@@ -185,16 +185,16 @@ partial_match = 'MIN'
 for index, dictionary in enumerate(todays_games):
     if target_key in dictionary and partial_match in dictionary[target_key]:
         target_index = index
-    else:
-        target_index = 0
+    # else:
+    #     target_index = 0
 
 if todays_games[target_index]['homeTeam']['teamId'] == wolves_id:
     game_id = todays_games[target_index]['gameId']
     home_or_away = 'Home'
     home_id = wolves_id
     home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
-    # away_id = todays_games[target_index]['awayTeam']['teamId']
-    away_id = opponent_id
+    away_id = todays_games[target_index]['awayTeam']['teamId']
+    # away_id = opponent_id
     away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
     opponent_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'TEAM_NAME'].values[0]
     game_title = f'{opponent_name} at Minnesota Timberwolves'

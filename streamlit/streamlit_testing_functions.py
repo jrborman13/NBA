@@ -188,33 +188,6 @@ target_index = None  # Initialize to None
 for index, dictionary in enumerate(todays_games):
     if target_key in dictionary and partial_match in dictionary[target_key]:
         target_index = index
-        break  # Stop after finding first match
-
-print(target_index)
-print(todays_games[target_index])
-
-try:
-    if todays_games[target_index]['homeTeam']['teamId'] == wolves_id:
-        game_id = todays_games[target_index]['gameId']
-        home_or_away = 'Home'
-        home_id = wolves_id
-        home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
-        # away_id = todays_games[target_index]['awayTeam']['teamId']
-        away_id = opponent_id
-        away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
-        opponent_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'TEAM_NAME'].values[0]
-        game_title = f'{opponent_name} at Minnesota Timberwolves'
-    else:
-        game_id = todays_games[target_index]['gameId']
-        home_or_away = 'Away'
-        away_id = wolves_id
-        away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
-        # home_id = todays_games[target_index]['homeTeam']['teamId']
-        home_id = opponent_id
-        home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
-        opponent_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'TEAM_NAME'].values[0]
-        game_title = f'Minnesota Timberwolves at {opponent_name}'
-except:
     home_or_away = 'Away'
     away_id = wolves_id
     away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'

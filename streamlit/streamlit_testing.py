@@ -4,6 +4,10 @@ import streamlit_testing_functions as functions
 import altair as alt
 import pandas as pd
 import streamlit as st
+
+# Clear all caches
+st.cache_data.clear()
+
 # import plotly.graph_objects as go
 # import matplotlib.pyplot as plt
 #

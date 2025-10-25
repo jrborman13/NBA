@@ -1,11 +1,11 @@
-
 import nba_api.stats.endpoints
 import requests
 import json
 import pandas as pd
 import nba_api
 
-current_season = '2024-25'
+current_season = '2025-26'
+season_type = 'Regular Season'
 opponent_id = 1610612760
 
 #ADVANCED DATA LOADING
@@ -16,7 +16,7 @@ data_adv_season = nba_api.stats.endpoints.LeagueDashTeamStats(
     pace_adjust='N',
     per_mode_detailed='PerGame',
     season=current_season,
-    season_type_all_star='Regular Season'
+    season_type_all_star=season_type
     ).get_data_frames()[0]
 ##LAST 5 GAMES
 data_adv_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
@@ -25,7 +25,7 @@ data_adv_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
     pace_adjust='N',
     per_mode_detailed='PerGame',
     season=current_season,
-    season_type_all_star='Regular Season',
+    season_type_all_star=season_type,
     last_n_games=5
     ).get_data_frames()[0]
 
@@ -36,8 +36,8 @@ data_misc_season = nba_api.stats.endpoints.LeagueDashTeamStats(
     measure_type_detailed_defense='Misc',
     pace_adjust='N',
     per_mode_detailed='PerGame',
-    season='2024-25',
-    season_type_all_star='Regular Season'
+    season=current_season,
+    season_type_all_star=season_type
     ).get_data_frames()[0]
 
 ### ADJUSTMENTS FOR DIFFERENTIALS
@@ -60,8 +60,8 @@ data_misc_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
     measure_type_detailed_defense='Misc',
     pace_adjust='N',
     per_mode_detailed='PerGame',
-    season='2024-25',
-    season_type_all_star='Regular Season',
+    season=current_season,
+    season_type_all_star=season_type,
     last_n_games=5
     ).get_data_frames()[0]
 
@@ -86,8 +86,8 @@ data_trad_season = nba_api.stats.endpoints.LeagueDashTeamStats(
     measure_type_detailed_defense='Base',
     pace_adjust='N',
     per_mode_detailed='PerGame',
-    season='2024-25',
-    season_type_all_star='Regular Season'
+    season=current_season,
+    season_type_all_star=season_type
     ).get_data_frames()[0]
 ## LAST 5
 data_trad_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
@@ -95,8 +95,8 @@ data_trad_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
     measure_type_detailed_defense='Base',
     pace_adjust='N',
     per_mode_detailed='PerGame',
-    season='2024-25',
-    season_type_all_star='Regular Season',
+    season=current_season,
+    season_type_all_star=season_type,
     last_n_games=5
     ).get_data_frames()[0]
 ## SEASON - STARTERS
@@ -105,8 +105,8 @@ data_trad_season_starters = nba_api.stats.endpoints.LeagueDashTeamStats(
     measure_type_detailed_defense='Base',
     pace_adjust='N',
     per_mode_detailed='PerGame',
-    season='2024-25',
-    season_type_all_star='Regular Season',
+    season=current_season,
+    season_type_all_star=season_type,
     starter_bench_nullable='Starters'
     ).get_data_frames()[0]
 ## LAST 5 - STARTERS
@@ -115,8 +115,8 @@ data_trad_L5_starters = nba_api.stats.endpoints.LeagueDashTeamStats(
     measure_type_detailed_defense='Base',
     pace_adjust='N',
     per_mode_detailed='PerGame',
-    season='2024-25',
-    season_type_all_star='Regular Season',
+    season=current_season,
+    season_type_all_star=season_type,
     last_n_games=5,
     starter_bench_nullable='Starters'
     ).get_data_frames()[0]
@@ -126,8 +126,8 @@ data_trad_season_bench = nba_api.stats.endpoints.LeagueDashTeamStats(
     measure_type_detailed_defense='Base',
     pace_adjust='N',
     per_mode_detailed='PerGame',
-    season='2024-25',
-    season_type_all_star='Regular Season',
+    season=current_season,
+    season_type_all_star=season_type,
     starter_bench_nullable='Bench'
     ).get_data_frames()[0]
 ## LAST 5 - BENCH
@@ -136,8 +136,8 @@ data_trad_L5_bench = nba_api.stats.endpoints.LeagueDashTeamStats(
     measure_type_detailed_defense='Base',
     pace_adjust='N',
     per_mode_detailed='PerGame',
-    season='2024-25',
-    season_type_all_star='Regular Season',
+    season=current_season,
+    season_type_all_star=season_type,
     last_n_games=5,
     starter_bench_nullable='Bench'
     ).get_data_frames()[0]
@@ -149,8 +149,8 @@ data_4F_season = nba_api.stats.endpoints.LeagueDashTeamStats(
     measure_type_detailed_defense='Four Factors',
     pace_adjust='N',
     per_mode_detailed='PerGame',
-    season='2024-25',
-    season_type_all_star='Regular Season'
+    season=current_season,
+    season_type_all_star=season_type
     ).get_data_frames()[0]
 ## LAST 5 GAMES
 data_4F_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
@@ -158,19 +158,20 @@ data_4F_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
     measure_type_detailed_defense='Four Factors',
     pace_adjust='N',
     per_mode_detailed='PerGame',
-    season='2024-25',
-    season_type_all_star='Regular Season',
+    season=current_season,
+    season_type_all_star=season_type,
     last_n_games=5
     ).get_data_frames()[0]
 
 #Key base variables
 wolves_id = data_adv_season.loc[data_adv_season['TEAM_NAME'] == 'Minnesota Timberwolves', 'TEAM_ID'].values[0]
+# wolves_id = '1610612750'
 logo_link = f'https://cdn.nba.com/logos/nba/{wolves_id}/primary/L/logo.svg'
 timberwolves = 'Minnesota Timberwolves'
 nba_logo = 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png?w=100&h=100&transparent=true'
 
 #Load in the current NBA standings
-standings = nba_api.stats.endpoints.LeagueStandings(league_id='00', season='2024-25', season_type='Regular Season').get_data_frames()[0]
+standings = nba_api.stats.endpoints.LeagueStandings(league_id='00', season=current_season, season_type='Regular Season').get_data_frames()[0]
 
 #Import today's games
 from nba_api.live.nba.endpoints import scoreboard
@@ -182,34 +183,48 @@ todays_games = games_json['scoreboard']['games']
 target_key = 'gameCode'
 partial_match = 'MIN'
 
+target_index = None  # Initialize to None
+
 for index, dictionary in enumerate(todays_games):
     if target_key in dictionary and partial_match in dictionary[target_key]:
         target_index = index
-    else:
-        target_index = 0
+        break  # Stop after finding first match
 
-if todays_games[target_index]['homeTeam']['teamId'] == wolves_id:
-    game_id = todays_games[target_index]['gameId']
-    home_or_away = 'Home'
-    home_id = wolves_id
-    home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
-    # away_id = todays_games[target_index]['awayTeam']['teamId']
-    away_id = opponent_id
-    away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
-    opponent_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'TEAM_NAME'].values[0]
-    game_title = f'{opponent_name} at Minnesota Timberwolves'
-else:
-    game_id = todays_games[target_index]['gameId']
+print(target_index)
+print(todays_games[target_index])
+
+try:
+    if todays_games[target_index]['homeTeam']['teamId'] == wolves_id:
+        game_id = todays_games[target_index]['gameId']
+        home_or_away = 'Home'
+        home_id = wolves_id
+        home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
+        # away_id = todays_games[target_index]['awayTeam']['teamId']
+        away_id = opponent_id
+        away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
+        opponent_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'TEAM_NAME'].values[0]
+        game_title = f'{opponent_name} at Minnesota Timberwolves'
+    else:
+        game_id = todays_games[target_index]['gameId']
+        home_or_away = 'Away'
+        away_id = wolves_id
+        away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
+        # home_id = todays_games[target_index]['homeTeam']['teamId']
+        home_id = opponent_id
+        home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
+        opponent_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'TEAM_NAME'].values[0]
+        game_title = f'Minnesota Timberwolves at {opponent_name}'
+except:
     home_or_away = 'Away'
     away_id = wolves_id
     away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
-    home_id = todays_games[target_index]['homeTeam']['teamId']
-    # home_id = 1610612752
+    # home_id = todays_games[target_index]['homeTeam']['teamId']
+    home_id = opponent_id
     home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
     opponent_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'TEAM_NAME'].values[0]
     game_title = f'Minnesota Timberwolves at {opponent_name}'
 
-print(game_title, todays_games)
+# print(game_title, todays_games)
 
 #Record and Seed
 ## Away Team
@@ -533,7 +548,7 @@ l5_away_team_tov_pct_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, '
 
 ## League Average
 la_tov_pct = round(data_adv_season['TM_TOV_PCT'].mean(), 3)
-print(la_tov_pct)
+# print(la_tov_pct)
 l5_la_tov_pct = round(data_adv_L5['TM_TOV_PCT'].mean(), 3)
 
 ## Home Team
@@ -661,8 +676,8 @@ l5_home_team_bench_scoring_rank = data_trad_L5_bench.loc[data_trad_L5_bench['TEA
 
 pbp_totals_url = "https://api.pbpstats.com/get-totals/nba"
 pbp_totals_params = {
-    "Season": '2024-25',
-    "SeasonType": "Regular Season",
+    "Season": current_season,
+    "SeasonType": season_type,
     "Type": "Team" # Use Opponent for opponent stats
 }
 pbp_totals_response = requests.get(pbp_totals_url, params=pbp_totals_params)
@@ -672,8 +687,8 @@ team_stats_dict = pbp_totals_response_json["multi_row_table_data"]
 
 pbp_opp_totals_url = "https://api.pbpstats.com/get-totals/nba"
 pbp_opp_totals_params = {
-    "Season": '2024-25',
-    "SeasonType": "Regular Season",
+    "Season": current_season,
+    "SeasonType": season_type,
     "Type": "Opponent" # Use Opponent for opponent stats
 }
 pbp_opp_totals_response = requests.get(pbp_opp_totals_url, params=pbp_opp_totals_params)
@@ -730,24 +745,24 @@ team_stats['FT_RATE'] = round(team_stats['FTA']/team_stats['FGA'], 3)
 team_stats['FT_RATE_RANK'] = team_stats['FT_RATE'].rank(ascending=False, method='first').astype(int)
 
 ## RIM
-team_stats['RIM_FREQ_RANK'] = team_stats['AtRimFrequency'].rank(ascending=False, method='first').astype(int)
-team_stats['RIM_FG%_RANK'] = team_stats['AtRimAccuracy'].rank(ascending=False, method='first').astype(int)
+team_stats['RIM_FREQ_RANK'] = team_stats['AtRimFrequency'].fillna(0).rank(ascending=False, method='first').astype(int)
+team_stats['RIM_FG%_RANK'] = team_stats['AtRimAccuracy'].fillna(0).rank(ascending=False, method='first').astype(int)
 
 ## SMR
-team_stats['SMR_FREQ_RANK'] = team_stats['ShortMidRangeFrequency'].rank(ascending=False, method='first').astype(int)
-team_stats['SMR_FG%_RANK'] = team_stats['ShortMidRangeAccuracy'].rank(ascending=False, method='first').astype(int)
+team_stats['SMR_FREQ_RANK'] = team_stats['ShortMidRangeFrequency'].fillna(0).rank(ascending=False, method='first').astype(int)
+team_stats['SMR_FG%_RANK'] = team_stats['ShortMidRangeAccuracy'].fillna(0).rank(ascending=False, method='first').astype(int)
 
 ## LMR
-team_stats['LMR_FREQ_RANK'] = team_stats['LongMidRangeFrequency'].rank(ascending=False, method='first').astype(int)
-team_stats['LMR_FG%_RANK'] = team_stats['LongMidRangeAccuracy'].rank(ascending=False, method='first').astype(int)
+team_stats['LMR_FREQ_RANK'] = team_stats['LongMidRangeFrequency'].fillna(0).rank(ascending=False, method='first').astype(int)
+team_stats['LMR_FG%_RANK'] = team_stats['LongMidRangeAccuracy'].fillna(0).rank(ascending=False, method='first').astype(int)
 
 ## C3
-team_stats['C3_FREQ_RANK'] = team_stats['Corner3Frequency'].rank(ascending=False, method='first').astype(int)
-team_stats['C3_FG%_RANK'] = team_stats['Corner3Accuracy'].rank(ascending=False, method='first').astype(int)
+team_stats['C3_FREQ_RANK'] = team_stats['Corner3Frequency'].fillna(0).rank(ascending=False, method='first').astype(int)
+team_stats['C3_FG%_RANK'] = team_stats['Corner3Accuracy'].fillna(0).rank(ascending=False, method='first').astype(int)
 
 ## ATB3
-team_stats['ATB3_FREQ_RANK'] = team_stats['Arc3Frequency'].rank(ascending=False, method='first').astype(int)
-team_stats['ATB3_FG%_RANK'] = team_stats['Arc3Accuracy'].rank(ascending=False, method='first').astype(int)
+team_stats['ATB3_FREQ_RANK'] = team_stats['Arc3Frequency'].fillna(0).rank(ascending=False, method='first').astype(int)
+team_stats['ATB3_FG%_RANK'] = team_stats['Arc3Accuracy'].fillna(0).rank(ascending=False, method='first').astype(int)
 
 
 # PRE-WORK FOR SHOOTING STATS -- OPPONENT
@@ -796,24 +811,24 @@ opp_team_stats['FT_RATE'] = round(opp_team_stats['FTA']/opp_team_stats['FGA'], 3
 opp_team_stats['FT_RATE_RANK'] = opp_team_stats['FT_RATE'].rank(ascending=True, method='first').astype(int)
 
 ## RIM
-opp_team_stats['RIM_FREQ_RANK'] = opp_team_stats['AtRimFrequency'].rank(ascending=True, method='first').astype(int)
-opp_team_stats['RIM_FG%_RANK'] = opp_team_stats['AtRimAccuracy'].rank(ascending=True, method='first').astype(int)
+opp_team_stats['RIM_FREQ_RANK'] = opp_team_stats['AtRimFrequency'].fillna(0).rank(ascending=True, method='first').astype(int)
+opp_team_stats['RIM_FG%_RANK'] = opp_team_stats['AtRimAccuracy'].fillna(0).rank(ascending=True, method='first').astype(int)
 
 ## SMR
-opp_team_stats['SMR_FREQ_RANK'] = opp_team_stats['ShortMidRangeFrequency'].rank(ascending=True, method='first').astype(int)
-opp_team_stats['SMR_FG%_RANK'] = opp_team_stats['ShortMidRangeAccuracy'].rank(ascending=True, method='first').astype(int)
+opp_team_stats['SMR_FREQ_RANK'] = opp_team_stats['ShortMidRangeFrequency'].fillna(0).rank(ascending=True, method='first').astype(int)
+opp_team_stats['SMR_FG%_RANK'] = opp_team_stats['ShortMidRangeAccuracy'].fillna(0).rank(ascending=True, method='first').astype(int)
 
 ## LMR
-opp_team_stats['LMR_FREQ_RANK'] = opp_team_stats['LongMidRangeFrequency'].rank(ascending=True, method='first').astype(int)
-opp_team_stats['LMR_FG%_RANK'] = opp_team_stats['LongMidRangeAccuracy'].rank(ascending=True, method='first').astype(int)
+opp_team_stats['LMR_FREQ_RANK'] = opp_team_stats['LongMidRangeFrequency'].fillna(0).rank(ascending=True, method='first').astype(int)
+opp_team_stats['LMR_FG%_RANK'] = opp_team_stats['LongMidRangeAccuracy'].fillna(0).rank(ascending=True, method='first').astype(int)
 
 ## C3
-opp_team_stats['C3_FREQ_RANK'] = opp_team_stats['Corner3Frequency'].rank(ascending=True, method='first').astype(int)
-opp_team_stats['C3_FG%_RANK'] = opp_team_stats['Corner3Accuracy'].rank(ascending=True, method='first').astype(int)
+opp_team_stats['C3_FREQ_RANK'] = opp_team_stats['Corner3Frequency'].fillna(0).rank(ascending=True, method='first').astype(int)
+opp_team_stats['C3_FG%_RANK'] = opp_team_stats['Corner3Accuracy'].fillna(0).rank(ascending=True, method='first').astype(int)
 
 ## ATB3
-opp_team_stats['ATB3_FREQ_RANK'] = opp_team_stats['Arc3Frequency'].rank(ascending=True, method='first').astype(int)
-opp_team_stats['ATB3_FG%_RANK'] = opp_team_stats['Arc3Accuracy'].rank(ascending=True, method='first').astype(int)
+opp_team_stats['ATB3_FREQ_RANK'] = opp_team_stats['Arc3Frequency'].fillna(0).rank(ascending=True, method='first').astype(int)
+opp_team_stats['ATB3_FG%_RANK'] = opp_team_stats['Arc3Accuracy'].fillna(0).rank(ascending=True, method='first').astype(int)
 
 # PRE-WORK FOR SHOOTING STATS -- DIFFERENTIAL
 ## MAKE TEAM ID A NUMBER
@@ -880,28 +895,28 @@ def create_shooting_diff(team):
 shooting_diff_results = pd.concat([create_shooting_diff(team) for team in pbp_team_list], ignore_index=True)
 
 #SHOOTING DIFFERENTIAL RANKS
-shooting_diff_results['FGM_RANK'] = shooting_diff_results['FGA_PG'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['FGA_RANK'] = shooting_diff_results['FGA_PG'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['FG%_RANK'] = shooting_diff_results['FG%'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['FG2M_RANK'] = shooting_diff_results['FG2M_PG'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['FG2A_RANK'] = shooting_diff_results['FG2A_PG'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['2PT%_RANK'] = shooting_diff_results['2PT%'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['FG3M_RANK'] = shooting_diff_results['FG3M_PG'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['FG3A_RANK'] = shooting_diff_results['FG3A_PG'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['3PT%_RANK'] = shooting_diff_results['3PT%'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['FTM_RANK'] = shooting_diff_results['FTM_PG'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['FTA_RANK'] = shooting_diff_results['FTA_PG'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['FT%_RANK'] = shooting_diff_results['FT%'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['RIM_FREQ_RANK'] = shooting_diff_results['AtRimFrequency'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['RIM_FG%_RANK'] = shooting_diff_results['AtRimAccuracy'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['SMR_FREQ_RANK'] = shooting_diff_results['ShortMidRangeFrequency'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['SMR_FG%_RANK'] = shooting_diff_results['ShortMidRangeAccuracy'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['LMR_FREQ_RANK'] = shooting_diff_results['LongMidRangeFrequency'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['LMR_FG%_RANK'] = shooting_diff_results['LongMidRangeAccuracy'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['C3_FREQ_RANK'] = shooting_diff_results['Corner3Frequency'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['C3_FG%_RANK'] = shooting_diff_results['Corner3Accuracy'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['ATB3_FREQ_RANK'] = shooting_diff_results['Arc3Frequency'].rank(ascending=False, method='first').astype(int)
-shooting_diff_results['ATB3_FG%_RANK'] = shooting_diff_results['Arc3Accuracy'].rank(ascending=False, method='first').astype(int)
+shooting_diff_results['FGM_RANK'] = shooting_diff_results['FGA_PG'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['FGA_RANK'] = shooting_diff_results['FGA_PG'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['FG%_RANK'] = shooting_diff_results['FG%'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['FG2M_RANK'] = shooting_diff_results['FG2M_PG'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['FG2A_RANK'] = shooting_diff_results['FG2A_PG'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['2PT%_RANK'] = shooting_diff_results['2PT%'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['FG3M_RANK'] = shooting_diff_results['FG3M_PG'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['FG3A_RANK'] = shooting_diff_results['FG3A_PG'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['3PT%_RANK'] = shooting_diff_results['3PT%'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['FTM_RANK'] = shooting_diff_results['FTM_PG'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['FTA_RANK'] = shooting_diff_results['FTA_PG'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['FT%_RANK'] = shooting_diff_results['FT%'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['RIM_FREQ_RANK'] = shooting_diff_results['AtRimFrequency'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['RIM_FG%_RANK'] = shooting_diff_results['AtRimAccuracy'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['SMR_FREQ_RANK'] = shooting_diff_results['ShortMidRangeFrequency'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['SMR_FG%_RANK'] = shooting_diff_results['ShortMidRangeAccuracy'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['LMR_FREQ_RANK'] = shooting_diff_results['LongMidRangeFrequency'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['LMR_FG%_RANK'] = shooting_diff_results['LongMidRangeAccuracy'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['C3_FREQ_RANK'] = shooting_diff_results['Corner3Frequency'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['C3_FG%_RANK'] = shooting_diff_results['Corner3Accuracy'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['ATB3_FREQ_RANK'] = shooting_diff_results['Arc3Frequency'].fillna(0).rank(ascending=False, method='first').astype(int)
+shooting_diff_results['ATB3_FG%_RANK'] = shooting_diff_results['Arc3Accuracy'].fillna(0).rank(ascending=False, method='first').astype(int)
 ## HOME TEAM SHOOTING STATS
 
 # Overall Field Goals

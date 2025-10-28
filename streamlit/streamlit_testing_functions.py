@@ -6,11 +6,12 @@ import nba_api
 
 current_season = '2025-26'
 season_type = 'Regular Season'
-opponent_id = 1610612760
+# opponent_id = 1610612760
 
 #ADVANCED DATA LOADING
 ##SEASON
 data_adv_season = nba_api.stats.endpoints.LeagueDashTeamStats(
+    league_id_nullable='00',
     # last_n_games=None,
     measure_type_detailed_defense='Advanced',
     pace_adjust='N',
@@ -18,8 +19,21 @@ data_adv_season = nba_api.stats.endpoints.LeagueDashTeamStats(
     season=current_season,
     season_type_all_star=season_type
     ).get_data_frames()[0]
+
+# Add missing ranking columns for Core Stats
+data_adv_season['OFF_RATING_RANK'] = data_adv_season['OFF_RATING'].rank(ascending=False, method='first').astype(int)
+data_adv_season['DEF_RATING_RANK'] = data_adv_season['DEF_RATING'].rank(ascending=True, method='first').astype(int)
+data_adv_season['NET_RATING_RANK'] = data_adv_season['NET_RATING'].rank(ascending=False, method='first').astype(int)
+data_adv_season['PACE_RANK'] = data_adv_season['PACE'].rank(ascending=False, method='first').astype(int)
+data_adv_season['AST_PCT_RANK'] = data_adv_season['AST_PCT'].rank(ascending=False, method='first').astype(int)
+data_adv_season['TM_TOV_PCT_RANK'] = data_adv_season['TM_TOV_PCT'].rank(ascending=True, method='first').astype(int)
+data_adv_season['AST_TO_RANK'] = data_adv_season['AST_TO'].rank(ascending=False, method='first').astype(int)
+data_adv_season['DREB_PCT_RANK'] = data_adv_season['DREB_PCT'].rank(ascending=False, method='first').astype(int)
+data_adv_season['OREB_PCT_RANK'] = data_adv_season['OREB_PCT'].rank(ascending=False, method='first').astype(int)
+data_adv_season['REB_PCT_RANK'] = data_adv_season['REB_PCT'].rank(ascending=False, method='first').astype(int)
 ##LAST 5 GAMES
 data_adv_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
+    league_id_nullable='00',
     # last_n_games=None,
     measure_type_detailed_defense='Advanced',
     pace_adjust='N',
@@ -32,6 +46,7 @@ data_adv_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
 #MISC DATA LOADING
 ##SEASON
 data_misc_season = nba_api.stats.endpoints.LeagueDashTeamStats(
+    league_id_nullable='00',
     # last_n_games=None,
     measure_type_detailed_defense='Misc',
     pace_adjust='N',
@@ -54,8 +69,19 @@ data_misc_season['PTS_FB_DIFF_RANK'] = data_misc_season['PTS_FB_DIFF'].rank(asce
 data_misc_season['PTS_OFF_TOV_DIFF'] = data_misc_season['PTS_OFF_TOV'] - data_misc_season['OPP_PTS_OFF_TOV']
 data_misc_season['PTS_OFF_TOV_DIFF_RANK'] = data_misc_season['PTS_OFF_TOV_DIFF'].rank(ascending=False, method='first')
 
+# Add missing ranking columns for misc stats
+data_misc_season['PTS_PAINT_RANK'] = data_misc_season['PTS_PAINT'].rank(ascending=False, method='first').astype(int)
+data_misc_season['OPP_PTS_PAINT_RANK'] = data_misc_season['OPP_PTS_PAINT'].rank(ascending=True, method='first').astype(int)
+data_misc_season['PTS_2ND_CHANCE_RANK'] = data_misc_season['PTS_2ND_CHANCE'].rank(ascending=False, method='first').astype(int)
+data_misc_season['OPP_PTS_2ND_CHANCE_RANK'] = data_misc_season['OPP_PTS_2ND_CHANCE'].rank(ascending=True, method='first').astype(int)
+data_misc_season['PTS_FB_RANK'] = data_misc_season['PTS_FB'].rank(ascending=False, method='first').astype(int)
+data_misc_season['OPP_PTS_FB_RANK'] = data_misc_season['OPP_PTS_FB'].rank(ascending=True, method='first').astype(int)
+data_misc_season['PTS_OFF_TOV_RANK'] = data_misc_season['PTS_OFF_TOV'].rank(ascending=False, method='first').astype(int)
+data_misc_season['OPP_PTS_OFF_TOV_RANK'] = data_misc_season['OPP_PTS_OFF_TOV'].rank(ascending=True, method='first').astype(int)
+
 ##LAST 5 GAMES
 data_misc_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
+    league_id_nullable='00',
     # last_n_games=None,
     measure_type_detailed_defense='Misc',
     pace_adjust='N',
@@ -79,9 +105,20 @@ data_misc_L5['PTS_FB_DIFF_RANK'] = data_misc_L5['PTS_FB_DIFF'].rank(ascending=Fa
 data_misc_L5['PTS_OFF_TOV_DIFF'] = data_misc_L5['PTS_OFF_TOV'] - data_misc_L5['OPP_PTS_OFF_TOV']
 data_misc_L5['PTS_OFF_TOV_DIFF_RANK'] = data_misc_L5['PTS_OFF_TOV_DIFF'].rank(ascending=False, method='first')
 
+# Add missing ranking columns for Last 5 games misc stats
+data_misc_L5['PTS_PAINT_RANK'] = data_misc_L5['PTS_PAINT'].rank(ascending=False, method='first').astype(int)
+data_misc_L5['OPP_PTS_PAINT_RANK'] = data_misc_L5['OPP_PTS_PAINT'].rank(ascending=True, method='first').astype(int)
+data_misc_L5['PTS_2ND_CHANCE_RANK'] = data_misc_L5['PTS_2ND_CHANCE'].rank(ascending=False, method='first').astype(int)
+data_misc_L5['OPP_PTS_2ND_CHANCE_RANK'] = data_misc_L5['OPP_PTS_2ND_CHANCE'].rank(ascending=True, method='first').astype(int)
+data_misc_L5['PTS_FB_RANK'] = data_misc_L5['PTS_FB'].rank(ascending=False, method='first').astype(int)
+data_misc_L5['OPP_PTS_FB_RANK'] = data_misc_L5['OPP_PTS_FB'].rank(ascending=True, method='first').astype(int)
+data_misc_L5['PTS_OFF_TOV_RANK'] = data_misc_L5['PTS_OFF_TOV'].rank(ascending=False, method='first').astype(int)
+data_misc_L5['OPP_PTS_OFF_TOV_RANK'] = data_misc_L5['OPP_PTS_OFF_TOV'].rank(ascending=True, method='first').astype(int)
+
 #LOAD TRADITIONAL DATA
 ## SEASON
 data_trad_season = nba_api.stats.endpoints.LeagueDashTeamStats(
+    league_id_nullable='00',
     # last_n_games=None,
     measure_type_detailed_defense='Base',
     pace_adjust='N',
@@ -89,8 +126,13 @@ data_trad_season = nba_api.stats.endpoints.LeagueDashTeamStats(
     season=current_season,
     season_type_all_star=season_type
     ).get_data_frames()[0]
+
+# Add missing ranking columns for traditional stats
+data_trad_season['AST_RANK'] = data_trad_season['AST'].rank(ascending=False, method='first').astype(int)
+data_trad_season['TOV_RANK'] = data_trad_season['TOV'].rank(ascending=True, method='first').astype(int)
 ## LAST 5
 data_trad_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
+    league_id_nullable='00',
     # last_n_games=None,
     measure_type_detailed_defense='Base',
     pace_adjust='N',
@@ -99,8 +141,13 @@ data_trad_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
     season_type_all_star=season_type,
     last_n_games=5
     ).get_data_frames()[0]
+
+# Add missing ranking columns for Last 5 games traditional stats
+data_trad_L5['AST_RANK'] = data_trad_L5['AST'].rank(ascending=False, method='first').astype(int)
+data_trad_L5['TOV_RANK'] = data_trad_L5['TOV'].rank(ascending=True, method='first').astype(int)
 ## SEASON - STARTERS
 data_trad_season_starters = nba_api.stats.endpoints.LeagueDashTeamStats(
+    league_id_nullable='00',
     # last_n_games=None,
     measure_type_detailed_defense='Base',
     pace_adjust='N',
@@ -109,8 +156,12 @@ data_trad_season_starters = nba_api.stats.endpoints.LeagueDashTeamStats(
     season_type_all_star=season_type,
     starter_bench_nullable='Starters'
     ).get_data_frames()[0]
+
+# Add missing ranking columns for starters
+data_trad_season_starters['PTS_RANK'] = data_trad_season_starters['PTS'].rank(ascending=False, method='first').astype(int)
 ## LAST 5 - STARTERS
 data_trad_L5_starters = nba_api.stats.endpoints.LeagueDashTeamStats(
+    league_id_nullable='00',
     # last_n_games=None,
     measure_type_detailed_defense='Base',
     pace_adjust='N',
@@ -120,8 +171,12 @@ data_trad_L5_starters = nba_api.stats.endpoints.LeagueDashTeamStats(
     last_n_games=5,
     starter_bench_nullable='Starters'
     ).get_data_frames()[0]
+
+# Add missing ranking columns for Last 5 starters
+data_trad_L5_starters['PTS_RANK'] = data_trad_L5_starters['PTS'].rank(ascending=False, method='first').astype(int)
 ## SEASON - BENCH
 data_trad_season_bench = nba_api.stats.endpoints.LeagueDashTeamStats(
+    league_id_nullable='00',
     # last_n_games=None,
     measure_type_detailed_defense='Base',
     pace_adjust='N',
@@ -130,8 +185,12 @@ data_trad_season_bench = nba_api.stats.endpoints.LeagueDashTeamStats(
     season_type_all_star=season_type,
     starter_bench_nullable='Bench'
     ).get_data_frames()[0]
+
+# Add missing ranking columns for bench
+data_trad_season_bench['PTS_RANK'] = data_trad_season_bench['PTS'].rank(ascending=False, method='first').astype(int)
 ## LAST 5 - BENCH
 data_trad_L5_bench = nba_api.stats.endpoints.LeagueDashTeamStats(
+    league_id_nullable='00',
     # last_n_games=None,
     measure_type_detailed_defense='Base',
     pace_adjust='N',
@@ -142,9 +201,13 @@ data_trad_L5_bench = nba_api.stats.endpoints.LeagueDashTeamStats(
     starter_bench_nullable='Bench'
     ).get_data_frames()[0]
 
+# Add missing ranking columns for Last 5 bench
+data_trad_L5_bench['PTS_RANK'] = data_trad_L5_bench['PTS'].rank(ascending=False, method='first').astype(int)
+
 #LOAD FOUR FACTORS DATA
 ##SEASON
 data_4F_season = nba_api.stats.endpoints.LeagueDashTeamStats(
+    league_id_nullable='00',
     # last_n_games=None,
     measure_type_detailed_defense='Four Factors',
     pace_adjust='N',
@@ -152,8 +215,12 @@ data_4F_season = nba_api.stats.endpoints.LeagueDashTeamStats(
     season=current_season,
     season_type_all_star=season_type
     ).get_data_frames()[0]
+
+# Add missing ranking columns for Four Factors
+data_4F_season['OPP_TOV_PCT_RANK'] = data_4F_season['OPP_TOV_PCT'].rank(ascending=True, method='first').astype(int)
 ## LAST 5 GAMES
 data_4F_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
+    league_id_nullable='00',
     # last_n_games=None,
     measure_type_detailed_defense='Four Factors',
     pace_adjust='N',
@@ -162,6 +229,9 @@ data_4F_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
     season_type_all_star=season_type,
     last_n_games=5
     ).get_data_frames()[0]
+
+# Add missing ranking columns for Last 5 Four Factors
+data_4F_L5['OPP_TOV_PCT_RANK'] = data_4F_L5['OPP_TOV_PCT'].rank(ascending=True, method='first').astype(int)
 
 #Key base variables
 wolves_id = data_adv_season.loc[data_adv_season['TEAM_NAME'] == 'Minnesota Timberwolves', 'TEAM_ID'].values[0]
@@ -185,20 +255,42 @@ partial_match = 'MIN'
 
 target_index = None  # Initialize to None
 
-for index, dictionary in enumerate(todays_games):
+for index, dictionary in enumerate[todays_games](todays_games):
     if target_key in dictionary and partial_match in dictionary[target_key]:
         target_index = index
-    home_or_away = 'Away'
-    away_id = wolves_id
-    away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
-    # home_id = todays_games[target_index]['homeTeam']['teamId']
-    home_id = opponent_id
-    home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
-    opponent_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'TEAM_NAME'].values[0]
-    game_title = f'Minnesota Timberwolves at {opponent_name}'
+        break  # Stop after finding first match
 
-# print(game_title, todays_games)
 
+try:
+    if todays_games[target_index]['homeTeam']['teamId'] == wolves_id:
+        game_id = todays_games[target_index]['gameId']
+        home_or_away = 'Home'
+        home_id = wolves_id
+        home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
+        away_id = todays_games[target_index]['awayTeam']['teamId']
+        away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
+        opponent_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'TEAM_NAME'].values[0]
+        game_title = f'{opponent_name} at Minnesota Timberwolves'
+        print(game_title)
+    else:
+        game_id = todays_games[target_index]['gameId']
+        home_or_away = 'Away'
+        away_id = wolves_id
+        away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
+        home_id = todays_games[target_index]['homeTeam']['teamId']
+        home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
+        opponent_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'TEAM_NAME'].values[0]
+        game_title = f'Minnesota Timberwolves at {opponent_name}'
+        print(game_title)
+
+except Exception as e:
+    print(f"Error: {e}")
+    game_id = None
+    home_or_away = None
+    home_id = None
+    home_logo_link = None
+    away_id = None
+    away_logo_link = None
 #Record and Seed
 ## Away Team
 away_team_record = standings.loc[standings['TeamID'] == away_id, 'Record'].values[0]
@@ -481,7 +573,7 @@ l5_home_team_ast_rank = data_trad_L5.loc[data_trad_L5['TEAM_ID'] == home_id, 'AS
 #ASSIST PERCENTAGE
 ## Away Team
 away_team_ast_pct = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'AST_PCT'].values[0]
-away_team_ast_pct_rank = data_adv_season.loc[data_trad_season['TEAM_ID'] == away_id, 'AST_PCT_RANK'].values[0]
+away_team_ast_pct_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'AST_PCT_RANK'].values[0]
 l5_away_team_ast_pct = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'AST_PCT'].values[0]
 l5_away_team_ast_pct_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'AST_PCT_RANK'].values[0]
 
@@ -515,7 +607,7 @@ l5_home_team_tov_rank = data_trad_L5.loc[data_trad_L5['TEAM_ID'] == home_id, 'TO
 #TURNOVER PERCENTAGE
 ## Away Team
 away_team_tov_pct = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'TM_TOV_PCT'].values[0]
-away_team_tov_pct_rank = data_adv_season.loc[data_trad_season['TEAM_ID'] == away_id, 'TM_TOV_PCT_RANK'].values[0]
+away_team_tov_pct_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'TM_TOV_PCT_RANK'].values[0]
 l5_away_team_tov_pct = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'TM_TOV_PCT'].values[0]
 l5_away_team_tov_pct_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'TM_TOV_PCT_RANK'].values[0]
 
@@ -533,7 +625,7 @@ l5_home_team_tov_pct_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, '
 #OPP. TURNOVER PERCENTAGE
 ## Away Team
 away_team_opp_tov_pct = data_4F_season.loc[data_4F_season['TEAM_ID'] == away_id, 'OPP_TOV_PCT'].values[0]
-away_team_opp_tov_pct_rank = data_4F_season.loc[data_trad_season['TEAM_ID'] == away_id, 'OPP_TOV_PCT_RANK'].values[0]
+away_team_opp_tov_pct_rank = data_4F_season.loc[data_4F_season['TEAM_ID'] == away_id, 'OPP_TOV_PCT_RANK'].values[0]
 l5_away_team_opp_tov_pct = data_4F_L5.loc[data_4F_L5['TEAM_ID'] == away_id, 'OPP_TOV_PCT'].values[0]
 l5_away_team_opp_tov_pct_rank = data_4F_L5.loc[data_4F_L5['TEAM_ID'] == away_id, 'OPP_TOV_PCT_RANK'].values[0]
 
@@ -550,7 +642,7 @@ l5_home_team_opp_tov_pct_rank = data_4F_L5.loc[data_4F_L5['TEAM_ID'] == home_id,
 #AST/TOV RATIO
 ## Away Team
 away_team_ast_tov = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'AST_TO'].values[0]
-away_team_ast_tov_rank = data_adv_season.loc[data_trad_season['TEAM_ID'] == away_id, 'AST_TO_RANK'].values[0]
+away_team_ast_tov_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'AST_TO_RANK'].values[0]
 l5_away_team_ast_tov = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'AST_TO'].values[0]
 l5_away_team_ast_tov_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'AST_TO_RANK'].values[0]
 
@@ -671,6 +763,7 @@ opp_team_stats_dict = pbp_opp_totals_response_json["multi_row_table_data"]
 
 team_stats = pd.DataFrame(team_stats_dict)
 opp_team_stats = pd.DataFrame(opp_team_stats_dict)
+
 
 # PRE-WORK FOR SHOOTING STATS -- TEAM
 ## MAKE TEAM ID A NUMBER

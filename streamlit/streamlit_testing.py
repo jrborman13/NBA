@@ -1,46 +1,19 @@
 import streamlit as st
 import streamlit_testing_functions as functions
+import datetime
 
 import altair as alt
 import pandas as pd
 import streamlit as st
 
 # Clear all caches
-st.cache_data.clear()
-
-# import plotly.graph_objects as go
-# import matplotlib.pyplot as plt
-#
-# # Create a DataFrame for plotting
-# data = pd.DataFrame({
-#     'x': range(10),
-#     'y1': [i * 1.5 for i in range(10)],
-#     'y2': [i * 2.5 for i in range(10)],
-#     'y3': [i * 3.5 for i in range(10)]
-# })
-#
-# # Create individual line charts
-# chart1 = alt.Chart(data).mark_line().encode(x='x', y='y1', tooltip=['x', 'y1'])
-# chart2 = alt.Chart(data).mark_line().encode(x='x', y='y2', tooltip=['x', 'y2'])
-# chart3 = alt.Chart(data).mark_line().encode(x='x', y='y3', tooltip=['x', 'y3'])
-#
-# # Create individual line plots
-# fig1 = go.Figure(go.Scatter(x=[1, 2, 3], y=[4, 5, 6], mode='lines', name='Line 1'))
-# fig2 = go.Figure(go.Scatter(x=[1, 2, 3], y=[6, 5, 4], mode='lines', name='Line 2'))
-# fig3 = go.Figure(go.Scatter(x=[1, 2, 3], y=[4, 6, 5], mode='lines', name='Line 3'))
-#
-# # Create subplots
-# fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-# axes[0].plot([1, 2, 3], [4, 5, 6])
-# axes[0].set_title("Line 1")
-# axes[1].plot([1, 2, 3], [6, 5, 4])
-# axes[1].set_title("Line 2")
-# axes[2].plot([1, 2, 3], [4, 6, 5])
-# axes[2].set_title("Line 3")
-
+# st.cache_data.clear()
 
 st.set_page_config(layout="wide")
 st.title("NBA Matchup Data App")
+
+# Show when data was last loaded
+# st.write(f"🕐 Data last loaded: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 # Sidebar for selecting the tab
 tab = st.radio("Select Tab", ('Core Stats', 'Shooting', 'Players', 'Lineups'))
 
@@ -54,21 +27,6 @@ body_header_background_color = 'f9f9f9'
 body_background_color = 'white'
 
 if tab == 'Core Stats':
-
-# # Layout charts in Streamlit
-# col1, col2, col3 = st.columns(3)
-# col1.altair_chart(chart1, use_container_width=True)
-# col2.altair_chart(chart2, use_container_width=True)
-# col3.altair_chart(chart3, use_container_width=True)
-#
-# # Layout charts in Streamlit
-# col1, col2, col3 = st.columns(3)
-# col1.plotly_chart(fig1, use_container_width=True)
-# col2.plotly_chart(fig2, use_container_width=True)
-# col3.plotly_chart(fig3, use_container_width=True)
-#
-# # Render in Streamlit
-# st.pyplot(fig)
 
 
     # Create the HTML for the header
@@ -92,100 +50,6 @@ if tab == 'Core Stats':
     """
     # Render the HTML in Streamlit
     st.markdown(header_html, unsafe_allow_html=True)
-
-    # # Define variables for the away and home team logos and league average data
-    # league_average = "50%"  # Example value for league average
-    #
-    # # Function to calculate background color based on rank (1 = green, 30 = red)
-    # def get_color(rank):
-    #     # Normalize rank into two halves: 1 to 15 and 15 to 30
-    #     if rank <= 15:
-    #         # Green (1) to White (15)
-    #         normalized = (rank - 1) / 14  # Map 1 -> 0, 15 -> 1
-    #         red = int(255 * normalized)
-    #         green = 255
-    #         blue = int(255 * normalized)
-    #     else:
-    #         # White (15) to Red (30)
-    #         normalized = (rank - 15) / 15  # Map 15 -> 0, 30 -> 1
-    #         red = 255
-    #         green = int(255 * (1 - normalized))
-    #         blue = int(255 * (1 - normalized))
-    #     return f"rgb({red}, {green}, {blue})"  # Return RGB color
-    #
-    # # Define example metrics with ranks
-    # metrics = [
-    #     {"metric": "Offense", "rank_away": 5, "rank_home": 25},
-    #     {"metric": "Defense", "rank_away": 10, "rank_home": 20},
-    # ]
-    #
-    # # Generate table rows dynamically
-    # rows = ""
-    # for data in metrics:
-    #     away_color = get_color(data["rank_away"])
-    #     home_color = get_color(data["rank_home"])
-    #     rows += f"""
-    #     <tr>
-    #         <td style="border: 1px solid black; padding: {padding}px; text-align: left; font-family: 'IBM Plex Sans', sans-serif;">{data['metric']}</td>
-    #         <td style="border: 1px solid black; background-color: {away_color}; font-family: 'IBM Plex Sans', sans-serif;">{data['rank_away']}</td>
-    #         <td style="border: 1px solid black; background-color: {away_color}; font-family: 'IBM Plex Sans', sans-serif;">Data {data['rank_away']}</td>
-    #         <td style="border: 1px solid black; text-align: center; font-family: 'IBM Plex Sans', sans-serif;">{league_average}</td>
-    #         <td style="border: 1px solid black; background-color: {home_color}; font-family: 'IBM Plex Sans', sans-serif;">{data['rank_home']}</td>
-    #         <td style="border: 1px solid black; background-color: {home_color}; font-family: 'IBM Plex Sans', sans-serif;">Data {data['rank_home']}</td>
-    #     </tr>
-    #     """
-    #
-    # # Create the full HTML table
-    # html_table = f"""
-    # <!DOCTYPE html>
-    # <html>
-    # <head>
-    # <style>
-    #     table {{
-    #         width: 100%;
-    #         border-collapse: collapse;
-    #         text-align: center;
-    #         font-family: IBM Plex Sans, sans-serif;
-    #     }}
-    #     th, td {{
-    #         border: 1px solid black;
-    #         padding: {padding}px;
-    #         font-family: IBM Plex Sans, sans-serif;
-    #     }}
-    #     th {{
-    #         background-color: #{body_header_background_color};
-    #         font-family: IBM Plex Sans, sans-serif;
-    #     }}
-    # </style>
-    # </head>
-    # <body>
-    # <table>
-    #   <tr>
-    #     <th style="border: 1px solid black;">Metric</th>
-    #     <th colspan="2" style="border: 1px solid black;">
-    #         <img src="{functions.away_logo_link}" alt="Away Team Logo" style="height: 50px; width: auto;"/>
-    #     </th>
-    #     <th style="border: 1px solid black;">League Average</th>
-    #     <th colspan="2" style="border: 1px solid black;">
-    #         <img src="{functions.home_logo_link}" alt="Home Team Logo" style="height: 50px; width: auto;"/>
-    #     </th>
-    #   </tr>
-    #   <tr>
-    #     <th>Metric</th>
-    #     <th>Rank</th>
-    #     <th>Col 1</th>
-    #     <th>Avg</th>
-    #     <th>Rank</th>
-    #     <th>Col 2</th>
-    #   </tr>
-    #   {rows}
-    # </table>
-    # </body>
-    # </html>
-    # """
-    #
-    # # Render the HTML table in Streamlit using st.components.v1.html
-    # st.components.v1.html(html_table, height=250)
 
     # Create the HTML table with column spanners
     html_table_2 = f"""

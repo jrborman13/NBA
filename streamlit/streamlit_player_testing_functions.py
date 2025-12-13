@@ -6,8 +6,7 @@ import nba_api
 import altair as alt
 import streamlit as st
 
-current_season = '2024-25'
-
+current_season = '2025-26'
 game_logs_ex = nba_api.stats.endpoints.PlayerGameLogs(
     season_nullable=current_season,
 ).get_data_frames()[0]

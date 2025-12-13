@@ -466,6 +466,75 @@ def get_player_data(player_id, players_df=None):
         # Reset index
         recent_games_df = recent_games_df.reset_index(drop=True)
     
+    # Create full game logs dataframe for pagination (all games, not just recent 10)
+    full_game_logs_df = None
+    if len(player_game_logs) > 0:
+        # Use the same formatting as recent_games but for all games
+        # Sort chronologically (oldest first) to assign season game numbers
+        all_games_sorted = player_game_logs.sort_values(by='GAME_DATE', ascending=True).copy()
+        all_games_sorted['season_game_num'] = range(1, len(all_games_sorted) + 1)
+        
+        # Now get all games sorted descending by date (most recent first)
+        all_games_desc = player_game_logs.sort_values(by='GAME_DATE', ascending=False).copy()
+        
+        # Merge with season game numbers
+        all_games = all_games_desc.merge(
+            all_games_sorted[['GAME_ID', 'season_game_num']],
+            on='GAME_ID',
+            how='left'
+        )
+        
+        # Format game date
+        all_games['GAME_DATE_FORMATTED'] = pd.to_datetime(all_games['GAME_DATE']).dt.strftime('%m/%d/%Y')
+        
+        # Extract opponent from MATCHUP
+        def extract_opponent_full(matchup):
+            if pd.isna(matchup):
+                return 'N/A'
+            parts = str(matchup).split()
+            if len(parts) >= 3:
+                return parts[-1]
+            elif len(parts) == 2:
+                return parts[1].replace('@', '').replace('vs.', '')
+            return matchup
+        
+        all_games['OPPONENT'] = all_games['MATCHUP'].apply(extract_opponent_full)
+        all_games['game_num'] = all_games['season_game_num']
+        
+        # Calculate 2-pointers
+        all_games['FG2M'] = all_games['FGM'] - all_games['FG3M']
+        all_games['FG2A'] = all_games['FGA'] - all_games['FG3A']
+        all_games['FG2_PCT'] = all_games.apply(
+            lambda row: round(row['FG2M'] / row['FG2A'] * 100, 1) if row['FG2A'] > 0 else 0.0,
+            axis=1
+        )
+        
+        # Format percentages
+        all_games['FG2_PCT_STR'] = all_games['FG2_PCT'].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
+        all_games['FG3_PCT_STR'] = (all_games['FG3_PCT'] * 100).round(1).apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
+        all_games['FT_PCT_STR'] = (all_games['FT_PCT'] * 100).round(1).apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "0.0%")
+        
+        # Round minutes
+        all_games['MIN_ROUNDED'] = all_games['MIN'].round().astype(int)
+        
+        # Calculate PRA
+        all_games['PRA'] = all_games['PTS'] + all_games['REB'] + all_games['AST']
+        
+        # Select and rename columns
+        full_game_logs_df = all_games[[
+            'game_num', 'GAME_DATE_FORMATTED', 'OPPONENT', 'MIN_ROUNDED', 'PTS', 'REB', 'AST', 'PRA',
+            'STL', 'BLK', 'TOV', 'FG2M', 'FG2A', 'FG2_PCT_STR', 
+            'FG3M', 'FG3A', 'FG3_PCT_STR', 'FTM', 'FTA', 'FT_PCT_STR'
+        ]].copy()
+        
+        full_game_logs_df.columns = [
+            'Game', 'Date', 'Opponent', 'MIN', 'PTS', 'REB', 'AST', 'PRA',
+            'STL', 'BLK', 'TOV', '2PM', '2PA', '2P%', 
+            '3PM', '3PA', '3P%', 'FTM', 'FTA', 'FT%'
+        ]
+        
+        full_game_logs_df = full_game_logs_df.reset_index(drop=True)
+    
     # Sort game logs ascending for chart (oldest to newest) - already filtered and sorted above
     if len(player_game_logs) > 0:
         player_game_logs = player_game_logs.sort_values(by='GAME_DATE', ascending=True)
@@ -559,6 +628,7 @@ def get_player_data(player_id, players_df=None):
         'player_info_position': player_info_position,
         'player_info_height': player_info_height,
         'player_info_weight': player_info_weight,
+        'team_id': player_team_id,  # Team ID for opponent detection
         'team_color': team_color,
         'headshot': headshot,
         'logo': logo,
@@ -576,6 +646,7 @@ def get_player_data(player_id, players_df=None):
         'stl_percentile': stl_percentile,
         'blk_percentile': blk_percentile,
         'recent_games_df': recent_games_df,
+        'full_game_logs_df': full_game_logs_df,  # All games for pagination
         'averages_df': averages_df,
     }
 

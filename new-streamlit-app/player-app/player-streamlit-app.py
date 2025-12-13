@@ -1,8 +1,14 @@
 import streamlit as st
 import player_functions as pf
+import team_defensive_stats as tds
+import prediction_model as pm
+import prediction_features as pf_features
+import vegas_lines as vl
+import prediction_tracker as pt
 import pandas as pd
 import nba_api.stats.endpoints
 from datetime import datetime, date
+import math
 
 st.set_page_config(layout="wide")
 st.title("NBA Player Data")
@@ -22,6 +28,26 @@ def get_cached_player_list():
 def get_player_name_map(player_ids_list, players_df):
     """Cache player names using the players dataframe"""
     return {pid: pf.get_player_name(pid, players_df) for pid in player_ids_list}
+
+# Cache team defensive shooting data
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def get_cached_shooting_data():
+    """Cache team shooting data from pbpstats API"""
+    try:
+        team_stats, opp_team_stats = tds.load_shooting_data()
+        return team_stats, opp_team_stats, None
+    except Exception as e:
+        return None, None, str(e)
+
+# Cache player shooting data
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def get_cached_player_shooting_data():
+    """Cache player shooting data from pbpstats API"""
+    try:
+        player_stats = tds.load_player_shooting_data()
+        return player_stats, None
+    except Exception as e:
+        return None, str(e)
 
 # Function to fetch matchups for a given date
 @st.cache_data(ttl=3600)  # Cache for 1 hour
@@ -115,16 +141,22 @@ with col_matchup:
 # Filter players based on selected matchup
 filtered_player_ids_list = player_ids_list.copy()
 selected_team_ids = None
+matchup_away_team_id = None
+matchup_home_team_id = None
+matchup_away_team_abbr = None
+matchup_home_team_abbr = None
 
-if selected_matchup_str and selected_matchup_str != "All Players":
+if selected_matchup_str and selected_matchup_str != "All Players" and selected_matchup_str != "All Matchups":
     # Find the selected matchup
     selected_matchup = next((m for m in matchups if m['matchup'] == selected_matchup_str), None)
     
     if selected_matchup:
-        # Get team IDs for filtering
-        away_team_id = selected_matchup['away_team_id']
-        home_team_id = selected_matchup['home_team_id']
-        selected_team_ids = [away_team_id, home_team_id]
+        # Get team IDs and abbreviations for filtering
+        matchup_away_team_id = selected_matchup['away_team_id']
+        matchup_home_team_id = selected_matchup['home_team_id']
+        matchup_away_team_abbr = selected_matchup['away_team']
+        matchup_home_team_abbr = selected_matchup['home_team']
+        selected_team_ids = [matchup_away_team_id, matchup_home_team_id]
         
         # Filter players dataframe to only include players from these teams
         if 'TEAM_ID' in players_df.columns:
@@ -272,8 +304,8 @@ with st.container(border=False):
 # with st.container(height=1000, border=True):
 #     st.altair_chart(player_data['final_chart'], use_container_width=False)
 
-# Create tabs for Current Season and YoY Data
-tab1, tab2 = st.tabs(["Current Season", "YoY Data"])
+# Create tabs for Current Season, YoY Data, and Predictions
+tab1, tab2, tab3 = st.tabs(["Current Season", "YoY Data", "Predictions"])
 
 with tab1:
     # Display averages table with heatmap
@@ -443,16 +475,188 @@ with tab1:
         
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-        # Display recent game logs table
+        # Display Opponent Defensive Stats (only when a matchup is selected)
+        if matchup_away_team_id and matchup_home_team_id:
+            # Determine which team is the opponent based on player's team
+            player_team_id = player_data.get('team_id')
+            if player_team_id:
+                player_team_id = int(player_team_id)
+                if player_team_id == matchup_away_team_id:
+                    opponent_team_id = matchup_home_team_id
+                    opponent_label = "Home"
+                elif player_team_id == matchup_home_team_id:
+                    opponent_team_id = matchup_away_team_id
+                    opponent_label = "Away"
+                else:
+                    opponent_team_id = None
+                    opponent_label = None
+                
+                if opponent_team_id:
+                    # Load shooting data
+                    team_stats, opp_team_stats, shooting_error = get_cached_shooting_data()
+                    
+                    if shooting_error:
+                        st.warning(f"⚠️ Could not load defensive stats: {shooting_error}")
+                    elif opp_team_stats is not None:
+                        # Get opponent defensive stats
+                        opp_def_stats = tds.get_team_defensive_stats(opponent_team_id, opp_team_stats)
+                        
+                        if opp_def_stats:
+                            st.subheader(f"🛡️ Opponent Defense: {opp_def_stats['team_name']} ({opponent_label})")
+                            st.caption("What opponents shoot against this team (lower rank = better defense)")
+                            
+                            # Create columns for defensive stats
+                            def_col1, def_col2, def_col3, def_col4, def_col5 = st.columns(5)
+                            
+                            with def_col1:
+                                rank_color = tds.get_rank_color(opp_def_stats['opp_fg_pct_rank'])
+                                st.metric(
+                                    label="Opp FG%",
+                                    value=f"{opp_def_stats['opp_fg_pct']}%",
+                                    delta=f"Rank: {opp_def_stats['opp_fg_pct_rank']}"
+                                )
+                            
+                            with def_col2:
+                                st.metric(
+                                    label="Opp 2PT%",
+                                    value=f"{opp_def_stats['opp_2pt_pct']}%",
+                                    delta=f"Rank: {opp_def_stats['opp_2pt_pct_rank']}"
+                                )
+                            
+                            with def_col3:
+                                st.metric(
+                                    label="Opp 3PT%",
+                                    value=f"{opp_def_stats['opp_3pt_pct']}%",
+                                    delta=f"Rank: {opp_def_stats['opp_3pt_pct_rank']}"
+                                )
+                            
+                            with def_col4:
+                                st.metric(
+                                    label="Opp Rim FG%",
+                                    value=f"{opp_def_stats['opp_rim_acc']}%",
+                                    delta=f"Rank: {opp_def_stats['opp_rim_acc_rank']}"
+                                )
+                            
+                            with def_col5:
+                                st.metric(
+                                    label="Opp FTA/G",
+                                    value=f"{opp_def_stats['opp_fta_pg']}",
+                                    delta=f"Rank: {opp_def_stats['opp_fta_rank']}"
+                                )
+                            
+                            # Expandable section for zone shooting details
+                            with st.expander("📍 Zone Shooting Defense Details"):
+                                zone_col1, zone_col2, zone_col3, zone_col4, zone_col5 = st.columns(5)
+                                
+                                with zone_col1:
+                                    st.markdown("**At Rim**")
+                                    st.write(f"Freq: {opp_def_stats['opp_rim_freq']}% (#{opp_def_stats['opp_rim_freq_rank']})")
+                                    st.write(f"FG%: {opp_def_stats['opp_rim_acc']}% (#{opp_def_stats['opp_rim_acc_rank']})")
+                                
+                                with zone_col2:
+                                    st.markdown("**Short Mid-Range**")
+                                    st.write(f"Freq: {opp_def_stats['opp_smr_freq']}% (#{opp_def_stats['opp_smr_freq_rank']})")
+                                    st.write(f"FG%: {opp_def_stats['opp_smr_acc']}% (#{opp_def_stats['opp_smr_acc_rank']})")
+                                
+                                with zone_col3:
+                                    st.markdown("**Long Mid-Range**")
+                                    st.write(f"Freq: {opp_def_stats['opp_lmr_freq']}% (#{opp_def_stats['opp_lmr_freq_rank']})")
+                                    st.write(f"FG%: {opp_def_stats['opp_lmr_acc']}% (#{opp_def_stats['opp_lmr_acc_rank']})")
+                                
+                                with zone_col4:
+                                    st.markdown("**Corner 3**")
+                                    st.write(f"Freq: {opp_def_stats['opp_c3_freq']}% (#{opp_def_stats['opp_c3_freq_rank']})")
+                                    st.write(f"FG%: {opp_def_stats['opp_c3_acc']}% (#{opp_def_stats['opp_c3_acc_rank']})")
+                                
+                                with zone_col5:
+                                    st.markdown("**Above Break 3**")
+                                    st.write(f"Freq: {opp_def_stats['opp_atb3_freq']}% (#{opp_def_stats['opp_atb3_freq_rank']})")
+                                    st.write(f"FG%: {opp_def_stats['opp_atb3_acc']}% (#{opp_def_stats['opp_atb3_acc_rank']})")
+                            
+                            # Zone Matchup Analysis - Player vs Opponent
+                            st.subheader("🎯 Zone Matchup Analysis")
+                            st.caption("Green = opponent allows more than player shoots (weak defense), Red = opponent allows less (strong defense)")
+                            
+                            # Load player shooting data
+                            player_shooting_df, player_shooting_error = get_cached_player_shooting_data()
+                            
+                            if player_shooting_error:
+                                st.warning(f"⚠️ Could not load player shooting data: {player_shooting_error}")
+                            elif player_shooting_df is not None:
+                                # Get player zone shooting stats
+                                player_zones = tds.get_player_zone_shooting(selected_player_id, player_shooting_df)
+                                
+                                if player_zones:
+                                    # Compare player zones to opponent defense
+                                    zone_comparisons = tds.compare_player_vs_opponent_zones(player_zones, opp_def_stats)
+                                    
+                                    if zone_comparisons:
+                                        # Display zone matchup cards
+                                        matchup_cols = st.columns(5)
+                                        zone_keys = ['rim', 'smr', 'lmr', 'c3', 'atb3']
+                                        
+                                        for i, zone_key in enumerate(zone_keys):
+                                            zone_data = zone_comparisons[zone_key]
+                                            bg_color = tds.get_matchup_color(zone_data['difference'])
+                                            
+                                            with matchup_cols[i]:
+                                                # Create a styled card using markdown
+                                                diff_sign = "+" if zone_data['difference'] >= 0 else ""
+                                                st.markdown(f"""
+                                                <div style="background-color: {bg_color}; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 8px;">
+                                                    <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">{zone_data['zone_name']}</div>
+                                                    <div style="font-size: 12px; color: #666;">Player: <strong>{zone_data['player_pct']}%</strong></div>
+                                                    <div style="font-size: 12px; color: #666;">Opp Allows: <strong>{zone_data['opp_allowed_pct']}%</strong></div>
+                                                    <div style="font-size: 16px; font-weight: bold; margin-top: 8px;">{diff_sign}{zone_data['difference']}%</div>
+                                                    <div style="font-size: 10px; color: #888;">Freq: {zone_data['player_freq']}% ({zone_data['player_fga']} FGA)</div>
+                                                </div>
+                                                """, unsafe_allow_html=True)
+                                else:
+                                    st.info("Could not load player zone shooting data.")
+                            
+                            st.divider()
+
+        # Display recent game logs table with pagination
         if player_data.get('recent_games_df') is not None and len(player_data['recent_games_df']) > 0:
-            st.subheader("Recent Game Logs (Last 10 Games)")
+            st.subheader("Game Logs")
+            
+            # Get full game logs (not just recent 10)
+            full_game_logs = player_data.get('full_game_logs_df', player_data['recent_games_df'])
+            total_games = len(full_game_logs)
+            
+            # Pagination settings
+            games_per_page = 10
+            total_pages = math.ceil(total_games / games_per_page)
+            
+            # Page selector
+            col_pagination_left, col_pagination_center, col_pagination_right = st.columns([0.3, 0.4, 0.3])
+            
+            with col_pagination_center:
+                if total_pages > 1:
+                    current_page = st.selectbox(
+                        f"Page (Total: {total_games} games)",
+                        options=list(range(1, total_pages + 1)),
+                        format_func=lambda x: f"Page {x} of {total_pages}",
+                        key="game_logs_page"
+                    )
+                else:
+                    current_page = 1
+                    st.caption(f"Showing all {total_games} games")
+            
+            # Calculate start and end indices
+            start_idx = (current_page - 1) * games_per_page
+            end_idx = min(start_idx + games_per_page, total_games)
+            
+            # Get current page of games
+            page_games_df = full_game_logs.iloc[start_idx:end_idx].copy()
+            
             show_game_comparison = st.toggle("Show vs Season Avg", value=False, key="show_game_comparison")
             
             # Get season averages for comparison
             if show_game_comparison and player_data.get('averages_df') is not None:
                 season_avg = player_data['averages_df'].iloc[-1]  # Last row is season
                 
-                game_logs_df = player_data['recent_games_df'].copy()
+                game_logs_df = page_games_df.copy()
                 
                 # Add comparison columns
                 numeric_cols = ['MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', '2PM', '2PA', '3PM', '3PA', 'FTM', 'FTA']
@@ -488,12 +692,78 @@ with tab1:
                 st.dataframe(game_logs_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(
-                    player_data['recent_games_df'],
+                    page_games_df,
                     use_container_width=True,
                     hide_index=True
                 )
+            
+            # Show page info at bottom
+            if total_pages > 1:
+                st.caption(f"Showing games {start_idx + 1}-{end_idx} of {total_games}")
         else:
             st.info("No game logs available for this player.")
+        
+        # Section: Performance vs Selected Opponent
+        if matchup_away_team_id and matchup_home_team_id and player_data.get('full_game_logs_df') is not None:
+            # Determine opponent team abbreviation based on player's team
+            player_team_id = player_data.get('team_id')
+            opponent_abbr = None
+            
+            if player_team_id:
+                player_team_id = int(player_team_id)
+                if player_team_id == matchup_away_team_id:
+                    opponent_abbr = matchup_home_team_abbr
+                elif player_team_id == matchup_home_team_id:
+                    opponent_abbr = matchup_away_team_abbr
+            
+            if opponent_abbr:
+                full_game_logs = player_data['full_game_logs_df']
+                
+                # Filter games against the opponent
+                vs_opponent_games = full_game_logs[full_game_logs['Opponent'] == opponent_abbr].copy()
+                
+                if len(vs_opponent_games) > 0:
+                    st.divider()
+                    st.subheader(f"📊 Performance vs {opponent_abbr} (2025-26)")
+                    
+                    # Calculate averages against opponent
+                    numeric_cols = ['MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', '2PM', '2PA', '3PM', '3PA', 'FTM', 'FTA']
+                    
+                    # Calculate averages
+                    vs_opp_avgs = {}
+                    for col in numeric_cols:
+                        if col in vs_opponent_games.columns:
+                            vs_opp_avgs[col] = round(vs_opponent_games[col].astype(float).mean(), 1)
+                    
+                    # Calculate shooting percentages from totals
+                    total_2pm = vs_opponent_games['2PM'].astype(float).sum()
+                    total_2pa = vs_opponent_games['2PA'].astype(float).sum()
+                    total_3pm = vs_opponent_games['3PM'].astype(float).sum()
+                    total_3pa = vs_opponent_games['3PA'].astype(float).sum()
+                    total_ftm = vs_opponent_games['FTM'].astype(float).sum()
+                    total_fta = vs_opponent_games['FTA'].astype(float).sum()
+                    
+                    vs_opp_avgs['2P%'] = f"{round(total_2pm / total_2pa * 100, 1)}%" if total_2pa > 0 else "0.0%"
+                    vs_opp_avgs['3P%'] = f"{round(total_3pm / total_3pa * 100, 1)}%" if total_3pa > 0 else "0.0%"
+                    vs_opp_avgs['FT%'] = f"{round(total_ftm / total_fta * 100, 1)}%" if total_fta > 0 else "0.0%"
+                    
+                    # Display averages
+                    st.markdown(f"**Averages vs {opponent_abbr}** ({len(vs_opponent_games)} games)")
+                    
+                    avg_cols = st.columns(8)
+                    stat_labels = ['PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', '3P%', 'FT%']
+                    
+                    for i, stat in enumerate(stat_labels):
+                        with avg_cols[i]:
+                            if stat in vs_opp_avgs:
+                                st.metric(label=stat, value=vs_opp_avgs[stat])
+                    
+                    # Display game logs against opponent
+                    st.markdown(f"**Game Logs vs {opponent_abbr}**")
+                    st.dataframe(vs_opponent_games, use_container_width=True, hide_index=True)
+                else:
+                    st.divider()
+                    st.info(f"ℹ️ No games played against {opponent_abbr} this season yet.")
 
 with tab2:
     # YoY Data tab
@@ -627,3 +897,301 @@ with tab2:
         st.dataframe(styled_yoy_df, use_container_width=True, hide_index=True)
     else:
         st.info("No historical season stats available for this player.")
+
+with tab3:
+    # Predictions tab
+    st.subheader("🔮 Stat Predictions")
+    
+    # Check if a matchup is selected
+    if matchup_away_team_id and matchup_home_team_id:
+        # Determine opponent based on player's team
+        player_team_id = player_data.get('team_id')
+        opponent_team_id = None
+        opponent_abbr = None
+        is_home = None
+        
+        if player_team_id:
+            player_team_id = int(player_team_id)
+            if player_team_id == matchup_away_team_id:
+                opponent_team_id = matchup_home_team_id
+                opponent_abbr = matchup_home_team_abbr
+                is_home = False
+            elif player_team_id == matchup_home_team_id:
+                opponent_team_id = matchup_away_team_id
+                opponent_abbr = matchup_away_team_abbr
+                is_home = True
+        
+        if opponent_team_id and opponent_abbr:
+            st.info(f"📊 Generating predictions for **{player_data['player_info_name']}** vs **{opponent_abbr}** ({'Home' if is_home else 'Away'})")
+            
+            # Cache predictions
+            @st.cache_data(ttl=1800)  # Cache for 30 minutes
+            def get_cached_predictions(player_id, opp_team_id, opp_abbr, game_dt, home):
+                try:
+                    return pm.generate_prediction(
+                        player_id=player_id,
+                        opponent_team_id=opp_team_id,
+                        opponent_abbr=opp_abbr,
+                        game_date=game_dt,
+                        is_home=home
+                    ), None
+                except Exception as e:
+                    return None, str(e)
+            
+            # Generate predictions
+            game_date_str = selected_date.strftime('%Y-%m-%d')
+            predictions, pred_error = get_cached_predictions(
+                selected_player_id, 
+                opponent_team_id, 
+                opponent_abbr, 
+                game_date_str, 
+                is_home
+            )
+            
+            if pred_error:
+                st.error(f"⚠️ Could not generate predictions: {pred_error}")
+            elif predictions:
+                # Display main predictions in columns
+                st.markdown("### Predicted Statline")
+                
+                pred_cols = st.columns(7)
+                stat_order = ['PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'FG3M']
+                stat_labels = {'PTS': 'Points', 'REB': 'Rebounds', 'AST': 'Assists', 
+                              'PRA': 'PRA', 'STL': 'Steals', 'BLK': 'Blocks', 'FG3M': '3PM'}
+                
+                for i, stat in enumerate(stat_order):
+                    if stat in predictions:
+                        pred = predictions[stat]
+                        with pred_cols[i]:
+                            # Color code by confidence
+                            if pred.confidence == 'high':
+                                conf_color = '🟢'
+                            elif pred.confidence == 'medium':
+                                conf_color = '🟡'
+                            else:
+                                conf_color = '🔴'
+                            
+                            st.metric(
+                                label=stat_labels.get(stat, stat),
+                                value=pred.value,
+                                delta=f"{conf_color} {pred.confidence}"
+                            )
+                
+                # Prediction breakdown
+                with st.expander("📈 Prediction Breakdown"):
+                    # Show breakdown for each stat
+                    breakdown_cols = st.columns(3)
+                    
+                    for i, stat in enumerate(['PTS', 'REB', 'AST']):
+                        if stat in predictions:
+                            pred = predictions[stat]
+                            with breakdown_cols[i]:
+                                st.markdown(f"**{stat_labels.get(stat, stat)}**")
+                                st.write(f"Season Avg: {pred.breakdown.get('season_avg', 'N/A')}")
+                                st.write(f"L5 Avg: {pred.breakdown.get('L5_avg', 'N/A')}")
+                                st.write(f"Weighted Avg: {pred.breakdown.get('weighted_avg', 'N/A')}")
+                                if 'vs_opponent' in pred.breakdown:
+                                    st.write(f"vs {opponent_abbr}: {pred.breakdown['vs_opponent']}")
+                                st.write(f"**Final: {pred.value}**")
+                
+                # Factors affecting prediction
+                with st.expander("🎯 Factors Considered"):
+                    pts_pred = predictions.get('PTS')
+                    if pts_pred and pts_pred.factors:
+                        for factor, description in pts_pred.factors.items():
+                            st.write(f"• **{factor.replace('_', ' ').title()}**: {description}")
+                
+                # Comparison table
+                st.markdown("### Season Averages vs Prediction")
+                
+                comparison_data = []
+                rolling_avgs = player_data.get('averages_df')
+                
+                if rolling_avgs is not None and len(rolling_avgs) > 0:
+                    season_row = rolling_avgs.iloc[-1]  # Season averages
+                    
+                    for stat in ['PTS', 'REB', 'AST', 'PRA']:
+                        if stat in predictions:
+                            pred = predictions[stat]
+                            season_val = season_row.get(stat, 'N/A')
+                            try:
+                                season_val_float = float(str(season_val).replace(',', ''))
+                                diff = round(pred.value - season_val_float, 1)
+                                diff_str = f"+{diff}" if diff >= 0 else str(diff)
+                            except:
+                                diff_str = "N/A"
+                            
+                            comparison_data.append({
+                                'Stat': stat_labels.get(stat, stat),
+                                'Season Avg': season_val,
+                                'Prediction': pred.value,
+                                'Diff': diff_str,
+                                'Confidence': pred.confidence.capitalize()
+                            })
+                    
+                    if comparison_data:
+                        comparison_df = pd.DataFrame(comparison_data)
+                        st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+                
+                # Vegas Lines Comparison Section
+                st.markdown("### 📊 Vegas Lines Comparison")
+                
+                # Get existing lines for this player/game
+                existing_lines = vl.get_player_lines(selected_player_id, game_date_str)
+                
+                # Allow manual line entry
+                with st.expander("➕ Enter Vegas Lines (Optional)", expanded=len(existing_lines) == 0):
+                    st.caption("Enter the betting lines to compare against predictions")
+                    
+                    line_cols = st.columns(4)
+                    line_inputs = {}
+                    
+                    for i, stat in enumerate(['PTS', 'REB', 'AST', 'PRA']):
+                        with line_cols[i]:
+                            default_val = existing_lines.get(stat, vl.PropLine(stat, 0, -110, -110, 'manual')).line if stat in existing_lines else 0.0
+                            line_inputs[stat] = st.number_input(
+                                f"{stat} Line",
+                                min_value=0.0,
+                                max_value=100.0,
+                                value=float(default_val),
+                                step=0.5,
+                                key=f"line_{stat}"
+                            )
+                    
+                    if st.button("💾 Save Lines", key="save_lines"):
+                        for stat, line_val in line_inputs.items():
+                            if line_val > 0:
+                                vl.set_player_line(
+                                    selected_player_id,
+                                    game_date_str,
+                                    stat,
+                                    line_val
+                                )
+                        st.success("Lines saved!")
+                        st.rerun()
+                
+                # Show comparison if lines exist
+                lines_comparison_data = []
+                for stat in ['PTS', 'REB', 'AST', 'PRA']:
+                    if stat in predictions:
+                        pred = predictions[stat]
+                        
+                        # Get line from saved or input
+                        if stat in existing_lines:
+                            line_val = existing_lines[stat].line
+                        elif stat in line_inputs and line_inputs[stat] > 0:
+                            line_val = line_inputs[stat]
+                        else:
+                            line_val = None
+                        
+                        if line_val and line_val > 0:
+                            comparison = vl.compare_prediction_to_line(pred.value, line_val)
+                            lines_comparison_data.append({
+                                'Stat': stat_labels.get(stat, stat),
+                                'Prediction': pred.value,
+                                'Line': line_val,
+                                'Edge': f"{comparison['diff']:+.1f}",
+                                'Lean': comparison['lean']
+                            })
+                
+                if lines_comparison_data:
+                    lines_df = pd.DataFrame(lines_comparison_data)
+                    
+                    # Style the dataframe with colors
+                    def style_lean(val):
+                        if 'Over' in val:
+                            return 'background-color: rgba(76, 175, 80, 0.3)'
+                        elif 'Under' in val:
+                            return 'background-color: rgba(244, 67, 54, 0.3)'
+                        else:
+                            return 'background-color: rgba(158, 158, 158, 0.2)'
+                    
+                    styled_lines = lines_df.style.applymap(style_lean, subset=['Lean'])
+                    st.dataframe(styled_lines, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Enter Vegas lines above to see comparison with predictions.")
+                
+                # Log prediction button
+                st.markdown("### 📝 Track This Prediction")
+                if st.button("📊 Log Prediction for Tracking", key="log_prediction"):
+                    try:
+                        # Get features for logging
+                        player_features = pf_features.get_all_prediction_features(
+                            player_id=selected_player_id,
+                            opponent_team_id=opponent_team_id,
+                            opponent_abbr=opponent_abbr,
+                            game_date=game_date_str,
+                            is_home=is_home
+                        )
+                        
+                        for stat in ['PTS', 'REB', 'AST', 'PRA']:
+                            if stat in predictions:
+                                line_val = existing_lines.get(stat, vl.PropLine(stat, 0, -110, -110, 'manual')).line if stat in existing_lines else None
+                                
+                                record = pt.create_prediction_record_from_dict(
+                                    player_id=selected_player_id,
+                                    player_name=player_data['player_info_name'],
+                                    opponent_abbr=opponent_abbr,
+                                    game_date=game_date_str,
+                                    stat=stat,
+                                    prediction_dict=predictions[stat],
+                                    features_dict=player_features,
+                                    vegas_line=line_val if line_val and line_val > 0 else None
+                                )
+                                pt.log_prediction(record)
+                        
+                        st.success("✅ Predictions logged! You can update with actual results after the game.")
+                    except Exception as e:
+                        st.error(f"Error logging prediction: {e}")
+                
+                # Show accuracy history
+                with st.expander("📈 Prediction Accuracy History"):
+                    accuracy_metrics = pt.calculate_accuracy_metrics()
+                    
+                    if accuracy_metrics:
+                        st.markdown("**Overall Accuracy by Stat**")
+                        
+                        acc_data = []
+                        for stat, metrics in accuracy_metrics.items():
+                            acc_data.append({
+                                'Stat': stat,
+                                'Predictions': metrics['count'],
+                                'MAE': metrics['mae'],
+                                'Within 10%': f"{metrics['within_10_pct']}%",
+                                'Within 20%': f"{metrics['within_20_pct']}%",
+                                'vs Line': f"{metrics['vs_line_accuracy']}%" if metrics['vs_line_accuracy'] else "N/A"
+                            })
+                        
+                        if acc_data:
+                            st.dataframe(pd.DataFrame(acc_data), use_container_width=True, hide_index=True)
+                        
+                        # By confidence
+                        by_conf = pt.calculate_accuracy_by_confidence()
+                        if by_conf:
+                            st.markdown("**Accuracy by Confidence Level**")
+                            conf_data = []
+                            for conf, metrics in by_conf.items():
+                                conf_data.append({
+                                    'Confidence': conf.capitalize(),
+                                    'Count': metrics['count'],
+                                    'MAE': metrics['mae'],
+                                    'Within 10%': f"{metrics['within_10_pct']}%"
+                                })
+                            st.dataframe(pd.DataFrame(conf_data), use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No prediction history yet. Log predictions and update with actual results to track accuracy.")
+            else:
+                st.warning("Could not generate predictions. Please try again.")
+        else:
+            st.warning("⚠️ Could not determine opponent. Please select a valid matchup.")
+    else:
+        st.info("ℹ️ Select a matchup above to generate predictions for this player.")
+        st.markdown("""
+        **How predictions work:**
+        1. We analyze the player's recent performance (L3, L5, L10, Season)
+        2. We adjust for opponent defensive strength and pace
+        3. We factor in home/away splits and rest days
+        4. We consider historical performance against this opponent
+        
+        Select a date and matchup above to see predictions!
+        """)

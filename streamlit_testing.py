@@ -10,7 +10,7 @@ import pandas as pd
 # st.cache_data.clear()
 
 st.set_page_config(layout="wide")
-st.title("NBA Matchup Data App")
+st.title("NBA Matchup Data App HA GAYYY")
 
 # Cache matchup data
 @st.cache_data(ttl=3600)  # Cache for 1 hour

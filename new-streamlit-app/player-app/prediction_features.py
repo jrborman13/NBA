@@ -6,6 +6,7 @@ Kept separate from main codebase for modularity.
 
 import pandas as pd
 import numpy as np
+import streamlit as st
 import nba_api.stats.endpoints as endpoints
 from typing import Optional, Dict, List, Tuple
 from datetime import datetime, date
@@ -16,6 +17,7 @@ CURRENT_SEASON = "2024-25"
 LEAGUE_ID = "00"
 
 
+@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_player_game_logs(player_id: str, season: str = CURRENT_SEASON) -> pd.DataFrame:
     """
     Get player's game logs for the season.
@@ -40,6 +42,31 @@ def get_player_game_logs(player_id: str, season: str = CURRENT_SEASON) -> pd.Dat
         return pd.DataFrame()
 
 
+@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
+def get_team_game_logs(team_id: int, season: str = CURRENT_SEASON) -> pd.DataFrame:
+    """
+    Get team's game logs for the season (for rest day calculation).
+    
+    Returns:
+        DataFrame with team game logs sorted by date descending (most recent first)
+    """
+    try:
+        team_logs = endpoints.TeamGameLog(
+            team_id=team_id,
+            season=season,
+            season_type_all_star='Regular Season'
+        ).get_data_frames()[0]
+        
+        # Sort by date descending
+        team_logs['GAME_DATE'] = pd.to_datetime(team_logs['GAME_DATE'])
+        team_logs = team_logs.sort_values('GAME_DATE', ascending=False)
+        
+        return team_logs
+    except Exception as e:
+        print(f"Error fetching game logs for team {team_id}: {e}")
+        return pd.DataFrame()
+
+
 def get_player_rolling_averages(game_logs: pd.DataFrame) -> Dict[str, Dict[str, float]]:
     """
     Calculate rolling averages from game logs.
@@ -47,7 +74,7 @@ def get_player_rolling_averages(game_logs: pd.DataFrame) -> Dict[str, Dict[str, 
     Returns:
         Dict with L3, L5, L10, Season averages for key stats
     """
-    stats = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'FG3M', 'FTM', 'MIN', 'TOV']
+    stats = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'FG3M', 'FTM', 'FTA', 'MIN', 'TOV']
     result = {}
     
     for window, label in [(3, 'L3'), (5, 'L5'), (10, 'L10'), (len(game_logs), 'Season')]:
@@ -57,6 +84,11 @@ def get_player_rolling_averages(game_logs: pd.DataFrame) -> Dict[str, Dict[str, 
             # Add PRA
             if all(s in subset.columns for s in ['PTS', 'REB', 'AST']):
                 result[label]['PRA'] = round(subset['PTS'].mean() + subset['REB'].mean() + subset['AST'].mean(), 1)
+            # Add Free Throw Rate (FTA / FGA)
+            if all(s in subset.columns for s in ['FTA', 'FGA']):
+                total_fta = subset['FTA'].sum()
+                total_fga = subset['FGA'].sum()
+                result[label]['FT_RATE'] = round(total_fta / total_fga * 100, 1) if total_fga > 0 else 0.0
     
     return result
 
@@ -68,7 +100,7 @@ def get_player_home_away_splits(game_logs: pd.DataFrame) -> Dict[str, Dict[str, 
     Returns:
         Dict with 'home' and 'away' averages
     """
-    stats = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'MIN']
+    stats = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'MIN', 'FTM', 'FG3M']
     result = {'home': {}, 'away': {}}
     
     # MATCHUP format: "TEAM vs. OPP" (home) or "TEAM @ OPP" (away)
@@ -94,7 +126,7 @@ def get_player_vs_opponent_history(
     Returns:
         Dict with averages against the opponent
     """
-    stats = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'MIN', 'FG3M']
+    stats = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'MIN', 'FG3M', 'FTM']
     
     # Filter games against opponent
     vs_opp = game_logs[game_logs['MATCHUP'].str.contains(opponent_abbr, na=False)]
@@ -111,9 +143,16 @@ def get_player_vs_opponent_history(
     if all(s in vs_opp.columns for s in ['PTS', 'REB', 'AST']):
         result['PRA'] = round(vs_opp['PTS'].mean() + vs_opp['REB'].mean() + vs_opp['AST'].mean(), 1)
     
+    # Add FT Rate for vs opponent
+    if all(s in vs_opp.columns for s in ['FTA', 'FGA']):
+        total_fta = vs_opp['FTA'].sum()
+        total_fga = vs_opp['FGA'].sum()
+        result['FT_RATE'] = round(total_fta / total_fga * 100, 1) if total_fga > 0 else 0.0
+    
     return result
 
 
+@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def get_team_pace(team_id: int, season: str = CURRENT_SEASON) -> float:
     """
     Get team's pace (possessions per game).
@@ -134,6 +173,7 @@ def get_team_pace(team_id: int, season: str = CURRENT_SEASON) -> float:
     return 100.0  # League average default
 
 
+@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def get_team_defensive_rating(team_id: int, season: str = CURRENT_SEASON) -> float:
     """
     Get team's defensive rating (points allowed per 100 possessions).
@@ -154,6 +194,7 @@ def get_team_defensive_rating(team_id: int, season: str = CURRENT_SEASON) -> flo
     return 110.0  # League average default
 
 
+@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_team_defensive_rating_last_n(
     team_id: int,
     n_games: int = 5,
@@ -178,6 +219,7 @@ def get_team_defensive_rating_last_n(
     return 110.0  # Default
 
 
+@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def get_league_averages(season: str = CURRENT_SEASON) -> Dict[str, float]:
     """
     Get league average stats for normalization.
@@ -199,6 +241,7 @@ def get_league_averages(season: str = CURRENT_SEASON) -> Dict[str, float]:
         return {'pace': 100.0, 'def_rating': 110.0, 'off_rating': 110.0}
 
 
+@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def get_player_usage_rate(player_id: str, season: str = CURRENT_SEASON) -> float:
     """
     Get player's usage rate.
@@ -234,19 +277,44 @@ def get_player_minutes_trend(game_logs: pd.DataFrame, window: int = 5) -> Dict[s
     }
 
 
-def calculate_days_rest(game_logs: pd.DataFrame, game_date: str) -> int:
+def calculate_days_rest(team_id: int, game_date: str) -> int:
     """
-    Calculate days of rest before a game.
-    """
-    if 'GAME_DATE' not in game_logs.columns or len(game_logs) == 0:
-        return 3  # Default
+    Calculate days of rest before a game using team's schedule.
     
-    game_dates = game_logs['GAME_DATE'].dt.strftime('%Y-%m-%d').tolist()
-    return utils.calculate_days_rest(game_dates, game_date)
+    Uses team game logs instead of player game logs since players may miss games.
+    
+    Args:
+        team_id: The player's team ID
+        game_date: The date of the upcoming game (YYYY-MM-DD)
+    
+    Returns:
+        Number of days since team's last game (1 = back-to-back)
+    """
+    try:
+        target = pd.to_datetime(game_date).date()
+        
+        # Get team's game logs (cached)
+        team_logs = get_team_game_logs(team_id)
+        
+        if team_logs.empty or 'GAME_DATE' not in team_logs.columns:
+            return 2  # Default to normal rest
+        
+        # Find the most recent game before the target date
+        for _, row in team_logs.iterrows():
+            game_dt = row['GAME_DATE'].date()
+            if game_dt < target:
+                days_rest = (target - game_dt).days
+                return days_rest
+        
+        return 2  # Default if no previous games found
+    except Exception as e:
+        print(f"Error calculating days rest for team {team_id}: {e}")
+        return 2  # Default
 
 
 def get_all_prediction_features(
     player_id: str,
+    player_team_id: int,
     opponent_team_id: int,
     opponent_abbr: str,
     game_date: str,
@@ -257,6 +325,7 @@ def get_all_prediction_features(
     
     Args:
         player_id: NBA API player ID
+        player_team_id: Player's team ID (for rest calculation)
         opponent_team_id: Opponent's team ID
         opponent_abbr: Opponent's team abbreviation (e.g., 'LAL')
         game_date: Date of the game (YYYY-MM-DD)
@@ -267,8 +336,11 @@ def get_all_prediction_features(
     """
     features = {}
     
-    # Get player game logs
+    # Get player game logs (cached)
     game_logs = get_player_game_logs(player_id)
+    
+    # Store game_logs in features for reuse in prediction model
+    features['game_logs'] = game_logs
     
     # Player rolling averages
     features['rolling_avgs'] = get_player_rolling_averages(game_logs)
@@ -280,8 +352,8 @@ def get_all_prediction_features(
     # Historical vs opponent
     features['vs_opponent'] = get_player_vs_opponent_history(game_logs, opponent_abbr)
     
-    # Rest days
-    features['days_rest'] = calculate_days_rest(game_logs, game_date)
+    # Rest days (using team schedule for accuracy)
+    features['days_rest'] = calculate_days_rest(player_team_id, game_date)
     features['is_back_to_back'] = utils.is_back_to_back(features['days_rest'])
     
     # Opponent stats
@@ -308,9 +380,11 @@ def get_all_prediction_features(
             'PTS': utils.calculate_trend(game_logs['PTS'].tolist()),
             'REB': utils.calculate_trend(game_logs['REB'].tolist()),
             'AST': utils.calculate_trend(game_logs['AST'].tolist()),
+            'FTM': utils.calculate_trend(game_logs['FTM'].tolist()) if 'FTM' in game_logs.columns else 0.0,
+            'FG3M': utils.calculate_trend(game_logs['FG3M'].tolist()) if 'FG3M' in game_logs.columns else 0.0,
         }
     else:
-        features['stat_trends'] = {'PTS': 0.0, 'REB': 0.0, 'AST': 0.0}
+        features['stat_trends'] = {'PTS': 0.0, 'REB': 0.0, 'AST': 0.0, 'FTM': 0.0, 'FG3M': 0.0}
     
     # Consistency scores
     if len(game_logs) >= 5:
@@ -318,9 +392,19 @@ def get_all_prediction_features(
             'PTS': utils.calculate_consistency(game_logs['PTS'].tolist()),
             'REB': utils.calculate_consistency(game_logs['REB'].tolist()),
             'AST': utils.calculate_consistency(game_logs['AST'].tolist()),
+            'FTM': utils.calculate_consistency(game_logs['FTM'].tolist()) if 'FTM' in game_logs.columns else 0.0,
+            'FG3M': utils.calculate_consistency(game_logs['FG3M'].tolist()) if 'FG3M' in game_logs.columns else 0.0,
         }
     else:
-        features['consistency'] = {'PTS': 0.0, 'REB': 0.0, 'AST': 0.0}
+        features['consistency'] = {'PTS': 0.0, 'REB': 0.0, 'AST': 0.0, 'FTM': 0.0, 'FG3M': 0.0}
+    
+    # Player's season FT Rate (for FTM prediction adjustment)
+    if len(game_logs) > 0 and all(col in game_logs.columns for col in ['FTA', 'FGA']):
+        total_fta = game_logs['FTA'].sum()
+        total_fga = game_logs['FGA'].sum()
+        features['player_ft_rate'] = round(total_fta / total_fga * 100, 1) if total_fga > 0 else 0.0
+    else:
+        features['player_ft_rate'] = 25.0  # Default ~25% FT rate
     
     return features
 

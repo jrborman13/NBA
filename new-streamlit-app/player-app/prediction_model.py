@@ -73,7 +73,8 @@ class PlayerStatPredictor:
         
         # 2. Calculate weighted average (exponential decay)
         # This gives more weight to recent games
-        game_logs = features.get_player_game_logs(str(player_features.get('player_id', '')))
+        # Use game_logs from features dict (already cached) instead of re-fetching
+        game_logs = player_features.get('game_logs', pd.DataFrame())
         if len(game_logs) > 0 and stat in game_logs.columns:
             recent_values = game_logs[stat].head(10).tolist()
             weighted_avg = utils.weighted_average(recent_values, decay=0.85)
@@ -128,6 +129,22 @@ class PlayerStatPredictor:
             def_adjustment = opp_def_rating / league_def_rating
             adjusted_prediction *= def_adjustment
             factors['defense'] = f"Opp DEF RTG {opp_def_rating} vs league avg {league_def_rating}"
+        
+        # FT Rate adjustment for FTM predictions
+        # If opponent allows more FT attempts (higher FT Rate), player likely to get more FTM
+        if stat == 'FTM':
+            # Get opponent's FT Rate allowed (need to load from team_defensive_stats)
+            player_ft_rate = player_features.get('player_ft_rate', 25.0)
+            # Assume league average FT Rate is around 25%
+            league_avg_ft_rate = 25.0
+            
+            # If player has higher than average FT Rate, they get to the line more
+            player_ft_rate_factor = player_ft_rate / league_avg_ft_rate if league_avg_ft_rate > 0 else 1.0
+            
+            # Apply a moderate adjustment based on player's tendency to get to the line
+            ft_adjustment = 0.8 + 0.2 * player_ft_rate_factor
+            adjusted_prediction *= ft_adjustment
+            factors['ft_rate'] = f"Player FT Rate: {player_ft_rate}% (league avg ~{league_avg_ft_rate}%)"
         
         # Pace adjustment
         opp_pace = opp_stats.get('pace', 100.0)
@@ -222,7 +239,7 @@ class PlayerStatPredictor:
         PRA is calculated as the sum of PTS + REB + AST, not predicted independently.
         """
         # Predict individual stats first
-        stats_to_predict = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'FG3M']
+        stats_to_predict = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'FG3M', 'FTM']
         
         predictions = {}
         for stat in stats_to_predict:
@@ -266,6 +283,7 @@ class PlayerStatPredictor:
 
 def generate_prediction(
     player_id: str,
+    player_team_id: int,
     opponent_team_id: int,
     opponent_abbr: str,
     game_date: str,
@@ -276,6 +294,7 @@ def generate_prediction(
     
     Args:
         player_id: NBA API player ID
+        player_team_id: Player's team ID (for rest calculation)
         opponent_team_id: Opponent's team ID
         opponent_abbr: Opponent's team abbreviation (e.g., 'LAL')
         game_date: Date of the game (YYYY-MM-DD)
@@ -287,6 +306,7 @@ def generate_prediction(
     # Gather all features
     player_features = features.get_all_prediction_features(
         player_id=player_id,
+        player_team_id=player_team_id,
         opponent_team_id=opponent_team_id,
         opponent_abbr=opponent_abbr,
         game_date=game_date,

@@ -49,6 +49,9 @@ def load_shooting_data():
         df['3PT%'] = df['FG3M'] / df['FG3A']
         df['FT%'] = df['FTM'] / df['FTA']
         
+        # Free Throw Rate = FTA / FGA (how often they get to the line per field goal attempt)
+        df['FT_RATE'] = df['FTA'] / df['FGA']
+        
         # Add ranking columns (lower rank = better defense, meaning opponents score less)
         df['FGM_RANK'] = df['FGM_PG'].rank(ascending=True, method='first').astype(int)
         df['FGA_RANK'] = df['FGA_PG'].rank(ascending=True, method='first').astype(int)
@@ -62,6 +65,7 @@ def load_shooting_data():
         df['FTM_RANK'] = df['FTM_PG'].rank(ascending=True, method='first').astype(int)
         df['FTA_RANK'] = df['FTA_PG'].rank(ascending=True, method='first').astype(int)
         df['FT%_RANK'] = df['FT%'].rank(ascending=True, method='first').astype(int)
+        df['FT_RATE_RANK'] = df['FT_RATE'].rank(ascending=True, method='first').astype(int)  # Lower = better defense (less FT allowed)
         
         # Zone shooting rankings
         df['RIM_FREQ_RANK'] = df['AtRimFrequency'].rank(ascending=False, method='first').astype(int)
@@ -115,6 +119,11 @@ def get_team_defensive_stats(team_id, opp_team_stats):
     stats['opp_ft_pct'] = round(team_row['FT%'].values[0] * 100, 1)
     stats['opp_fta_pg'] = team_row['FTA_PG'].values[0]
     stats['opp_fta_rank'] = int(team_row['FTA_RANK'].values[0])
+    stats['opp_ftm_pg'] = team_row['FTM_PG'].values[0]
+    
+    # Free Throw Rate (FTA/FGA) - how often opponents get to the line
+    stats['opp_ft_rate'] = round(team_row['FT_RATE'].values[0] * 100, 1)  # As percentage
+    stats['opp_ft_rate_rank'] = int(team_row['FT_RATE_RANK'].values[0])
     
     # Rim Defense
     stats['opp_rim_freq'] = round(team_row['AtRimFrequency'].values[0] * 100, 1)

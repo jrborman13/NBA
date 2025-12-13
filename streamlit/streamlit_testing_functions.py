@@ -243,191 +243,479 @@ nba_logo = 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.pn
 #Load in the current NBA standings
 standings = nba_api.stats.endpoints.LeagueStandings(league_id='00', season=current_season, season_type='Regular Season').get_data_frames()[0]
 
-#Import today's games
-from nba_api.live.nba.endpoints import scoreboard
-games = scoreboard.ScoreBoard()
-games_json = json.loads(games.get_json())
-todays_games = games_json['scoreboard']['games']
+# Function to get today's matchups
+def get_todays_matchups():
+    """Fetch today's NBA matchups and return as list of dictionaries"""
+    try:
+        from nba_api.live.nba.endpoints import scoreboard
+        games = scoreboard.ScoreBoard()
+        games_json = json.loads(games.get_json())
+        todays_games = games_json['scoreboard']['games']
+        
+        matchups = []
+        for game in todays_games:
+            away_team_id = game['awayTeam']['teamId']
+            home_team_id = game['homeTeam']['teamId']
+            game_id = game['gameId']
+            game_time = game.get('gameTimeUTC', '')
+            
+            # Get team names
+            try:
+                away_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_team_id, 'TEAM_NAME'].values[0]
+                home_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_team_id, 'TEAM_NAME'].values[0]
+            except:
+                away_name = game['awayTeam'].get('teamName', 'Unknown')
+                home_name = game['homeTeam'].get('teamName', 'Unknown')
+            
+            matchups.append({
+                'game_id': game_id,
+                'away_team_id': away_team_id,
+                'home_team_id': home_team_id,
+                'away_team_name': away_name,
+                'home_team_name': home_name,
+                'game_time': game_time,
+                'is_wolves_game': (away_team_id == wolves_id or home_team_id == wolves_id)
+            })
+        
+        # Sort by game time, with Wolves games first
+        matchups.sort(key=lambda x: (not x['is_wolves_game'], x['game_time']))
+        
+        return matchups
+    except Exception as e:
+        print(f"Error fetching matchups: {e}")
+        return []
 
-#Search for the Wolves game
-target_key = 'gameCode'
-partial_match = 'MIN'
+# Get today's matchups
+todays_matchups = get_todays_matchups()
 
-target_index = None  # Initialize to None
-
-for index, dictionary in enumerate[todays_games](todays_games):
-    if target_key in dictionary and partial_match in dictionary[target_key]:
-        target_index = index
-        break  # Stop after finding first match
-
-
+# Global variable to store selected matchup (can be set by Streamlit app before stats calculation)
+# Check if streamlit session state exists and has matchup_override
+_selected_matchup_override = None
 try:
-    if todays_games[target_index]['homeTeam']['teamId'] == wolves_id:
-        game_id = todays_games[target_index]['gameId']
-        home_or_away = 'Home'
-        home_id = wolves_id
-        home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
-        away_id = todays_games[target_index]['awayTeam']['teamId']
-        away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
-        opponent_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'TEAM_NAME'].values[0]
-        game_title = f'{opponent_name} at Minnesota Timberwolves'
-        print(game_title)
+    import streamlit as st
+    if hasattr(st, 'session_state') and 'matchup_override' in st.session_state:
+        _selected_matchup_override = st.session_state['matchup_override']
+except:
+    pass
+
+def set_matchup_override(matchup):
+    """Set matchup override before stats are calculated"""
+    global _selected_matchup_override
+    _selected_matchup_override = matchup
+
+# Function to update selected matchup
+def update_selected_matchup(matchup):
+    """Update module-level variables based on selected matchup"""
+    global game_id, away_id, home_id, away_logo_link, home_logo_link, game_title, home_or_away
+    
+    if matchup:
+        game_id = matchup['game_id']
+        away_id = matchup['away_team_id']
+        home_id = matchup['home_team_id']
+        
+        if away_id == wolves_id:
+            home_or_away = 'Away'
+            away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
+            home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
+            game_title = f'Minnesota Timberwolves at {matchup["home_team_name"]}'
+        elif home_id == wolves_id:
+            home_or_away = 'Home'
+            away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
+            home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
+            game_title = f'{matchup["away_team_name"]} at Minnesota Timberwolves'
+        else:
+            home_or_away = None
+            away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
+            home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
+            game_title = f'{matchup["away_team_name"]} at {matchup["home_team_name"]}'
     else:
-        game_id = todays_games[target_index]['gameId']
-        home_or_away = 'Away'
-        away_id = wolves_id
-        away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
-        home_id = todays_games[target_index]['homeTeam']['teamId']
-        home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
-        opponent_name = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'TEAM_NAME'].values[0]
-        game_title = f'Minnesota Timberwolves at {opponent_name}'
-        print(game_title)
+        game_id = None
+        home_or_away = None
+        home_id = None
+        home_logo_link = None
+        away_id = None
+        away_logo_link = None
+        game_title = "No game today"
 
-except Exception as e:
-    print(f"Error: {e}")
-    game_id = None
-    home_or_away = None
-    home_id = None
-    home_logo_link = None
-    away_id = None
-    away_logo_link = None
-#Record and Seed
-## Away Team
-away_team_record = standings.loc[standings['TeamID'] == away_id, 'Record'].values[0]
-away_team_seed = standings.loc[standings['TeamID'] == away_id, 'PlayoffRank'].values[0]
-away_team_division_seed = standings.loc[standings['TeamID'] == away_id, 'DivisionRank'].values[0]
-## Home Team
-home_team_record = standings.loc[standings['TeamID'] == home_id, 'Record'].values[0]
-home_team_seed = standings.loc[standings['TeamID'] == home_id, 'PlayoffRank'].values[0]
-home_team_division_seed = standings.loc[standings['TeamID'] == home_id, 'DivisionRank'].values[0]
+# Default to first matchup (which will be Wolves game if available, otherwise first by time)
+# Use override if set, otherwise use first matchup
+selected_matchup = None
+if _selected_matchup_override is not None:
+    selected_matchup = _selected_matchup_override
+elif todays_matchups:
+    selected_matchup = todays_matchups[0]  # Default to first (Wolves game if available)
 
-#Offensive Ratings
-## Away Team
-away_team_ortg = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'OFF_RATING'].values[0]
-away_team_ortg_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'OFF_RATING_RANK'].values[0]
-l5_away_team_ortg = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'OFF_RATING'].values[0]
-l5_away_team_ortg_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'OFF_RATING_RANK'].values[0]
-##League Average
-la_ortg = round(data_adv_season['OFF_RATING'].mean(), 1)
-l5_la_ortg = round(data_adv_L5['OFF_RATING'].mean(), 1)
-## Home Team
-home_team_ortg = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'OFF_RATING'].values[0]
-home_team_ortg_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'OFF_RATING_RANK'].values[0]
-l5_home_team_ortg = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, 'OFF_RATING'].values[0]
-l5_home_team_ortg_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, 'OFF_RATING_RANK'].values[0]
+if selected_matchup:
+    update_selected_matchup(selected_matchup)
+else:
+    update_selected_matchup(None)
 
-#Defensive Ratings
-## Away Team
-away_team_drtg = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'DEF_RATING'].values[0]
-away_team_drtg_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'DEF_RATING_RANK'].values[0]
-l5_away_team_drtg = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'DEF_RATING'].values[0]
-l5_away_team_drtg_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'DEF_RATING_RANK'].values[0]
-##League Average
-la_drtg = round(data_adv_season['DEF_RATING'].mean(), 1)
-l5_la_drtg = round(data_adv_L5['DEF_RATING'].mean(), 1)
-## Home Team
-home_team_drtg = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'DEF_RATING'].values[0]
-home_team_drtg_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'DEF_RATING_RANK'].values[0]
-l5_home_team_drtg = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, 'DEF_RATING'].values[0]
-l5_home_team_drtg_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, 'DEF_RATING_RANK'].values[0]
+# Helper function to safely get values from DataFrame
+def safe_get_value(df, team_id, column, default=None, id_column=None):
+    """Safely get a value from DataFrame, returning default if not found
+    
+    Args:
+        df: DataFrame to search
+        team_id: Team ID to search for
+        column: Column name to retrieve
+        default: Default value if not found
+        id_column: ID column name (auto-detects 'TEAM_ID' or 'TeamID' if None)
+    """
+    if team_id is None:
+        return default
+    
+    # Auto-detect ID column name
+    if id_column is None:
+        if 'TEAM_ID' in df.columns:
+            id_column = 'TEAM_ID'
+        elif 'TeamID' in df.columns:
+            id_column = 'TeamID'
+        else:
+            # Try to find any column that might be the ID column
+            id_candidates = [col for col in df.columns if 'id' in col.lower() or 'team' in col.lower()]
+            if id_candidates:
+                id_column = id_candidates[0]
+            else:
+                return default
+    
+    if id_column not in df.columns or column not in df.columns:
+        return default
+    
+    filtered = df.loc[df[id_column] == team_id, column]
+    if len(filtered) > 0:
+        return filtered.values[0]
+    return default
 
-#Net Ratings
-## Away Team
-away_team_net = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'NET_RATING'].values[0]
-away_team_net_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'NET_RATING_RANK'].values[0]
-l5_away_team_net = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'NET_RATING'].values[0]
-l5_away_team_net_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'NET_RATING_RANK'].values[0]
-##League Average
-la_net = 0
-l5_la_net = 0
-## Home Team
-home_team_net = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'NET_RATING'].values[0]
-home_team_net_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'NET_RATING_RANK'].values[0]
-l5_home_team_net = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, 'NET_RATING'].values[0]
-l5_home_team_net_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, 'NET_RATING_RANK'].values[0]
-
-#REBOUND PERCENTAGES
-
-#DREB%
-## Away Team
-away_team_dreb = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'DREB_PCT'].values[0]
-away_team_dreb_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'DREB_PCT_RANK'].values[0]
-l5_away_team_dreb = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'DREB_PCT'].values[0]
-l5_away_team_dreb_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'DREB_PCT_RANK'].values[0]
-## League Average
-la_dreb = round(data_adv_season['DREB_PCT'].mean(), 3)
-l5_la_dreb = round(data_adv_L5['DREB_PCT'].mean(), 3)
-## Home Team
-home_team_dreb = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'DREB_PCT'].values[0]
-home_team_dreb_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'DREB_PCT_RANK'].values[0]
-l5_home_team_dreb = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, 'DREB_PCT'].values[0]
-l5_home_team_dreb_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, 'DREB_PCT_RANK'].values[0]
-
-#OREB%
-## Away Team
-away_team_oreb = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'OREB_PCT'].values[0]
-away_team_oreb_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'OREB_PCT_RANK'].values[0]
-l5_away_team_oreb = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'OREB_PCT'].values[0]
-l5_away_team_oreb_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'OREB_PCT_RANK'].values[0]
-## League Average
-la_oreb = round(data_adv_season['OREB_PCT'].mean(), 3)
-l5_la_oreb = round(data_adv_L5['OREB_PCT'].mean(), 3)
-## Home Team
-home_team_oreb = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'OREB_PCT'].values[0]
-home_team_oreb_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'OREB_PCT_RANK'].values[0]
-l5_home_team_oreb = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, 'OREB_PCT'].values[0]
-l5_home_team_oreb_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, 'OREB_PCT_RANK'].values[0]
-
-#REB%
-## Away Team
-away_team_reb = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'REB_PCT'].values[0]
-away_team_reb_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == away_id, 'REB_PCT_RANK'].values[0]
-l5_away_team_reb = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'REB_PCT'].values[0]
-l5_away_team_reb_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == away_id, 'REB_PCT_RANK'].values[0]
-## League Average
-la_reb = round(data_adv_season['REB_PCT'].mean(), 3)
-l5_la_reb = round(data_adv_L5['REB_PCT'].mean(), 3)
-## Home Team
-home_team_reb = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'REB_PCT'].values[0]
-home_team_reb_rank = data_adv_season.loc[data_adv_season['TEAM_ID'] == home_id, 'REB_PCT_RANK'].values[0]
-l5_home_team_reb = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, 'REB_PCT'].values[0]
-l5_home_team_reb_rank = data_adv_L5.loc[data_adv_L5['TEAM_ID'] == home_id, 'REB_PCT_RANK'].values[0]
+# Only calculate stats if we have valid team IDs
+if away_id is not None and home_id is not None:
+    #Record and Seed
+    ## Away Team
+    away_team_record = safe_get_value(standings, away_id, 'Record', id_column='TeamID')
+    away_team_seed = safe_get_value(standings, away_id, 'PlayoffRank', id_column='TeamID')
+    away_team_division_seed = safe_get_value(standings, away_id, 'DivisionRank', id_column='TeamID')
+    
+    ## Home Team
+    home_team_record = safe_get_value(standings, home_id, 'Record', id_column='TeamID')
+    home_team_seed = safe_get_value(standings, home_id, 'PlayoffRank', id_column='TeamID')
+    home_team_division_seed = safe_get_value(standings, home_id, 'DivisionRank', id_column='TeamID')
+    
+    #Offensive Ratings
+    ## Away Team
+    away_team_ortg = safe_get_value(data_adv_season, away_id, 'OFF_RATING', 0)
+    away_team_ortg_rank = safe_get_value(data_adv_season, away_id, 'OFF_RATING_RANK', 0)
+    l5_away_team_ortg = safe_get_value(data_adv_L5, away_id, 'OFF_RATING', 0)
+    l5_away_team_ortg_rank = safe_get_value(data_adv_L5, away_id, 'OFF_RATING_RANK', 0)
+    ##League Average
+    la_ortg = round(data_adv_season['OFF_RATING'].mean(), 1)
+    l5_la_ortg = round(data_adv_L5['OFF_RATING'].mean(), 1)
+    ## Home Team
+    home_team_ortg = safe_get_value(data_adv_season, home_id, 'OFF_RATING', 0)
+    home_team_ortg_rank = safe_get_value(data_adv_season, home_id, 'OFF_RATING_RANK', 0)
+    l5_home_team_ortg = safe_get_value(data_adv_L5, home_id, 'OFF_RATING', 0)
+    l5_home_team_ortg_rank = safe_get_value(data_adv_L5, home_id, 'OFF_RATING_RANK', 0)
+    
+    #Defensive Ratings
+    ## Away Team
+    away_team_drtg = safe_get_value(data_adv_season, away_id, 'DEF_RATING', 0)
+    away_team_drtg_rank = safe_get_value(data_adv_season, away_id, 'DEF_RATING_RANK', 0)
+    l5_away_team_drtg = safe_get_value(data_adv_L5, away_id, 'DEF_RATING', 0)
+    l5_away_team_drtg_rank = safe_get_value(data_adv_L5, away_id, 'DEF_RATING_RANK', 0)
+    ##League Average
+    la_drtg = round(data_adv_season['DEF_RATING'].mean(), 1)
+    l5_la_drtg = round(data_adv_L5['DEF_RATING'].mean(), 1)
+    ## Home Team
+    home_team_drtg = safe_get_value(data_adv_season, home_id, 'DEF_RATING', 0)
+    home_team_drtg_rank = safe_get_value(data_adv_season, home_id, 'DEF_RATING_RANK', 0)
+    l5_home_team_drtg = safe_get_value(data_adv_L5, home_id, 'DEF_RATING', 0)
+    l5_home_team_drtg_rank = safe_get_value(data_adv_L5, home_id, 'DEF_RATING_RANK', 0)
+    
+    #Net Ratings
+    ## Away Team
+    away_team_net = safe_get_value(data_adv_season, away_id, 'NET_RATING', 0)
+    away_team_net_rank = safe_get_value(data_adv_season, away_id, 'NET_RATING_RANK', 0)
+    l5_away_team_net = safe_get_value(data_adv_L5, away_id, 'NET_RATING', 0)
+    l5_away_team_net_rank = safe_get_value(data_adv_L5, away_id, 'NET_RATING_RANK', 0)
+    ##League Average
+    la_net = 0
+    l5_la_net = 0
+    ## Home Team
+    home_team_net = safe_get_value(data_adv_season, home_id, 'NET_RATING', 0)
+    home_team_net_rank = safe_get_value(data_adv_season, home_id, 'NET_RATING_RANK', 0)
+    l5_home_team_net = safe_get_value(data_adv_L5, home_id, 'NET_RATING', 0)
+    l5_home_team_net_rank = safe_get_value(data_adv_L5, home_id, 'NET_RATING_RANK', 0)
+    
+    #REBOUND PERCENTAGES
+    
+    #DREB%
+    ## Away Team
+    away_team_dreb = safe_get_value(data_adv_season, away_id, 'DREB_PCT', 0)
+    away_team_dreb_rank = safe_get_value(data_adv_season, away_id, 'DREB_PCT_RANK', 0)
+    l5_away_team_dreb = safe_get_value(data_adv_L5, away_id, 'DREB_PCT', 0)
+    l5_away_team_dreb_rank = safe_get_value(data_adv_L5, away_id, 'DREB_PCT_RANK', 0)
+    ## League Average
+    la_dreb = round(data_adv_season['DREB_PCT'].mean(), 3)
+    l5_la_dreb = round(data_adv_L5['DREB_PCT'].mean(), 3)
+    ## Home Team
+    home_team_dreb = safe_get_value(data_adv_season, home_id, 'DREB_PCT', 0)
+    home_team_dreb_rank = safe_get_value(data_adv_season, home_id, 'DREB_PCT_RANK', 0)
+    l5_home_team_dreb = safe_get_value(data_adv_L5, home_id, 'DREB_PCT', 0)
+    l5_home_team_dreb_rank = safe_get_value(data_adv_L5, home_id, 'DREB_PCT_RANK', 0)
+    
+    #OREB%
+    ## Away Team
+    away_team_oreb = safe_get_value(data_adv_season, away_id, 'OREB_PCT', 0)
+    away_team_oreb_rank = safe_get_value(data_adv_season, away_id, 'OREB_PCT_RANK', 0)
+    l5_away_team_oreb = safe_get_value(data_adv_L5, away_id, 'OREB_PCT', 0)
+    l5_away_team_oreb_rank = safe_get_value(data_adv_L5, away_id, 'OREB_PCT_RANK', 0)
+    ## League Average
+    la_oreb = round(data_adv_season['OREB_PCT'].mean(), 3)
+    l5_la_oreb = round(data_adv_L5['OREB_PCT'].mean(), 3)
+    ## Home Team
+    home_team_oreb = safe_get_value(data_adv_season, home_id, 'OREB_PCT', 0)
+    home_team_oreb_rank = safe_get_value(data_adv_season, home_id, 'OREB_PCT_RANK', 0)
+    l5_home_team_oreb = safe_get_value(data_adv_L5, home_id, 'OREB_PCT', 0)
+    l5_home_team_oreb_rank = safe_get_value(data_adv_L5, home_id, 'OREB_PCT_RANK', 0)
+    
+    #REB%
+    ## Away Team
+    away_team_reb = safe_get_value(data_adv_season, away_id, 'REB_PCT', 0)
+    away_team_reb_rank = safe_get_value(data_adv_season, away_id, 'REB_PCT_RANK', 0)
+    l5_away_team_reb = safe_get_value(data_adv_L5, away_id, 'REB_PCT', 0)
+    l5_away_team_reb_rank = safe_get_value(data_adv_L5, away_id, 'REB_PCT_RANK', 0)
+    ## League Average
+    la_reb = round(data_adv_season['REB_PCT'].mean(), 3)
+    l5_la_reb = round(data_adv_L5['REB_PCT'].mean(), 3)
+    ## Home Team
+    home_team_reb = safe_get_value(data_adv_season, home_id, 'REB_PCT', 0)
+    home_team_reb_rank = safe_get_value(data_adv_season, home_id, 'REB_PCT_RANK', 0)
+    l5_home_team_reb = safe_get_value(data_adv_L5, home_id, 'REB_PCT', 0)
+    l5_home_team_reb_rank = safe_get_value(data_adv_L5, home_id, 'REB_PCT_RANK', 0)
+else:
+    # Set default values when no game is found
+    away_team_record = None
+    away_team_seed = None
+    away_team_division_seed = None
+    home_team_record = None
+    home_team_seed = None
+    home_team_division_seed = None
+    away_team_ortg = 0
+    away_team_ortg_rank = 0
+    l5_away_team_ortg = 0
+    l5_away_team_ortg_rank = 0
+    la_ortg = 0
+    l5_la_ortg = 0
+    home_team_ortg = 0
+    home_team_ortg_rank = 0
+    l5_home_team_ortg = 0
+    l5_home_team_ortg_rank = 0
+    
+    #Defensive Ratings
+    ## Away Team
+    away_team_drtg = 0
+    away_team_drtg_rank = 0
+    l5_away_team_drtg = 0
+    l5_away_team_drtg_rank = 0
+    ##League Average
+    la_drtg = round(data_adv_season['DEF_RATING'].mean(), 1)
+    l5_la_drtg = round(data_adv_L5['DEF_RATING'].mean(), 1)
+    ## Home Team
+    home_team_drtg = 0
+    home_team_drtg_rank = 0
+    l5_home_team_drtg = 0
+    l5_home_team_drtg_rank = 0
+    
+    #Net Ratings
+    ## Away Team
+    away_team_net = 0
+    away_team_net_rank = 0
+    l5_away_team_net = 0
+    l5_away_team_net_rank = 0
+    ##League Average
+    la_net = 0
+    l5_la_net = 0
+    ## Home Team
+    home_team_net = 0
+    home_team_net_rank = 0
+    l5_home_team_net = 0
+    l5_home_team_net_rank = 0
+    
+    #REBOUND PERCENTAGES
+    
+    #DREB%
+    ## Away Team
+    away_team_dreb = 0
+    away_team_dreb_rank = 0
+    l5_away_team_dreb = 0
+    l5_away_team_dreb_rank = 0
+    ## League Average
+    la_dreb = round(data_adv_season['DREB_PCT'].mean(), 3)
+    l5_la_dreb = round(data_adv_L5['DREB_PCT'].mean(), 3)
+    ## Home Team
+    home_team_dreb = 0
+    home_team_dreb_rank = 0
+    l5_home_team_dreb = 0
+    l5_home_team_dreb_rank = 0
+    
+    #OREB%
+    ## Away Team
+    away_team_oreb = 0
+    away_team_oreb_rank = 0
+    l5_away_team_oreb = 0
+    l5_away_team_oreb_rank = 0
+    ## League Average
+    la_oreb = round(data_adv_season['OREB_PCT'].mean(), 3)
+    l5_la_oreb = round(data_adv_L5['OREB_PCT'].mean(), 3)
+    ## Home Team
+    home_team_oreb = 0
+    home_team_oreb_rank = 0
+    l5_home_team_oreb = 0
+    l5_home_team_oreb_rank = 0
+    
+    #REB%
+    ## Away Team
+    away_team_reb = 0
+    away_team_reb_rank = 0
+    l5_away_team_reb = 0
+    l5_away_team_reb_rank = 0
+    ## League Average
+    la_reb = round(data_adv_season['REB_PCT'].mean(), 3)
+    l5_la_reb = round(data_adv_L5['REB_PCT'].mean(), 3)
+    ## Home Team
+    home_team_reb = 0
+    home_team_reb_rank = 0
+    l5_home_team_reb = 0
+    l5_home_team_reb_rank = 0
+    
+    # Initialize all other stats used by the app to defaults
+    away_team_pitp_off = 0
+    away_team_pitp_off_rank = 0
+    l5_away_team_pitp_off = 0
+    l5_away_team_pitp_off_rank = 0
+    home_team_pitp_off = 0
+    home_team_pitp_off_rank = 0
+    l5_home_team_pitp_off = 0
+    l5_home_team_pitp_off_rank = 0
+    away_team_pitp_def = 0
+    away_team_pitp_def_rank = 0
+    l5_away_team_pitp_def = 0
+    l5_away_team_pitp_def_rank = 0
+    home_team_pitp_def = 0
+    home_team_pitp_def_rank = 0
+    l5_home_team_pitp_def = 0
+    l5_home_team_pitp_def_rank = 0
+    away_team_2c_off = 0
+    away_team_2c_off_rank = 0
+    l5_away_team_2c_off = 0
+    l5_away_team_2c_off_rank = 0
+    home_team_2c_off = 0
+    home_team_2c_off_rank = 0
+    l5_home_team_2c_off = 0
+    l5_home_team_2c_off_rank = 0
+    away_team_2c_def = 0
+    away_team_2c_def_rank = 0
+    l5_away_team_2c_def = 0
+    l5_away_team_2c_def_rank = 0
+    home_team_2c_def = 0
+    home_team_2c_def_rank = 0
+    l5_home_team_2c_def = 0
+    l5_home_team_2c_def_rank = 0
+    away_team_fb_off = 0
+    away_team_fb_off_rank = 0
+    l5_away_team_fb_off = 0
+    l5_away_team_fb_off_rank = 0
+    home_team_fb_off = 0
+    home_team_fb_off_rank = 0
+    l5_home_team_fb_off = 0
+    l5_home_team_fb_off_rank = 0
+    away_team_fb_def = 0
+    away_team_fb_def_rank = 0
+    l5_away_team_fb_def = 0
+    l5_away_team_fb_def_rank = 0
+    home_team_fb_def = 0
+    home_team_fb_def_rank = 0
+    l5_home_team_fb_def = 0
+    l5_home_team_fb_def_rank = 0
+    away_team_pace = 0
+    away_team_pace_rank = 0
+    l5_away_team_pace = 0
+    l5_away_team_pace_rank = 0
+    away_team_ast = 0
+    away_team_ast_rank = 0
+    l5_away_team_ast = 0
+    l5_away_team_ast_rank = 0
+    away_team_ast_pct = 0
+    away_team_ast_pct_rank = 0
+    l5_away_team_ast_pct = 0
+    l5_away_team_ast_pct_rank = 0
+    away_team_tov = 0
+    away_team_tov_rank = 0
+    l5_away_team_tov = 0
+    l5_away_team_tov_rank = 0
+    away_team_tov_pct = 0
+    away_team_tov_pct_rank = 0
+    l5_away_team_tov_pct = 0
+    l5_away_team_tov_pct_rank = 0
+    away_team_pts_off_tov = 0
+    away_team_pts_off_tov_rank = 0
+    l5_away_team_pts_off_tov = 0
+    l5_away_team_pts_off_tov_rank = 0
+    home_team_opp_pts_off_tov = 0
+    home_team_opp_pts_off_tov_rank = 0
+    l5_home_team_opp_pts_off_tov = 0
+    l5_home_team_opp_pts_off_tov_rank = 0
+    away_team_ast_tov = 0
+    away_team_ast_tov_rank = 0
+    l5_away_team_ast_tov = 0
+    l5_away_team_ast_tov_rank = 0
+    away_team_starters_scoring = 0
+    away_team_starters_scoring_rank = 0
+    l5_away_team_starters_scoring = 0
+    l5_away_team_starters_scoring_rank = 0
+    away_team_bench_scoring = 0
+    away_team_bench_scoring_rank = 0
+    l5_away_team_bench_scoring = 0
+    l5_away_team_bench_scoring_rank = 0
+    away_team_opp_tov_pct = 0
+    away_team_opp_tov_pct_rank = 0
+    l5_away_team_opp_tov_pct = 0
+    l5_away_team_opp_tov_pct_rank = 0
 
 #POINTS IN THE PAINT
-
-#OFFENSE
-## Away Team
-away_team_pitp_off = data_misc_season.loc[data_misc_season['TEAM_ID'] == away_id, 'PTS_PAINT'].values[0]
-away_team_pitp_off_rank = data_misc_season.loc[data_misc_season['TEAM_ID'] == away_id, 'PTS_PAINT_RANK'].values[0]
-l5_away_team_pitp_off = data_misc_L5.loc[data_misc_L5['TEAM_ID'] == away_id, 'PTS_PAINT'].values[0]
-l5_away_team_pitp_off_rank = data_misc_L5.loc[data_misc_L5['TEAM_ID'] == away_id, 'PTS_PAINT_RANK'].values[0]
-## League Average
-la_pitp_off = round(data_misc_season['PTS_PAINT'].mean(), 1)
-l5_la_pitp_off = round(data_misc_L5['PTS_PAINT'].mean(), 1)
-## Home Team
-home_team_pitp_off = data_misc_season.loc[data_misc_season['TEAM_ID'] == home_id, 'PTS_PAINT'].values[0]
-home_team_pitp_off_rank = data_misc_season.loc[data_misc_season['TEAM_ID'] == home_id, 'PTS_PAINT_RANK'].values[0]
-l5_home_team_pitp_off = data_misc_L5.loc[data_misc_L5['TEAM_ID'] == home_id, 'PTS_PAINT'].values[0]
-l5_home_team_pitp_off_rank = data_misc_L5.loc[data_misc_L5['TEAM_ID'] == home_id, 'PTS_PAINT_RANK'].values[0]
-
-#DEFENSE
-## Away Team
-away_team_pitp_def = data_misc_season.loc[data_misc_season['TEAM_ID'] == away_id, 'OPP_PTS_PAINT'].values[0]
-away_team_pitp_def_rank = data_misc_season.loc[data_misc_season['TEAM_ID'] == away_id, 'OPP_PTS_PAINT_RANK'].values[0]
-l5_away_team_pitp_def = data_misc_L5.loc[data_misc_L5['TEAM_ID'] == away_id, 'OPP_PTS_PAINT'].values[0]
-l5_away_team_pitp_def_rank = data_misc_L5.loc[data_misc_L5['TEAM_ID'] == away_id, 'OPP_PTS_PAINT_RANK'].values[0]
-## League Average
-la_pitp_def = round(data_misc_season['OPP_PTS_PAINT'].mean(), 1)
-l5_la_pitp_def = round(data_misc_L5['OPP_PTS_PAINT'].mean(), 1)
-## Home Team
-home_team_pitp_def = data_misc_season.loc[data_misc_season['TEAM_ID'] == home_id, 'OPP_PTS_PAINT'].values[0]
-home_team_pitp_def_rank = data_misc_season.loc[data_misc_season['TEAM_ID'] == home_id, 'OPP_PTS_PAINT_RANK'].values[0]
-l5_home_team_pitp_def = data_misc_L5.loc[data_misc_L5['TEAM_ID'] == home_id, 'OPP_PTS_PAINT'].values[0]
-l5_home_team_pitp_def_rank = data_misc_L5.loc[data_misc_L5['TEAM_ID'] == home_id, 'OPP_PTS_PAINT_RANK'].values[0]
-
-#DIFFERENCE
-## Away Team
-away_team_pitp_diff = round(data_misc_season.loc[data_misc_season['TEAM_ID'] == away_id, 'PTS_PAINT_DIFF'].values[0], 1)
+# Only calculate if we have valid team IDs
+if away_id is not None and home_id is not None:
+    #OFFENSE
+    ## Away Team
+    away_team_pitp_off = safe_get_value(data_misc_season, away_id, 'PTS_PAINT', 0)
+    away_team_pitp_off_rank = safe_get_value(data_misc_season, away_id, 'PTS_PAINT_RANK', 0)
+    l5_away_team_pitp_off = safe_get_value(data_misc_L5, away_id, 'PTS_PAINT', 0)
+    l5_away_team_pitp_off_rank = safe_get_value(data_misc_L5, away_id, 'PTS_PAINT_RANK', 0)
+    ## League Average
+    la_pitp_off = round(data_misc_season['PTS_PAINT'].mean(), 1)
+    l5_la_pitp_off = round(data_misc_L5['PTS_PAINT'].mean(), 1)
+    ## Home Team
+    home_team_pitp_off = safe_get_value(data_misc_season, home_id, 'PTS_PAINT', 0)
+    home_team_pitp_off_rank = safe_get_value(data_misc_season, home_id, 'PTS_PAINT_RANK', 0)
+    l5_home_team_pitp_off = safe_get_value(data_misc_L5, home_id, 'PTS_PAINT', 0)
+    l5_home_team_pitp_off_rank = safe_get_value(data_misc_L5, home_id, 'PTS_PAINT_RANK', 0)
+    
+    #DEFENSE
+    ## Away Team
+    away_team_pitp_def = safe_get_value(data_misc_season, away_id, 'OPP_PTS_PAINT', 0)
+    away_team_pitp_def_rank = safe_get_value(data_misc_season, away_id, 'OPP_PTS_PAINT_RANK', 0)
+    l5_away_team_pitp_def = safe_get_value(data_misc_L5, away_id, 'OPP_PTS_PAINT', 0)
+    l5_away_team_pitp_def_rank = safe_get_value(data_misc_L5, away_id, 'OPP_PTS_PAINT_RANK', 0)
+    ## League Average
+    la_pitp_def = round(data_misc_season['OPP_PTS_PAINT'].mean(), 1)
+    l5_la_pitp_def = round(data_misc_L5['OPP_PTS_PAINT'].mean(), 1)
+    ## Home Team
+    home_team_pitp_def = safe_get_value(data_misc_season, home_id, 'OPP_PTS_PAINT', 0)
+    home_team_pitp_def_rank = safe_get_value(data_misc_season, home_id, 'OPP_PTS_PAINT_RANK', 0)
+    l5_home_team_pitp_def = safe_get_value(data_misc_L5, home_id, 'OPP_PTS_PAINT', 0)
+    l5_home_team_pitp_def_rank = safe_get_value(data_misc_L5, home_id, 'OPP_PTS_PAINT_RANK', 0)
+    
+    #DIFFERENCE
+    ## Away Team
+    away_team_pitp_diff = round(safe_get_value(data_misc_season, away_id, 'PTS_PAINT_DIFF', 0), 1)
 away_team_pitp_diff_rank = int(data_misc_season.loc[data_misc_season['TEAM_ID'] == away_id, 'PTS_PAINT_DIFF_RANK'].values[0])
 l5_away_team_pitp_diff = round(data_misc_L5.loc[data_misc_L5['TEAM_ID'] == away_id, 'PTS_PAINT_DIFF'].values[0], 1)
 l5_away_team_pitp_diff_rank = int(data_misc_L5.loc[data_misc_L5['TEAM_ID'] == away_id, 'PTS_PAINT_DIFF_RANK'].values[0])

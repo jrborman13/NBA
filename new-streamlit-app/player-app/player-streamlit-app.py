@@ -112,21 +112,18 @@ def get_cached_player_stats():
 
 player_minutes_map = get_cached_player_stats()
 
-# Cached function to fetch injury report
+# Cached function to fetch injury report for a specific date
 @st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
-def get_cached_injury_report():
-    """Fetch and cache today's injury report during initial load"""
+def get_cached_injury_report_for_date(selected_date):
+    """Fetch and cache injury report for a specific date"""
     try:
-        injury_df, status_msg = ir.fetch_todays_injuries()
+        injury_df, status_msg = ir.fetch_injuries_for_date(report_date=selected_date)
         if injury_df is not None and len(injury_df) > 0:
             return injury_df, status_msg, None
         else:
             return pd.DataFrame(), status_msg, "No injuries found"
     except Exception as e:
         return pd.DataFrame(), "", str(e)
-
-# Fetch injuries during initial load
-injury_report_df, injury_report_url, injury_load_error = get_cached_injury_report()
 
 # Validate players_df
 if players_df is None or len(players_df) == 0:
@@ -174,6 +171,15 @@ with col_matchup:
         selected_matchup_str = "All Players"
         if not matchup_error:  # Only show info if no error (meaning no games on this date)
             st.info("ℹ️ No games scheduled for this date. Showing all players.")
+
+# Fetch injury report for the selected date
+# This needs to happen after date selection but before injury section
+injury_report_df, injury_report_url, injury_load_error = get_cached_injury_report_for_date(selected_date)
+
+# Clear processed matchups cache when date changes (so injuries get re-processed)
+if 'last_injury_date' not in st.session_state or st.session_state.last_injury_date != selected_date:
+    st.session_state.last_injury_date = selected_date
+    st.session_state.processed_matchups = {}  # Clear cached matchup injury data
 
 # Filter players based on selected matchup
 filtered_player_ids_list = player_ids_list.copy()

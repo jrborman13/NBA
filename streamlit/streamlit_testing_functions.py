@@ -217,7 +217,9 @@ data_4F_season = nba_api.stats.endpoints.LeagueDashTeamStats(
     ).get_data_frames()[0]
 
 # Add missing ranking columns for Four Factors
-data_4F_season['OPP_TOV_PCT_RANK'] = data_4F_season['OPP_TOV_PCT'].rank(ascending=True, method='first').astype(int)
+# OPP_TOV_PCT: Higher is better (opponents turn ball over more = good defense)
+# So ascending=False means higher OPP_TOV_PCT = rank 1 (best)
+data_4F_season['OPP_TOV_PCT_RANK'] = data_4F_season['OPP_TOV_PCT'].rank(ascending=False, method='first').astype(int)
 ## LAST 5 GAMES
 data_4F_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
     league_id_nullable='00',
@@ -231,7 +233,8 @@ data_4F_L5 = nba_api.stats.endpoints.LeagueDashTeamStats(
     ).get_data_frames()[0]
 
 # Add missing ranking columns for Last 5 Four Factors
-data_4F_L5['OPP_TOV_PCT_RANK'] = data_4F_L5['OPP_TOV_PCT'].rank(ascending=True, method='first').astype(int)
+# OPP_TOV_PCT: Higher is better (opponents turn ball over more = good defense)
+data_4F_L5['OPP_TOV_PCT_RANK'] = data_4F_L5['OPP_TOV_PCT'].rank(ascending=False, method='first').astype(int)
 
 #Key base variables
 wolves_id = data_adv_season.loc[data_adv_season['TEAM_NAME'] == 'Minnesota Timberwolves', 'TEAM_ID'].values[0]

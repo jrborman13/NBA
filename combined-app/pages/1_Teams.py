@@ -62,45 +62,47 @@ else:
     if 'selected_matchup' in st.session_state:
         del st.session_state['selected_matchup']
 
-# Tab selector (Core Stats and Shooting only - Players/Lineups are separate pages)
-tab = st.radio("Select Tab", ('Core Stats', 'Shooting'))
+# Only show tabs and content if a matchup is selected
+if selected_matchup:
+    # Tab selector (Core Stats and Shooting only - Players/Lineups are separate pages)
+    tab = st.radio("Select Tab", ('Core Stats', 'Shooting'))
 
-stat_font_size = 20
-rank_font_size = 16
-border = 1
-padding = 8
-border_radius = 5
-title_header_background_color = 'f9f9f9'
-body_header_background_color = 'f9f9f9'
-body_background_color = 'white'
+    stat_font_size = 20
+    rank_font_size = 16
+    border = 1
+    padding = 8
+    border_radius = 5
+    title_header_background_color = 'f9f9f9'
+    body_header_background_color = 'f9f9f9'
+    body_background_color = 'white'
 
-if tab == 'Core Stats':
+    if tab == 'Core Stats':
 
+        # Create the HTML for the header
+        header_html = f"""
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: {padding}px; border: 1px solid black; background-color: #{body_header_background_color}; font-family: Arial, sans-serif;">
+          <!-- Away Team Logo -->
+          <a href="{functions.away_logo_link}" style="display: inline-block;">
+            <img src="{functions.away_logo_link}" alt="Away Team Logo" style="height: 150px; width: auto;" />
+          </a>
+        
+          <!-- Team Names -->
+          <div style="display: flex; flex-direction: column; align-items: center; flex-grow: 1; text-align: center;">
+            <span style="font-size: 30px; font-weight: bold;">{functions.game_title}</span>
+          </div>
+        
+          <!-- Home Team Logo -->
+          <a href="{functions.home_logo_link}" style="display: inline-block;">
+            <img src="{functions.home_logo_link}" alt="Home Team Logo" style="height: 150px; width: auto;" />
+          </a>
+        </div>
+        <br>
+        """
+        # Render the HTML in Streamlit
+        st.markdown(header_html, unsafe_allow_html=True)
 
-    # Create the HTML for the header
-    header_html = f"""
-    <div style="display: flex; align-items: center; justify-content: space-between; padding: {padding}px; border: 1px solid black; background-color: #{body_header_background_color}; font-family: Arial, sans-serif;">
-      <!-- Away Team Logo -->
-      <a href="{functions.away_logo_link}" style="display: inline-block;">
-        <img src="{functions.away_logo_link}" alt="Away Team Logo" style="height: 150px; width: auto;" />
-      </a>
-    
-      <!-- Team Names -->
-      <div style="display: flex; flex-direction: column; align-items: center; flex-grow: 1; text-align: center;">
-        <span style="font-size: 30px; font-weight: bold;">{functions.game_title}</span>
-      </div>
-    
-      <!-- Home Team Logo -->
-      <a href="{functions.home_logo_link}" style="display: inline-block;">
-        <img src="{functions.home_logo_link}" alt="Home Team Logo" style="height: 150px; width: auto;" />
-    </div>
-    <br>
-    """
-    # Render the HTML in Streamlit
-    st.markdown(header_html, unsafe_allow_html=True)
-
-    # Create the HTML table with column spanners
-    html_table_2 = f"""
+        # Create the HTML table with column spanners
+        html_table_2 = f"""
     <table style="width:50%; border: {border}px solid black; border-collapse: collapse; text-align: center">
       <thead>
         <!-- First sticky row -->
@@ -750,15 +752,15 @@ if tab == 'Core Stats':
       </tr>  
       </tbody>
     </table>
-    """
+        """
 
-    # Render the table in Streamlit
-    st.markdown(html_table_2, unsafe_allow_html=True)
+        # Render the table in Streamlit
+        st.markdown(html_table_2, unsafe_allow_html=True)
 
-elif tab == 'Shooting':
+    elif tab == 'Shooting':
 
-    # Create the HTML for the header
-    header_html_shooting = f"""
+        # Create the HTML for the header
+        header_html_shooting = f"""
         <div style="display: flex; align-items: center; justify-content: space-between; padding: {padding}px; border: 1px solid black; background-color: #{body_header_background_color}; font-family: Arial, sans-serif;">
           <!-- Away Team Logo -->
           <a href="{functions.away_logo_link}" style="display: inline-block;">
@@ -773,13 +775,14 @@ elif tab == 'Shooting':
           <!-- Home Team Logo -->
           <a href="{functions.home_logo_link}" style="display: inline-block;">
             <img src="{functions.home_logo_link}" alt="Home Team Logo" style="height: 150px; width: auto;" />
+          </a>
         </div>
         <br>
         """
-    # Render the HTML in Streamlit
-    st.markdown(header_html_shooting, unsafe_allow_html=True)
+        # Render the HTML in Streamlit
+        st.markdown(header_html_shooting, unsafe_allow_html=True)
 
-    html_table_shooting = f"""
+        html_table_shooting = f"""
         <table style="width:75%; border: {border}px solid black; border-collapse: collapse; text-align: center">
           <thead>
             <!-- First sticky row -->
@@ -1668,7 +1671,7 @@ elif tab == 'Shooting':
             </tr>
           </tbody>
         </table>
-    """
+        """
 
-    # Render the table in Streamlit
-    st.markdown(html_table_shooting, unsafe_allow_html=True)
+        # Render the table in Streamlit
+        st.markdown(html_table_shooting, unsafe_allow_html=True)

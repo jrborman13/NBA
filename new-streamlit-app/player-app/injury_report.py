@@ -525,17 +525,20 @@ def get_players_out_for_matchup(
     return result
 
 
-def fetch_todays_injuries(players_df: pd.DataFrame = None) -> Tuple[pd.DataFrame, str]:
+def fetch_injuries_for_date(report_date: date = None, players_df: pd.DataFrame = None) -> Tuple[pd.DataFrame, str]:
     """
-    Convenience function to fetch and parse today's injury report.
+    Fetch and parse injury report for a specific date.
     Tries multiple URLs until one successfully parses.
+    
+    Args:
+        report_date: Date to fetch injuries for (defaults to today)
+        players_df: Optional players DataFrame (not used in this function but kept for compatibility)
     
     Returns:
         Tuple of (injury DataFrame, status message)
     """
-    from datetime import date as date_type
-    
-    report_date = date_type.today()
+    if report_date is None:
+        report_date = date.today()
     
     # Get current time in ET (Eastern Time)
     try:
@@ -594,7 +597,18 @@ def fetch_todays_injuries(players_df: pd.DataFrame = None) -> Tuple[pd.DataFrame
         except requests.RequestException:
             continue
     
-    return pd.DataFrame(), f"❌ No injury report found. Tried: {', '.join(tried_urls)}"
+    return pd.DataFrame(), f"❌ No injury report found for {report_date.strftime('%m/%d/%Y')}. Tried: {', '.join(tried_urls)}"
+
+
+def fetch_todays_injuries(players_df: pd.DataFrame = None) -> Tuple[pd.DataFrame, str]:
+    """
+    Convenience function to fetch and parse today's injury report.
+    Wrapper around fetch_injuries_for_date() for backwards compatibility.
+    
+    Returns:
+        Tuple of (injury DataFrame, status message)
+    """
+    return fetch_injuries_for_date(report_date=date.today(), players_df=players_df)
 
 
 def format_injury_status(status: str) -> str:

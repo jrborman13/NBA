@@ -10,6 +10,7 @@ from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass
 import prediction_utils as utils
 import prediction_features as features
+import matchup_stats as ms
 
 
 @dataclass
@@ -129,6 +130,32 @@ class PlayerStatPredictor:
             def_adjustment = opp_def_rating / league_def_rating
             adjusted_prediction *= def_adjustment
             factors['defense'] = f"Opp DEF RTG {opp_def_rating} vs league avg {league_def_rating}"
+        
+        # Matchup-specific adjustment (PTS_PAINT, PTS_FB, PTS_2ND_CHANCE)
+        matchup_data = player_features.get('matchup', {})
+        matchup_adjustments = matchup_data.get('matchup_adjustments', {})
+        
+        if stat == 'PTS':
+            # Apply overall matchup factor for points
+            overall_factor = matchup_adjustments.get('overall_pts_factor', 1.0)
+            if overall_factor != 1.0:
+                # Apply a moderate portion of the matchup adjustment (50%)
+                matchup_adjustment = 1.0 + 0.5 * (overall_factor - 1.0)
+                adjusted_prediction *= matchup_adjustment
+                
+                player_breakdown = matchup_data.get('player_scoring_breakdown', {})
+                opp_vuln = matchup_data.get('opponent_vulnerabilities', {})
+                
+                if overall_factor > 1.0:
+                    factors['matchup'] = (
+                        f"Favorable matchup (+{round((overall_factor-1)*100, 1)}%): "
+                        f"Paint {player_breakdown.get('pts_paint', 0)} vs opp allows {opp_vuln.get('opp_pts_paint_allowed', 0)}"
+                    )
+                else:
+                    factors['matchup'] = (
+                        f"Tough matchup ({round((overall_factor-1)*100, 1)}%): "
+                        f"Paint {player_breakdown.get('pts_paint', 0)} vs opp allows {opp_vuln.get('opp_pts_paint_allowed', 0)}"
+                    )
         
         # FT Rate adjustment for FTM predictions
         # If opponent allows more FT attempts (higher FT Rate), player likely to get more FTM

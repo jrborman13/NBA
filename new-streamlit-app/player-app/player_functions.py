@@ -673,7 +673,7 @@ def build_season_stats_csv(csv_path='new-streamlit-app/files/historical_player_s
         return
     
     # Read existing CSV
-    existing_df = pd.read_csv(csv_path)
+    existing_df = pd.read_csv(csv_path, on_bad_lines='skip')
     existing_seasons = existing_df['SEASON'].unique().tolist() if 'SEASON' in existing_df.columns else []
     
     # Always update current season (remove old data and re-fetch)
@@ -771,7 +771,7 @@ def get_player_yoy_data(player_id, players_df=None):
     if not os.path.exists(csv_path):
         return {'averages_df': None}
     
-    season_stats_df = pd.read_csv(csv_path)
+    season_stats_df = pd.read_csv(csv_path, on_bad_lines='skip')
     
     # Filter for this player (all seasons)
     player_season_stats = season_stats_df[

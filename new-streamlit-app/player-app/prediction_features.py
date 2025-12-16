@@ -11,9 +11,10 @@ import nba_api.stats.endpoints as endpoints
 from typing import Optional, Dict, List, Tuple
 from datetime import datetime, date
 import prediction_utils as utils
+import matchup_stats as ms
 
 # Current season configuration
-CURRENT_SEASON = "2024-25"
+CURRENT_SEASON = "2025-26"
 LEAGUE_ID = "00"
 
 
@@ -405,6 +406,32 @@ def get_all_prediction_features(
         features['player_ft_rate'] = round(total_fta / total_fga * 100, 1) if total_fga > 0 else 0.0
     else:
         features['player_ft_rate'] = 25.0  # Default ~25% FT rate
+    
+    # Matchup-specific stats (PTS_PAINT, PTS_FB, PTS_2ND_CHANCE)
+    # This includes player scoring breakdown and opponent defensive vulnerabilities
+    try:
+        matchup_features = ms.get_matchup_prediction_features(
+            player_id=player_id,
+            opponent_team_id=opponent_team_id
+        )
+        features['matchup'] = matchup_features
+    except Exception as e:
+        print(f"Error fetching matchup features: {e}")
+        features['matchup'] = {
+            'player_scoring_breakdown': {
+                'pts_paint': 0.0, 'pts_fb': 0.0, 'pts_2nd_chance': 0.0, 'pts_off_tov': 0.0
+            },
+            'opponent_vulnerabilities': {
+                'opp_pts_paint_allowed': 48.0, 'opp_pts_fb_allowed': 12.0, 
+                'opp_pts_2nd_chance_allowed': 12.0, 'opp_pts_off_tov_allowed': 15.0
+            },
+            'league_misc_averages': {
+                'pts_paint': 48.0, 'pts_fb': 12.0, 'pts_2nd_chance': 12.0, 'pts_off_tov': 15.0
+            },
+            'matchup_adjustments': {
+                'overall_pts_factor': 1.0
+            }
+        }
     
     return features
 

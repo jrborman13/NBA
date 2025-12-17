@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'new-streamlit-app', 'player-app'))
+
 import streamlit as st
 import player_functions as pf
 import team_defensive_stats as tds
@@ -1880,14 +1884,14 @@ Estimated Cost: {preview['estimated_cost']}
                                 comparison = vl.compare_prediction_to_line(pred.value, prop.line)
                                 
                                 api_comparison_data.append({
-                                'Stat': stat_labels.get(stat, stat),
+                                    'Stat': stat_labels.get(stat, stat),
                                     'Prediction': round(pred.value, 1),
                                     'Underdog Line': round(prop.line, 1),
                                     'Edge': round(comparison['diff'], 1),
                                     'Edge %': round(abs(comparison['diff_pct']) / 100, 3),
-                                'Lean': comparison['lean']
-                            })
-                
+                                    'Lean': comparison['lean']
+                                })
+                                
                                 # Also save to existing lines for persistence
                                 vl.set_player_line(
                                     selected_player_id,

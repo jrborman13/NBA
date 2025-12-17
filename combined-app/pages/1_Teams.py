@@ -66,6 +66,238 @@ else:
 
 # Only show tabs and content if a matchup is selected
 if selected_matchup:
+    # ============================================================
+    # MATCHUP SUMMARY SECTION
+    # ============================================================
+    
+    # Load player data for matchup summary (reuse cache from Rosters tab)
+    @st.cache_data(ttl=1800, show_spinner="Loading player data...")
+    def load_summary_data():
+        players_df = functions.get_players_dataframe()
+        game_logs_df = functions.get_all_player_game_logs()
+        return players_df, game_logs_df
+    
+    summary_players_df, summary_game_logs_df = load_summary_data()
+    
+    # Get team info
+    away_team_name = selected_matchup['away_team_name']
+    home_team_name = selected_matchup['home_team_name']
+    away_team_id = selected_matchup['away_team_id']
+    home_team_id = selected_matchup['home_team_id']
+    
+    # Team name to abbreviation mapping
+    team_name_to_abbr = {
+        'Atlanta Hawks': 'ATL', 'Boston Celtics': 'BOS', 'Brooklyn Nets': 'BKN',
+        'Charlotte Hornets': 'CHA', 'Chicago Bulls': 'CHI', 'Cleveland Cavaliers': 'CLE',
+        'Dallas Mavericks': 'DAL', 'Denver Nuggets': 'DEN', 'Detroit Pistons': 'DET',
+        'Golden State Warriors': 'GSW', 'Houston Rockets': 'HOU', 'Indiana Pacers': 'IND',
+        'LA Clippers': 'LAC', 'Los Angeles Lakers': 'LAL', 'Memphis Grizzlies': 'MEM',
+        'Miami Heat': 'MIA', 'Milwaukee Bucks': 'MIL', 'Minnesota Timberwolves': 'MIN',
+        'New Orleans Pelicans': 'NOP', 'New York Knicks': 'NYK', 'Oklahoma City Thunder': 'OKC',
+        'Orlando Magic': 'ORL', 'Philadelphia 76ers': 'PHI', 'Phoenix Suns': 'PHX',
+        'Portland Trail Blazers': 'POR', 'Sacramento Kings': 'SAC', 'San Antonio Spurs': 'SAS',
+        'Toronto Raptors': 'TOR', 'Utah Jazz': 'UTA', 'Washington Wizards': 'WAS'
+    }
+    
+    away_abbr = team_name_to_abbr.get(away_team_name, away_team_name.split()[-1][:3].upper())
+    home_abbr = team_name_to_abbr.get(home_team_name, home_team_name.split()[-1][:3].upper())
+    
+    # Fetch injury report for matchup summary
+    @st.cache_data(ttl=600, show_spinner=False)
+    def fetch_summary_injuries():
+        return ir.fetch_injuries_for_date()
+    
+    summary_injury_df, _ = fetch_summary_injuries()
+    
+    # Get injuries for this matchup
+    summary_away_injuries = []
+    summary_home_injuries = []
+    if summary_injury_df is not None and len(summary_injury_df) > 0:
+        matchup_injuries = ir.get_injuries_for_matchup(
+            summary_injury_df, away_abbr, home_abbr, summary_players_df
+        )
+        summary_away_injuries = matchup_injuries.get('away', [])
+        summary_home_injuries = matchup_injuries.get('home', [])
+    
+    # Generate matchup summary
+    matchup_summary = functions.generate_matchup_summary(
+        away_id=away_team_id,
+        home_id=home_team_id,
+        away_name=away_team_name,
+        home_name=home_team_name,
+        away_abbr=away_abbr,
+        home_abbr=home_abbr,
+        players_df=summary_players_df,
+        game_logs_df=summary_game_logs_df,
+        away_injuries=summary_away_injuries,
+        home_injuries=summary_home_injuries
+    )
+    
+    # Display matchup summary in an expander
+    with st.expander("📊 **Matchup Summary**", expanded=True):
+        
+        # === BIGGEST MISMATCHES ===
+        st.markdown("#### 🔥 Biggest Stat Mismatches")
+        
+        if matchup_summary['mismatches']:
+            mismatch_cols = st.columns(2)
+            
+            # Split mismatches by team advantage (using abbreviations now)
+            away_advantages = [m for m in matchup_summary['mismatches'] if m['team_with_advantage'] == away_abbr]
+            home_advantages = [m for m in matchup_summary['mismatches'] if m['team_with_advantage'] == home_abbr]
+            
+            with mismatch_cols[0]:
+                st.markdown(f"**{away_team_name} ({away_abbr}) Advantages**")
+                if away_advantages:
+                    for m in away_advantages[:5]:  # Top 5 per team
+                        arrow = "🟢" if m['rank_diff'] >= 15 else "🟡" if m['rank_diff'] >= 10 else "⚪"
+                        st.markdown(f"{arrow} **{m['stat_name']}**: {m['off_team']} OFF #{m['off_rank']} vs {m['def_team']} DEF #{m['def_rank']} (+{m['rank_diff']})")
+                else:
+                    st.caption("No significant advantages found")
+            
+            with mismatch_cols[1]:
+                st.markdown(f"**{home_team_name} ({home_abbr}) Advantages**")
+                if home_advantages:
+                    for m in home_advantages[:5]:  # Top 5 per team
+                        arrow = "🟢" if m['rank_diff'] >= 15 else "🟡" if m['rank_diff'] >= 10 else "⚪"
+                        st.markdown(f"{arrow} **{m['stat_name']}**: {m['off_team']} OFF #{m['off_rank']} vs {m['def_team']} DEF #{m['def_rank']} (+{m['rank_diff']})")
+                else:
+                    st.caption("No significant advantages found")
+        else:
+            st.caption("No mismatches data available")
+        
+        st.divider()
+        
+        # === HOT PLAYERS ===
+        st.markdown("#### 📈 Hot Players (20%+ Above Season Avg in L5)")
+        
+        hot_cols = st.columns(2)
+        
+        with hot_cols[0]:
+            st.markdown(f"**{away_team_name}**")
+            if matchup_summary['hot_players']['away']:
+                for p in matchup_summary['hot_players']['away'][:5]:
+                    hot_stat = p['hot_stats'][0]
+                    pct = int(hot_stat['pct_change'] * 100)
+                    st.markdown(f"🔥 **{p['player_name']}**: {hot_stat['l5']:.1f} {hot_stat['stat']} L5 (+{pct}% vs {hot_stat['season']:.1f} season)")
+            else:
+                st.caption("No hot players found")
+        
+        with hot_cols[1]:
+            st.markdown(f"**{home_team_name}**")
+            if matchup_summary['hot_players']['home']:
+                for p in matchup_summary['hot_players']['home'][:5]:
+                    hot_stat = p['hot_stats'][0]
+                    pct = int(hot_stat['pct_change'] * 100)
+                    st.markdown(f"🔥 **{p['player_name']}**: {hot_stat['l5']:.1f} {hot_stat['stat']} L5 (+{pct}% vs {hot_stat['season']:.1f} season)")
+            else:
+                st.caption("No hot players found")
+        
+        st.divider()
+        
+        # === COLD PLAYERS ===
+        st.markdown("#### 🥶 Cold Players (20%+ Below Season Avg in L5)")
+        
+        cold_cols = st.columns(2)
+        
+        with cold_cols[0]:
+            st.markdown(f"**{away_team_name}**")
+            if matchup_summary['cold_players']['away']:
+                for p in matchup_summary['cold_players']['away'][:5]:
+                    cold_stat = p['cold_stats'][0]
+                    pct = int(abs(cold_stat['pct_change']) * 100)
+                    st.markdown(f"🥶 **{p['player_name']}**: {cold_stat['l5']:.1f} {cold_stat['stat']} L5 (-{pct}% vs {cold_stat['season']:.1f} season)")
+            else:
+                st.caption("No cold players found")
+        
+        with cold_cols[1]:
+            st.markdown(f"**{home_team_name}**")
+            if matchup_summary['cold_players']['home']:
+                for p in matchup_summary['cold_players']['home'][:5]:
+                    cold_stat = p['cold_stats'][0]
+                    pct = int(abs(cold_stat['pct_change']) * 100)
+                    st.markdown(f"🥶 **{p['player_name']}**: {cold_stat['l5']:.1f} {cold_stat['stat']} L5 (-{pct}% vs {cold_stat['season']:.1f} season)")
+            else:
+                st.caption("No cold players found")
+        
+        st.divider()
+        
+        # === NEW PLAYERS (Emerging Roles) ===
+        st.markdown("#### 🆕 Emerging Roles (25%+ Minutes Increase in L5)")
+        
+        new_cols = st.columns(2)
+        
+        with new_cols[0]:
+            st.markdown(f"**{away_team_name}**")
+            if matchup_summary['new_players']['away']:
+                for p in matchup_summary['new_players']['away'][:5]:
+                    pct = int(p['pct_increase'] * 100)
+                    st.markdown(f"⬆️ **{p['player_name']}**: {p['l5_min']:.1f} MIN L5 (+{pct}% vs {p['season_min']:.1f} season) | {p['l5_pts']:.1f}/{p['l5_reb']:.1f}/{p['l5_ast']:.1f}")
+            else:
+                st.caption("No emerging players found")
+        
+        with new_cols[1]:
+            st.markdown(f"**{home_team_name}**")
+            if matchup_summary['new_players']['home']:
+                for p in matchup_summary['new_players']['home'][:5]:
+                    pct = int(p['pct_increase'] * 100)
+                    st.markdown(f"⬆️ **{p['player_name']}**: {p['l5_min']:.1f} MIN L5 (+{pct}% vs {p['season_min']:.1f} season) | {p['l5_pts']:.1f}/{p['l5_reb']:.1f}/{p['l5_ast']:.1f}")
+            else:
+                st.caption("No emerging players found")
+        
+        st.divider()
+        
+        # === KEY INJURIES ===
+        st.markdown("#### 🏥 Key Injuries (MIN ≥15 or PRA ≥15 | Questionable/Doubtful/Out)")
+        
+        inj_cols = st.columns(2)
+        
+        # Helper for status color
+        def get_status_badge(status):
+            status_lower = status.lower() if status else ''
+            if 'out' in status_lower:
+                return "🔴"
+            elif 'doubtful' in status_lower:
+                return "🟠"
+            elif 'questionable' in status_lower:
+                return "🟡"
+            elif 'probable' in status_lower:
+                return "🟢"
+            else:
+                return "⚪"
+        
+        with inj_cols[0]:
+            st.markdown(f"**{away_team_name}**")
+            if matchup_summary['key_injuries']['away']:
+                for inj in matchup_summary['key_injuries']['away']:
+                    badge = get_status_badge(inj.get('status', ''))
+                    player_name = ir.format_player_name(inj.get('player_name', 'Unknown'))
+                    status = inj.get('status', 'Unknown')
+                    games_missed = inj.get('games_missed', '?')
+                    avg_min = inj.get('avg_min', 0)
+                    avg_pra = inj.get('avg_pra', 0)
+                    reason = ir.format_injury_reason(inj.get('reason', ''))
+                    st.markdown(f"{badge} **{player_name}** ({status} - {games_missed}) | {avg_min:.1f} MIN, {avg_pra:.1f} PRA | {reason}")
+            else:
+                st.caption("No key injuries")
+        
+        with inj_cols[1]:
+            st.markdown(f"**{home_team_name}**")
+            if matchup_summary['key_injuries']['home']:
+                for inj in matchup_summary['key_injuries']['home']:
+                    badge = get_status_badge(inj.get('status', ''))
+                    player_name = ir.format_player_name(inj.get('player_name', 'Unknown'))
+                    status = inj.get('status', 'Unknown')
+                    games_missed = inj.get('games_missed', '?')
+                    avg_min = inj.get('avg_min', 0)
+                    avg_pra = inj.get('avg_pra', 0)
+                    reason = ir.format_injury_reason(inj.get('reason', ''))
+                    st.markdown(f"{badge} **{player_name}** ({status} - {games_missed}) | {avg_min:.1f} MIN, {avg_pra:.1f} PRA | {reason}")
+            else:
+                st.caption("No key injuries")
+    
+    st.markdown("---")
+    
     # Tab selector (Core Stats, Shooting, and Rosters)
     tab = st.radio("Select Tab", ('Core Stats', 'Shooting', 'Rosters'))
 

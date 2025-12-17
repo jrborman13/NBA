@@ -1808,3 +1808,525 @@ def get_team_roster_stats(team_id: int, players_df: pd.DataFrame, game_logs_df: 
     df = df.sort_values(by='MIN', ascending=False)
     
     return df
+
+
+# ============================================================
+# MATCHUP SUMMARY FUNCTIONS
+# ============================================================
+
+def calculate_games_missed(player_id, team_id: int, game_logs_df: pd.DataFrame) -> str:
+    """
+    Calculate how many team games a player has missed.
+    
+    Args:
+        player_id: The player's NBA ID (can be int or string)
+        team_id: The team's NBA ID
+        game_logs_df: DataFrame from get_all_player_game_logs()
+    
+    Returns:
+        String like "3 games" or "Season" if no games played
+    """
+    # Convert player_id to int for comparison
+    try:
+        player_id_int = int(player_id)
+    except (ValueError, TypeError):
+        return "Unknown"
+    
+    # Get player's game logs
+    player_logs = game_logs_df[game_logs_df['PLAYER_ID'] == player_id_int]
+    
+    if len(player_logs) == 0:
+        return "Season"  # No games this season
+    
+    # Get player's last game date
+    player_last_game = pd.to_datetime(player_logs['GAME_DATE'].max())
+    
+    # Get team's games (distinct game dates for any player on that team)
+    team_logs = game_logs_df[game_logs_df['TEAM_ID'] == team_id]
+    team_game_dates = pd.to_datetime(team_logs['GAME_DATE'].unique())
+    
+    # Count team games after player's last game
+    games_missed = sum(1 for d in team_game_dates if d > player_last_game)
+    
+    if games_missed == 0:
+        return "0"
+    elif games_missed == 1:
+        return "1 game"
+    else:
+        return f"{games_missed} games"
+
+
+def find_hot_players(team_id: int, players_df: pd.DataFrame, game_logs_df: pd.DataFrame, 
+                     threshold_pct: float = 0.20, min_l5_games: int = 3) -> list:
+    """
+    Find players performing significantly above their season average.
+    
+    Args:
+        team_id: Team ID to analyze
+        players_df: DataFrame from PlayerIndex
+        game_logs_df: DataFrame from PlayerGameLogs
+        threshold_pct: Minimum % above season avg to qualify (0.20 = 20%)
+        min_l5_games: Minimum games in L5 sample
+    
+    Returns:
+        List of dicts with player info and hot stats
+    """
+    hot_players = []
+    
+    # Get season stats for comparison
+    season_stats = get_team_roster_stats(team_id, players_df, game_logs_df, num_games=None)
+    l5_stats = get_team_roster_stats(team_id, players_df, game_logs_df, num_games=5)
+    
+    if len(season_stats) == 0 or len(l5_stats) == 0:
+        return hot_players
+    
+    # Join season and L5 stats
+    for _, l5_row in l5_stats.iterrows():
+        player_name = l5_row['Player']
+        
+        # Must have at least min_l5_games in L5
+        if l5_row['GP'] < min_l5_games:
+            continue
+        
+        # Find season row
+        season_row = season_stats[season_stats['Player'] == player_name]
+        if len(season_row) == 0:
+            continue
+        season_row = season_row.iloc[0]
+        
+        # Skip if season avg is too low (avoid division issues)
+        if season_row['PTS'] < 3:
+            continue
+        
+        # Calculate % increase for key stats
+        hot_stats = []
+        
+        for stat in ['PTS', 'REB', 'AST']:
+            season_val = season_row[stat]
+            l5_val = l5_row[stat]
+            
+            if season_val > 0:
+                pct_change = (l5_val - season_val) / season_val
+                if pct_change >= threshold_pct:
+                    hot_stats.append({
+                        'stat': stat,
+                        'season': season_val,
+                        'l5': l5_val,
+                        'pct_change': pct_change
+                    })
+        
+        if hot_stats:
+            # Sort by biggest improvement
+            hot_stats.sort(key=lambda x: x['pct_change'], reverse=True)
+            hot_players.append({
+                'player_name': player_name,
+                'player_id': l5_row.get('_player_id'),
+                'headshot': l5_row.get('headshot'),
+                'hot_stats': hot_stats,
+                'best_pct_change': hot_stats[0]['pct_change']
+            })
+    
+    # Sort by biggest improvement
+    hot_players.sort(key=lambda x: x['best_pct_change'], reverse=True)
+    
+    return hot_players
+
+
+def find_cold_players(team_id: int, players_df: pd.DataFrame, game_logs_df: pd.DataFrame, 
+                      threshold_pct: float = 0.20, min_l5_games: int = 3) -> list:
+    """
+    Find players performing significantly below their season average.
+    
+    Args:
+        team_id: Team ID to analyze
+        players_df: DataFrame from PlayerIndex
+        game_logs_df: DataFrame from PlayerGameLogs
+        threshold_pct: Minimum % below season avg to qualify (0.20 = 20%)
+        min_l5_games: Minimum games in L5 sample
+    
+    Returns:
+        List of dicts with player info and cold stats
+    """
+    cold_players = []
+    
+    # Get season stats for comparison
+    season_stats = get_team_roster_stats(team_id, players_df, game_logs_df, num_games=None)
+    l5_stats = get_team_roster_stats(team_id, players_df, game_logs_df, num_games=5)
+    
+    if len(season_stats) == 0 or len(l5_stats) == 0:
+        return cold_players
+    
+    for _, l5_row in l5_stats.iterrows():
+        player_name = l5_row['Player']
+        
+        # Must have at least min_l5_games in L5
+        if l5_row['GP'] < min_l5_games:
+            continue
+        
+        # Find season row
+        season_row = season_stats[season_stats['Player'] == player_name]
+        if len(season_row) == 0:
+            continue
+        season_row = season_row.iloc[0]
+        
+        # Skip if season avg is too low (avoid division issues and focus on meaningful players)
+        if season_row['PTS'] < 8:
+            continue
+        
+        # Calculate % decrease for key stats
+        cold_stats = []
+        
+        for stat in ['PTS', 'REB', 'AST']:
+            season_val = season_row[stat]
+            l5_val = l5_row[stat]
+            
+            if season_val > 0:
+                pct_change = (l5_val - season_val) / season_val
+                # Looking for negative change (below average)
+                if pct_change <= -threshold_pct:
+                    cold_stats.append({
+                        'stat': stat,
+                        'season': season_val,
+                        'l5': l5_val,
+                        'pct_change': pct_change
+                    })
+        
+        if cold_stats:
+            # Sort by biggest decline (most negative first)
+            cold_stats.sort(key=lambda x: x['pct_change'])
+            cold_players.append({
+                'player_name': player_name,
+                'player_id': l5_row.get('_player_id'),
+                'headshot': l5_row.get('headshot'),
+                'cold_stats': cold_stats,
+                'worst_pct_change': cold_stats[0]['pct_change']
+            })
+    
+    # Sort by biggest decline (most negative first)
+    cold_players.sort(key=lambda x: x['worst_pct_change'])
+    
+    return cold_players
+
+
+def find_new_players(team_id: int, players_df: pd.DataFrame, game_logs_df: pd.DataFrame,
+                     min_increase_pct: float = 0.25, min_season_minutes: float = 7.5) -> list:
+    """
+    Find players with significant minutes increases (emerging roles).
+    
+    Args:
+        team_id: Team ID to analyze
+        players_df: DataFrame from PlayerIndex
+        game_logs_df: DataFrame from PlayerGameLogs
+        min_increase_pct: Minimum % increase in minutes (0.25 = 25%)
+        min_season_minutes: Minimum season avg minutes to qualify
+    
+    Returns:
+        List of dicts with player info and minutes change
+    """
+    new_players = []
+    
+    # Get season and L5 stats
+    season_stats = get_team_roster_stats(team_id, players_df, game_logs_df, num_games=None)
+    l5_stats = get_team_roster_stats(team_id, players_df, game_logs_df, num_games=5)
+    
+    if len(season_stats) == 0 or len(l5_stats) == 0:
+        return new_players
+    
+    for _, l5_row in l5_stats.iterrows():
+        player_name = l5_row['Player']
+        
+        # Find season row
+        season_row = season_stats[season_stats['Player'] == player_name]
+        if len(season_row) == 0:
+            continue
+        season_row = season_row.iloc[0]
+        
+        season_min = season_row['MIN']
+        l5_min = l5_row['MIN']
+        
+        # Must meet minimum season minutes threshold
+        if season_min < min_season_minutes:
+            continue
+        
+        # Calculate % increase
+        if season_min > 0:
+            pct_increase = (l5_min - season_min) / season_min
+            
+            if pct_increase >= min_increase_pct:
+                new_players.append({
+                    'player_name': player_name,
+                    'player_id': l5_row.get('_player_id'),
+                    'headshot': l5_row.get('headshot'),
+                    'season_min': season_min,
+                    'l5_min': l5_min,
+                    'min_increase': l5_min - season_min,
+                    'pct_increase': pct_increase,
+                    # Include their L5 production
+                    'l5_pts': l5_row['PTS'],
+                    'l5_reb': l5_row['REB'],
+                    'l5_ast': l5_row['AST']
+                })
+    
+    # Sort by biggest % increase
+    new_players.sort(key=lambda x: x['pct_increase'], reverse=True)
+    
+    return new_players
+
+
+def calculate_stat_mismatches(away_id: int, home_id: int, away_abbr: str = 'Away', 
+                               home_abbr: str = 'Home', top_n: int = 10) -> list:
+    """
+    Calculate the biggest stat mismatches between teams.
+    
+    Args:
+        away_id: Away team ID
+        home_id: Home team ID
+        away_abbr: Away team abbreviation (e.g., 'MIN')
+        home_abbr: Home team abbreviation (e.g., 'MEM')
+        top_n: Number of top mismatches to return
+    
+    Returns:
+        List of dicts with mismatch details, sorted by magnitude
+    """
+    mismatches = []
+    
+    # Define stat matchups: (name, off_stat, off_rank_col, def_stat, def_rank_col, df, off_higher_is_better, def_lower_is_better)
+    stat_matchups = [
+        # Core ratings
+        ('Offensive Rating', 'OFF_RATING', 'OFF_RATING_RANK', 'DEF_RATING', 'DEF_RATING_RANK', 
+         data_adv_season, True, True),
+        
+        # Shooting percentages - from Four Factors
+        ('Effective FG%', 'EFG_PCT', None, 'OPP_EFG_PCT', None, data_4F_season, True, True),
+        
+        # Rebounding
+        ('Offensive Reb %', 'OREB_PCT', 'OREB_PCT_RANK', 'DREB_PCT', 'DREB_PCT_RANK', 
+         data_adv_season, True, True),
+        
+        # Playmaking
+        ('Assist %', 'AST_PCT', 'AST_PCT_RANK', 'AST_PCT', 'AST_PCT_RANK', 
+         data_adv_season, True, True),
+        
+        # Turnovers
+        ('Turnover %', 'TM_TOV_PCT', 'TM_TOV_PCT_RANK', 'OPP_TOV_PCT', 'OPP_TOV_PCT_RANK', 
+         data_4F_season, False, False),
+        
+        # Pace
+        ('Pace', 'PACE', 'PACE_RANK', 'PACE', 'PACE_RANK', data_adv_season, True, True),
+        
+        # Paint scoring
+        ('Points in Paint', 'PTS_PAINT', 'PTS_PAINT_RANK', 'OPP_PTS_PAINT', 'OPP_PTS_PAINT_RANK',
+         data_misc_season, True, True),
+        
+        # Second chance
+        ('2nd Chance Points', 'PTS_2ND_CHANCE', 'PTS_2ND_CHANCE_RANK', 'OPP_PTS_2ND_CHANCE', 'OPP_PTS_2ND_CHANCE_RANK',
+         data_misc_season, True, True),
+        
+        # Fast break
+        ('Fast Break Points', 'PTS_FB', 'PTS_FB_RANK', 'OPP_PTS_FB', 'OPP_PTS_FB_RANK',
+         data_misc_season, True, True),
+        
+        # Points off turnovers
+        ('Points Off Turnovers', 'PTS_OFF_TOV', 'PTS_OFF_TOV_RANK', 'OPP_PTS_OFF_TOV', 'OPP_PTS_OFF_TOV_RANK',
+         data_misc_season, True, True),
+        
+        # Free throw rate
+        ('Free Throw Rate', 'FTA_RATE', None, 'OPP_FTA_RATE', None, data_4F_season, True, True),
+    ]
+    
+    def get_rank_and_value(df, team_id, stat_col, rank_col):
+        """Helper to get stat value and rank"""
+        team_row = df[df['TEAM_ID'] == team_id]
+        if len(team_row) == 0:
+            return None, None
+        
+        value = team_row[stat_col].values[0] if stat_col in team_row.columns else None
+        
+        if rank_col and rank_col in team_row.columns:
+            rank = int(team_row[rank_col].values[0])
+        elif value is not None:
+            rank = int(df[stat_col].rank(ascending=False, method='first')[team_row.index[0]])
+        else:
+            rank = None
+            
+        return value, rank
+    
+    # Process Away Offense vs Home Defense
+    for name, off_stat, off_rank, def_stat, def_rank, df, off_higher_better, def_lower_better in stat_matchups:
+        away_off_val, away_off_rank = get_rank_and_value(df, away_id, off_stat, off_rank)
+        home_def_val, home_def_rank = get_rank_and_value(df, home_id, def_stat, def_rank)
+        
+        if away_off_rank is not None and home_def_rank is not None:
+            if def_lower_better:
+                rank_diff = home_def_rank - away_off_rank
+            else:
+                rank_diff = away_off_rank - home_def_rank
+            
+            mismatches.append({
+                'matchup_type': 'away_off_vs_home_def',
+                'stat_name': name,
+                'team_with_advantage': away_abbr if rank_diff > 0 else home_abbr,
+                'off_team': away_abbr,
+                'def_team': home_abbr,
+                'off_rank': away_off_rank,
+                'def_rank': home_def_rank,
+                'rank_diff': abs(rank_diff),
+                'raw_rank_diff': rank_diff,
+                'off_value': away_off_val,
+                'def_value': home_def_val
+            })
+    
+    # Process Home Offense vs Away Defense  
+    for name, off_stat, off_rank, def_stat, def_rank, df, off_higher_better, def_lower_better in stat_matchups:
+        home_off_val, home_off_rank = get_rank_and_value(df, home_id, off_stat, off_rank)
+        away_def_val, away_def_rank = get_rank_and_value(df, away_id, def_stat, def_rank)
+        
+        if home_off_rank is not None and away_def_rank is not None:
+            if def_lower_better:
+                rank_diff = away_def_rank - home_off_rank
+            else:
+                rank_diff = home_off_rank - away_def_rank
+                
+            mismatches.append({
+                'matchup_type': 'home_off_vs_away_def',
+                'stat_name': name,
+                'team_with_advantage': home_abbr if rank_diff > 0 else away_abbr,
+                'off_team': home_abbr,
+                'def_team': away_abbr,
+                'off_rank': home_off_rank,
+                'def_rank': away_def_rank,
+                'rank_diff': abs(rank_diff),
+                'raw_rank_diff': rank_diff,
+                'off_value': home_off_val,
+                'def_value': away_def_val
+            })
+    
+    mismatches.sort(key=lambda x: x['rank_diff'], reverse=True)
+    
+    return mismatches[:top_n]
+
+
+def get_key_injuries(injuries: list, game_logs_df: pd.DataFrame, team_id: int,
+                     min_minutes: float = 15.0, min_pra: float = 15.0,
+                     include_statuses: list = None) -> list:
+    """
+    Filter injuries to only show impactful players who are Questionable, Doubtful, or Out.
+    
+    Args:
+        injuries: List of injury dicts from injury_report
+        game_logs_df: DataFrame from get_all_player_game_logs()
+        team_id: Team ID
+        min_minutes: Minimum season avg minutes to be considered key
+        min_pra: Minimum season avg PRA to be considered key
+        include_statuses: List of statuses to include (default: Questionable, Doubtful, Out)
+    
+    Returns:
+        List of key injuries with games missed info
+    """
+    if include_statuses is None:
+        include_statuses = ['questionable', 'doubtful', 'out']
+    
+    key_injuries = []
+    
+    for inj in injuries:
+        player_id = inj.get('player_id')
+        if not player_id:
+            continue
+        
+        # Filter by status (exclude Probable)
+        status = inj.get('status', '').lower()
+        if not any(s in status for s in include_statuses):
+            continue
+        
+        # Convert player_id to int for comparison (injury report returns string)
+        try:
+            player_id_int = int(player_id)
+        except (ValueError, TypeError):
+            continue
+        
+        player_logs = game_logs_df[game_logs_df['PLAYER_ID'] == player_id_int]
+        
+        if len(player_logs) == 0:
+            avg_min = 0
+            avg_pra = 0
+            games_missed = "Season"
+        else:
+            avg_min = player_logs['MIN'].mean()
+            avg_pra = (player_logs['PTS'] + player_logs['REB'] + player_logs['AST']).mean()
+            games_missed = calculate_games_missed(player_id, team_id, game_logs_df)
+        
+        if avg_min >= min_minutes or avg_pra >= min_pra:
+            key_injuries.append({
+                **inj,
+                'avg_min': round(avg_min, 1),
+                'avg_pra': round(avg_pra, 1),
+                'games_missed': games_missed
+            })
+    
+    key_injuries.sort(key=lambda x: x['avg_pra'], reverse=True)
+    
+    return key_injuries
+
+
+def generate_matchup_summary(away_id: int, home_id: int, away_name: str, home_name: str,
+                            away_abbr: str, home_abbr: str,
+                            players_df: pd.DataFrame, game_logs_df: pd.DataFrame,
+                            away_injuries: list = None, home_injuries: list = None) -> dict:
+    """
+    Generate a comprehensive matchup summary.
+    
+    Args:
+        away_id: Away team ID
+        home_id: Home team ID
+        away_name: Away team name
+        home_name: Home team name
+        away_abbr: Away team abbreviation (e.g., 'MIN')
+        home_abbr: Home team abbreviation (e.g., 'MEM')
+        players_df: DataFrame from PlayerIndex
+        game_logs_df: DataFrame from PlayerGameLogs
+        away_injuries: List of away team injuries (optional)
+        home_injuries: List of home team injuries (optional)
+    
+    Returns:
+        Dict with all matchup summary data
+    """
+    summary = {
+        'away_name': away_name,
+        'home_name': home_name,
+        'away_abbr': away_abbr,
+        'home_abbr': home_abbr,
+        'away_id': away_id,
+        'home_id': home_id,
+        
+        'mismatches': calculate_stat_mismatches(away_id, home_id, away_abbr, home_abbr, top_n=10),
+        
+        'hot_players': {
+            'away': find_hot_players(away_id, players_df, game_logs_df, 
+                                     threshold_pct=0.20, min_l5_games=3),
+            'home': find_hot_players(home_id, players_df, game_logs_df,
+                                     threshold_pct=0.20, min_l5_games=3)
+        },
+        
+        'cold_players': {
+            'away': find_cold_players(away_id, players_df, game_logs_df, 
+                                      threshold_pct=0.20, min_l5_games=3),
+            'home': find_cold_players(home_id, players_df, game_logs_df,
+                                      threshold_pct=0.20, min_l5_games=3)
+        },
+        
+        'new_players': {
+            'away': find_new_players(away_id, players_df, game_logs_df,
+                                     min_increase_pct=0.25, min_season_minutes=7.5),
+            'home': find_new_players(home_id, players_df, game_logs_df,
+                                     min_increase_pct=0.25, min_season_minutes=7.5)
+        },
+        
+        'key_injuries': {
+            'away': get_key_injuries(away_injuries or [], game_logs_df, away_id,
+                                     min_minutes=15.0, min_pra=15.0),
+            'home': get_key_injuries(home_injuries or [], game_logs_df, home_id,
+                                     min_minutes=15.0, min_pra=15.0)
+        }
+    }
+    
+    return summary

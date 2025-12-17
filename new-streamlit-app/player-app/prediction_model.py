@@ -157,21 +157,74 @@ class PlayerStatPredictor:
                         f"Paint {player_breakdown.get('pts_paint', 0)} vs opp allows {opp_vuln.get('opp_pts_paint_allowed', 0)}"
                     )
         
-        # FT Rate adjustment for FTM predictions
-        # If opponent allows more FT attempts (higher FT Rate), player likely to get more FTM
+        # FT Rate adjustment for FTM predictions (with drives integration)
+        # FT Rate = FTA / FGA (how often a player/team gets to the line per field goal attempt)
         if stat == 'FTM':
-            # Get opponent's FT Rate allowed (need to load from team_defensive_stats)
+            # Get opponent's FT Rate allowed (from team_defensive_stats)
+            opp_ft_rate_allowed = opp_stats.get('ft_rate_allowed', 25.0)
+            league_avg_ft_rate = player_features.get('league_avg_ft_rate', 25.0)
             player_ft_rate = player_features.get('player_ft_rate', 25.0)
-            # Assume league average FT Rate is around 25%
-            league_avg_ft_rate = 25.0
             
-            # If player has higher than average FT Rate, they get to the line more
+            # Get drives data for FTM adjustment
+            drives_adj = player_features.get('drives_adjustments', {})
+            drives_data = player_features.get('drives', {})
+            ftm_drive_factor = drives_adj.get('ftm_drive_factor', 1.0)
+            drive_description = drives_adj.get('drive_description', 'Average driver')
+            drives_vs_league = drives_adj.get('drives_vs_league', 1.0)
+            drive_fta_pg = drives_data.get('drive_fta', 1.0)
+            drive_tier = drives_adj.get('drive_tier', 'average')
+            
+            # 1. Opponent FT Rate adjustment
+            # If opponent allows higher FT Rate than league avg, player will get more FTM
+            opp_ft_rate_factor = opp_ft_rate_allowed / league_avg_ft_rate if league_avg_ft_rate > 0 else 1.0
+            
+            # 2. Player's own tendency to get to the line
             player_ft_rate_factor = player_ft_rate / league_avg_ft_rate if league_avg_ft_rate > 0 else 1.0
             
-            # Apply a moderate adjustment based on player's tendency to get to the line
-            ft_adjustment = 0.8 + 0.2 * player_ft_rate_factor
+            # 3. Drives factor - weighting based on how player gets to the line
+            # High drivers: opponent FT Rate matters more (they attack the paint)
+            # Low drivers: their FTM is less predictable, reduce overall adjustment
+            if drive_tier in ['elite', 'high']:
+                # High driver - opponent FT Rate matters more
+                opp_weight = 0.70
+                player_weight = 0.30
+            elif drive_tier == 'average':
+                # Normal - balanced weighting
+                opp_weight = 0.60
+                player_weight = 0.40
+            elif drive_tier == 'low':
+                # Low driver - reduce overall FT rate influence
+                opp_weight = 0.55
+                player_weight = 0.45
+            else:  # very_low
+                # Non-driver (stretch bigs, shooters) - FTs come from different sources
+                # These players' FTM is highly variable, weight toward baseline more
+                opp_weight = 0.50
+                player_weight = 0.50
+            
+            combined_ft_factor = opp_weight * opp_ft_rate_factor + player_weight * player_ft_rate_factor
+            
+            # Apply adjustment (moderate impact - scale to ~0.85 to 1.15 range)
+            # Then apply drives factor (reduces for low drivers, amplifies for high)
+            ft_adjustment = 0.70 + 0.30 * combined_ft_factor
+            ft_adjustment *= ftm_drive_factor  # Reduce for non-drivers, amplify for elite drivers
             adjusted_prediction *= ft_adjustment
-            factors['ft_rate'] = f"Player FT Rate: {player_ft_rate}% (league avg ~{league_avg_ft_rate}%)"
+            
+            opp_ft_rate_rank = opp_stats.get('ft_rate_allowed_rank', 15)
+            rank_description = "gives up FTs" if opp_ft_rate_rank <= 10 else ("avg" if opp_ft_rate_rank <= 20 else "limits FTs")
+            factors['ft_rate'] = f"Opp FT Rate: {opp_ft_rate_allowed}% (Rank {opp_ft_rate_rank}, {rank_description})"
+            factors['drives_ftm'] = f"{drive_description} ({drives_vs_league:.1f}x league avg drives, {drive_fta_pg:.1f} drive FTA/g)"
+        
+        # AST adjustment based on drives (drive-and-kick playmaking)
+        if stat == 'AST':
+            drives_adj = player_features.get('drives_adjustments', {})
+            ast_drive_factor = drives_adj.get('ast_drive_factor', 1.0)
+            ast_description = drives_adj.get('ast_description', 'Average')
+            drive_ast_vs_league = drives_adj.get('drive_ast_vs_league', 1.0)
+            
+            if ast_drive_factor != 1.0:
+                adjusted_prediction *= ast_drive_factor
+                factors['drives_ast'] = f"{ast_description} ({drive_ast_vs_league:.1f}x league avg drive AST)"
         
         # Pace adjustment
         opp_pace = opp_stats.get('pace', 100.0)
@@ -180,6 +233,13 @@ class PlayerStatPredictor:
         pace_adjustment = opp_pace / league_pace
         adjusted_prediction *= pace_adjustment
         factors['pace'] = f"Opp PACE {opp_pace} vs league avg {league_pace}"
+        
+        # Positional defense adjustment (DISABLED - was causing double-counting)
+        # Keeping the code for potential future use with actual position-specific API data
+        # if stat in ['PTS', 'PRA']:
+        #     pos_defense = player_features.get('positional_defense', {})
+        #     pos_factor = pos_defense.get('factor', 1.0)
+        #     # ... adjustment logic ...
         
         # Home/Away adjustment
         is_home = player_features.get('is_home', True)
@@ -208,6 +268,71 @@ class PlayerStatPredictor:
             factors['rest'] = f"{days_rest} days rest (+2%)"
         else:
             factors['rest'] = f"{days_rest} days rest (normal)"
+        
+        # Star regression adjustment (POSITION-SPECIFIC)
+        # Ultra-elite (27+ PPG): No regression - consistently dominant (Giannis, etc.)
+        # Bigs (C) are more predictable - apply regression to reduce over-prediction
+        # Guards (PG/SG) have higher variance/ceiling games - no regression needed
+        if stat in ['PTS', 'PRA']:
+            # Use SEASON average for tier determination (more stable than rolling)
+            season_ppg = player_features.get('season_ppg', rolling_avgs.get('Season', {}).get('PTS', 0.0))
+            if season_ppg == 0:
+                season_ppg = rolling_avgs.get('Season', {}).get('PTS', 0.0)
+            player_position = player_features.get('player_position', 'F')
+            
+            # ULTRA-ELITE TIER: 27+ PPG players get NO regression
+            # These players consistently dominate and regression hurts accuracy
+            if season_ppg >= 27:
+                factors['star_regression'] = f"Ultra-elite ({season_ppg:.1f} season PPG) - no regression (consistently dominant)"
+                factors['regression_tier'] = 'Ultra-elite'
+            else:
+                # Determine position group
+                position_upper = player_position.upper() if player_position else 'F'
+                is_guard = any(pos in position_upper for pos in ['G', 'PG', 'SG'])
+                is_center = 'C' in position_upper and 'SG' not in position_upper
+                is_forward = any(pos in position_upper for pos in ['F', 'PF', 'SF']) and not is_center
+                
+                # Position-specific regression factors
+                # Guards: No regression (they have higher variance, ceiling games)
+                # Forwards: Moderate regression
+                # Centers: Full regression (most predictable)
+                if is_guard:
+                    position_regression_mult = 0.0  # No regression for guards
+                    position_label = "Guard"
+                elif is_center:
+                    position_regression_mult = 1.0  # Full regression for centers
+                    position_label = "Center"
+                else:
+                    position_regression_mult = 0.5  # Half regression for forwards
+                    position_label = "Forward"
+                
+                # Base regression by PPG tier (using season_ppg)
+                if season_ppg >= 25:
+                    base_regression = 0.06  # 6% base
+                    tier_label = "Elite scorer"
+                elif season_ppg >= 20:
+                    base_regression = 0.04  # 4% base
+                    tier_label = "Star"
+                elif season_ppg >= 15:
+                    base_regression = 0.02  # 2% base
+                    tier_label = "Starter"
+                else:
+                    base_regression = 0.0
+                    tier_label = "Role player"
+                
+                # Apply position-specific regression
+                actual_regression = base_regression * position_regression_mult
+                star_factor = 1.0 - actual_regression
+                
+                if actual_regression > 0:
+                    factors['star_regression'] = f"{tier_label} {position_label} ({season_ppg:.1f} season PPG) - adjustment (-{actual_regression*100:.1f}%)"
+                    factors['regression_tier'] = tier_label
+                    adjusted_prediction *= star_factor
+                elif season_ppg >= 15 and is_guard:
+                    factors['star_regression'] = f"{tier_label} Guard ({season_ppg:.1f} season PPG) - no regression (high variance position)"
+                    factors['regression_tier'] = f"{tier_label} (Guard)"
+                else:
+                    factors['regression_tier'] = tier_label
         
         breakdown['adjusted_prediction'] = round(adjusted_prediction, 1)
         
@@ -428,13 +553,18 @@ def format_predictions_for_display(predictions: Dict[str, Prediction]) -> pd.Dat
     """
     rows = []
     for stat, pred in predictions.items():
+        # Use None instead of 'N/A' to avoid Arrow serialization issues
+        season_avg = pred.breakdown.get('season_avg')
+        l5_avg = pred.breakdown.get('L5_avg')
+        vs_opp = pred.breakdown.get('vs_opponent')
+        
         rows.append({
             'Stat': stat,
             'Prediction': pred.value,
             'Confidence': pred.confidence.capitalize(),
-            'Season Avg': pred.breakdown.get('season_avg', 'N/A'),
-            'L5 Avg': pred.breakdown.get('L5_avg', 'N/A'),
-            'vs Opp': pred.breakdown.get('vs_opponent', 'N/A'),
+            'Season Avg': round(season_avg, 1) if season_avg is not None else None,
+            'L5 Avg': round(l5_avg, 1) if l5_avg is not None else None,
+            'vs Opp': round(vs_opp, 1) if vs_opp is not None else None,
         })
     
     return pd.DataFrame(rows)

@@ -12,10 +12,33 @@ from typing import Optional, Dict, List, Tuple
 from datetime import datetime, date
 import prediction_utils as utils
 import matchup_stats as ms
+import positional_defense as pos_def
+import team_defensive_stats as tds
+import drives_stats as ds
 
 # Current season configuration
 CURRENT_SEASON = "2025-26"
 LEAGUE_ID = "00"
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_player_position_from_index(player_id: str) -> str:
+    """
+    Get player's position from PlayerIndex endpoint.
+    """
+    try:
+        player_index = endpoints.PlayerIndex(
+            season=CURRENT_SEASON,
+            league_id=LEAGUE_ID
+        ).get_data_frames()[0]
+        
+        player_row = player_index[player_index['PERSON_ID'] == int(player_id)]
+        if len(player_row) > 0:
+            return player_row['POSITION'].iloc[0]
+        return 'F'  # Default
+    except Exception as e:
+        print(f"Error getting player position: {e}")
+        return 'F'
 
 
 @st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
@@ -129,6 +152,10 @@ def get_player_vs_opponent_history(
     """
     stats = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'MIN', 'FG3M', 'FTM']
     
+    # Check if MATCHUP column exists
+    if 'MATCHUP' not in game_logs.columns:
+        return {'games_played': 0}
+    
     # Filter games against opponent
     vs_opp = game_logs[game_logs['MATCHUP'].str.contains(opponent_abbr, na=False)]
     
@@ -172,6 +199,40 @@ def get_team_pace(team_id: int, season: str = CURRENT_SEASON) -> float:
         print(f"Error fetching pace for team {team_id}: {e}")
     
     return 100.0  # League average default
+
+
+@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+def get_opponent_ft_rate(opponent_team_id: int) -> Dict[str, float]:
+    """
+    Get opponent's Free Throw Rate allowed (FTA/FGA).
+    Higher FT Rate = opponents get to the line more often against this team.
+    
+    Returns:
+        Dict with opp_ft_rate, opp_ft_rate_rank, league_avg_ft_rate
+    """
+    try:
+        # Load the team defensive stats
+        _, opp_team_stats = tds.load_shooting_data()
+        
+        if opp_team_stats is None:
+            return {'opp_ft_rate': 25.0, 'opp_ft_rate_rank': 15, 'league_avg_ft_rate': 25.0}
+        
+        opp_def_stats = tds.get_team_defensive_stats(opponent_team_id, opp_team_stats)
+        
+        if opp_def_stats is None:
+            return {'opp_ft_rate': 25.0, 'opp_ft_rate_rank': 15, 'league_avg_ft_rate': 25.0}
+        
+        # Calculate league average FT Rate
+        league_avg_ft_rate = opp_team_stats['FT_RATE'].mean() * 100  # Convert to percentage
+        
+        return {
+            'opp_ft_rate': opp_def_stats.get('opp_ft_rate', 25.0),
+            'opp_ft_rate_rank': opp_def_stats.get('opp_ft_rate_rank', 15),
+            'league_avg_ft_rate': round(league_avg_ft_rate, 1)
+        }
+    except Exception as e:
+        print(f"Error getting opponent FT Rate: {e}")
+        return {'opp_ft_rate': 25.0, 'opp_ft_rate_rank': 15, 'league_avg_ft_rate': 25.0}
 
 
 @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
@@ -346,6 +407,9 @@ def get_all_prediction_features(
     # Player rolling averages
     features['rolling_avgs'] = get_player_rolling_averages(game_logs)
     
+    # Season PPG for tier determination (stable metric)
+    features['season_ppg'] = features['rolling_avgs'].get('Season', {}).get('PTS', 0.0)
+    
     # Home/Away splits
     features['home_away_splits'] = get_player_home_away_splits(game_logs)
     features['is_home'] = is_home
@@ -358,13 +422,17 @@ def get_all_prediction_features(
     features['is_back_to_back'] = utils.is_back_to_back(features['days_rest'])
     
     # Opponent stats
+    opp_ft_rate_stats = get_opponent_ft_rate(opponent_team_id)
     features['opponent'] = {
         'team_id': opponent_team_id,
         'abbr': opponent_abbr,
         'pace': get_team_pace(opponent_team_id),
         'def_rating': get_team_defensive_rating(opponent_team_id),
         'def_rating_L5': get_team_defensive_rating_last_n(opponent_team_id, 5),
+        'ft_rate_allowed': opp_ft_rate_stats.get('opp_ft_rate', 25.0),
+        'ft_rate_allowed_rank': opp_ft_rate_stats.get('opp_ft_rate_rank', 15),
     }
+    features['league_avg_ft_rate'] = opp_ft_rate_stats.get('league_avg_ft_rate', 25.0)
     
     # League averages for normalization
     features['league_avg'] = get_league_averages()
@@ -431,6 +499,52 @@ def get_all_prediction_features(
             'matchup_adjustments': {
                 'overall_pts_factor': 1.0
             }
+        }
+    
+    # Positional defense adjustment
+    try:
+        player_position = get_player_position_from_index(player_id)
+        features['player_position'] = player_position
+        features['positional_defense'] = pos_def.get_positional_defense_adjustment(
+            opponent_abbr=opponent_abbr,
+            player_position=player_position
+        )
+    except Exception as e:
+        print(f"Error getting positional defense: {e}")
+        features['player_position'] = 'F'
+        features['positional_defense'] = {
+            'factor': 1.0,
+            'rank': 15,
+            'vs_league_avg': 0.0,
+            'position_group': 'F',
+            'opponent': opponent_abbr,
+            'description': 'Positional defense data unavailable'
+        }
+    
+    # Player drives tracking data (for FTM and AST predictions)
+    try:
+        features['drives'] = ds.get_player_drives_stats(player_id)
+        
+        # Calculate drives adjustment factors
+        opp_ft_rate = features['opponent'].get('ft_rate_allowed', 25.0)
+        league_ft_rate = features.get('league_avg_ft_rate', 25.0)
+        features['drives_adjustments'] = ds.calculate_drives_adjustment_factors(
+            player_drives=features['drives'],
+            opp_ft_rate_allowed=opp_ft_rate,
+            league_avg_ft_rate=league_ft_rate
+        )
+    except Exception as e:
+        print(f"Error getting drives stats: {e}")
+        features['drives'] = ds._get_default_player_drives()
+        features['drives_adjustments'] = {
+            'ftm_drive_factor': 1.0,
+            'ast_drive_factor': 1.0,
+            'drives_per_game': 5.0,
+            'drive_fta_per_game': 1.0,
+            'drives_vs_league': 1.0,
+            'drive_ast_vs_league': 1.0,
+            'drive_description': 'Data unavailable',
+            'ast_description': 'Data unavailable',
         }
     
     return features

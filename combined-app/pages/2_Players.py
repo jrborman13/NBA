@@ -11,6 +11,7 @@ import matchup_stats as ms
 import vegas_lines as vl
 import prediction_tracker as pt
 import injury_adjustments as inj
+import backtest as bt
 import injury_report as ir
 import pandas as pd
 import nba_api.stats.endpoints
@@ -409,7 +410,7 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                             return styles
                         
                         styled_plays = display_df.style.apply(style_lean_bvp, axis=1)
-                        st.dataframe(styled_plays, use_container_width=True, hide_index=True)
+                        st.dataframe(styled_plays, width='stretch', hide_index=True)
                         
                         # Summary stats
                         overs = len([p for p in best_plays if 'Over' in p['lean']])
@@ -558,7 +559,7 @@ with st.container(border=False):
             )
 
 # with st.container(height=1000, border=True):
-#     st.altair_chart(player_data['final_chart'], use_container_width=False)
+#     st.altair_chart(player_data['final_chart'], width='content')
 
 # Create tabs for Current Season, YoY Data, and Predictions
 tab1, tab2, tab3 = st.tabs(["Current Season", "YoY Data", "Predictions"])
@@ -729,7 +730,7 @@ with tab1:
         else:
             styled_df = averages_df.style.apply(style_heatmap, axis=1)
         
-        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        st.dataframe(styled_df, width='stretch', hide_index=True)
 
         # Display Opponent Defensive Stats (only when a matchup is selected)
         if matchup_away_team_id and matchup_home_team_id:
@@ -1000,11 +1001,11 @@ with tab1:
                             pass
                 
                 game_logs_df = game_logs_df[new_cols]
-                st.dataframe(game_logs_df, use_container_width=True, hide_index=True)
+                st.dataframe(game_logs_df, width='stretch', hide_index=True)
             else:
                 st.dataframe(
                     page_games_df,
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True
                 )
             
@@ -1112,7 +1113,7 @@ with tab1:
                     
                     # Display game logs against opponent
                     st.markdown(f"**Game Logs vs {opponent_abbr}**")
-                    st.dataframe(vs_opponent_games, use_container_width=True, hide_index=True)
+                    st.dataframe(vs_opponent_games, width='stretch', hide_index=True)
                 else:
                     st.divider()
                     st.info(f"ℹ️ No games played against {opponent_abbr} this season yet.")
@@ -1246,7 +1247,7 @@ with tab2:
         else:
             styled_yoy_df = yoy_averages_df.style.apply(style_yoy_heatmap, axis=1)
         
-        st.dataframe(styled_yoy_df, use_container_width=True, hide_index=True)
+        st.dataframe(styled_yoy_df, width='stretch', hide_index=True)
     else:
         st.info("No historical season stats available for this player.")
 
@@ -1399,7 +1400,7 @@ with tab3:
                             unique_matchups = injury_report_df['matchup'].unique()
                             for m in unique_matchups:
                                 st.write(f"  • {m}")
-                            st.dataframe(injury_report_df, use_container_width=True)
+                            st.dataframe(injury_report_df, width='stretch')
                         else:
                             st.write("No data available")
                 
@@ -1636,7 +1637,7 @@ with tab3:
                                 {"Category": "2nd Chance Pts", "Player": player_breakdown['pts_2nd_chance'], "Player Rank": player_breakdown['pts_2nd_chance_rank']},
                                 {"Category": "Pts Off TOV", "Player": player_breakdown['pts_off_tov'], "Player Rank": player_breakdown['pts_off_tov_rank']},
                             ])
-                            st.dataframe(breakdown_data, hide_index=True, use_container_width=True)
+                            st.dataframe(breakdown_data, hide_index=True, width='stretch')
                         
                         with col2:
                             st.markdown(f"**{opponent_abbr} Defense (What They Allow)**")
@@ -1646,7 +1647,7 @@ with tab3:
                                 {"Category": "2nd Chance Pts", "Allowed": opp_vuln['opp_pts_2nd_chance_allowed'], "Rank": opp_vuln['opp_pts_2nd_chance_rank'], "Lg Avg": league_avgs['pts_2nd_chance']},
                                 {"Category": "Pts Off TOV", "Allowed": opp_vuln['opp_pts_off_tov_allowed'], "Rank": opp_vuln['opp_pts_off_tov_rank'], "Lg Avg": league_avgs['pts_off_tov']},
                             ])
-                            st.dataframe(defense_data, hide_index=True, use_container_width=True)
+                            st.dataframe(defense_data, hide_index=True, width='stretch')
                         
                         # Matchup adjustments
                         st.markdown("**Matchup-Adjusted Projections**")
@@ -1655,7 +1656,7 @@ with tab3:
                             {"Category": "Fast Break", "Base": player_breakdown['pts_fb'], "Adjusted": adjustments['pts_fb_adjusted'], "Impact": f"+{round(adjustments['pts_fb_adjusted'] - player_breakdown['pts_fb'], 1)}" if adjustments['pts_fb_adjusted'] > player_breakdown['pts_fb'] else f"{round(adjustments['pts_fb_adjusted'] - player_breakdown['pts_fb'], 1)}"},
                             {"Category": "2nd Chance", "Base": player_breakdown['pts_2nd_chance'], "Adjusted": adjustments['pts_2nd_chance_adjusted'], "Impact": f"+{round(adjustments['pts_2nd_chance_adjusted'] - player_breakdown['pts_2nd_chance'], 1)}" if adjustments['pts_2nd_chance_adjusted'] > player_breakdown['pts_2nd_chance'] else f"{round(adjustments['pts_2nd_chance_adjusted'] - player_breakdown['pts_2nd_chance'], 1)}"},
                         ])
-                        st.dataframe(adj_data, hide_index=True, use_container_width=True)
+                        st.dataframe(adj_data, hide_index=True, width='stretch')
                         
                         overall_factor = adjustments.get('overall_pts_factor', 1.0)
                         if overall_factor != 1.0:
@@ -1686,25 +1687,31 @@ with tab3:
                         if stat in predictions:
                             pred = predictions[stat]
                             col_name = stat_to_col.get(stat, stat)  # Use mapped name if exists
-                            season_val = season_row.get(col_name, 'N/A')
+                            season_val = season_row.get(col_name)
                             try:
-                                season_val_float = float(str(season_val).replace(',', ''))
-                                diff = round(pred.value - season_val_float, 1)
-                                diff_str = f"+{diff}" if diff >= 0 else str(diff)
+                                season_val_float = float(str(season_val).replace(',', '')) if season_val is not None else None
+                                if season_val_float is not None:
+                                    diff = round(pred.value - season_val_float, 1)
+                                    diff_str = f"+{diff}" if diff >= 0 else str(diff)
+                                    season_val_display = round(season_val_float, 1)
+                                else:
+                                    diff_str = "-"
+                                    season_val_display = None
                             except:
-                                diff_str = "N/A"
+                                diff_str = "-"
+                                season_val_display = None
                             
                             comparison_data.append({
                                 'Stat': stat_labels.get(stat, stat),
-                                'Season Avg': season_val,
-                                'Prediction': pred.value,
+                                'Season Avg': season_val_display,
+                                'Prediction': round(pred.value, 1),
                                 'Diff': diff_str,
                                 'Confidence': pred.confidence.capitalize()
                             })
                     
                     if comparison_data:
                         comparison_df = pd.DataFrame(comparison_data)
-                        st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+                        st.dataframe(comparison_df, width='stretch', hide_index=True)
                 
                 # Vegas Lines Comparison Section
                 st.markdown("### 📊 Vegas Lines Comparison")
@@ -1878,7 +1885,7 @@ Estimated Cost: {preview['estimated_cost']}
                                     return ''
                             
                             styled_api_df = api_df.style.applymap(style_api_lean, subset=['Lean']).applymap(style_edge, subset=['Edge'])
-                            st.dataframe(styled_api_df, use_container_width=True, hide_index=True)
+                            st.dataframe(styled_api_df, width='stretch', hide_index=True)
                             
                             # Summary callout for best plays
                             strong_plays = [row for row in api_comparison_data if 'Strong' in row['Lean']]
@@ -1893,96 +1900,6 @@ Estimated Cost: {preview['estimated_cost']}
                         st.warning(f"No Underdog props available for {player_data['player_info_name']} in this game.")
                 
                 st.markdown("---")
-                
-                # Allow manual line entry
-                with st.expander("➕ Enter Vegas Lines Manually (Optional)", expanded=len(existing_lines) == 0 and not cached_props):
-                    st.caption("Enter the betting lines to compare against predictions")
-                    
-                    # First row: main stats
-                    line_cols1 = st.columns(4)
-                    line_inputs = {}
-                    
-                    for i, stat in enumerate(['PTS', 'REB', 'AST', 'PRA']):
-                        with line_cols1[i]:
-                            default_val = existing_lines.get(stat, vl.PropLine(stat, 0, -110, -110, 'manual')).line if stat in existing_lines else 0.0
-                            line_inputs[stat] = st.number_input(
-                                f"{stat} Line",
-                                min_value=0.0,
-                                max_value=100.0,
-                                value=float(default_val),
-                                step=0.5,
-                                key=f"line_{stat}"
-                            )
-                    
-                    # Second row: additional stats
-                    line_cols2 = st.columns(4)
-                    for i, stat in enumerate(['STL', 'BLK', 'FG3M', 'FTM']):
-                        with line_cols2[i]:
-                            default_val = existing_lines.get(stat, vl.PropLine(stat, 0, -110, -110, 'manual')).line if stat in existing_lines else 0.0
-                            line_inputs[stat] = st.number_input(
-                                f"{stat_labels.get(stat, stat)} Line",
-                                min_value=0.0,
-                                max_value=100.0,
-                                value=float(default_val),
-                                step=0.5,
-                                key=f"line_{stat}"
-                            )
-                    
-                    if st.button("💾 Save Lines", key="save_lines"):
-                        for stat, line_val in line_inputs.items():
-                            if line_val > 0:
-                                vl.set_player_line(
-                                    selected_player_id,
-                                    game_date_str,
-                                    stat,
-                                    line_val
-                                )
-                        st.success("Lines saved!")
-                        st.rerun()
-                
-                # Show comparison if lines exist
-                lines_comparison_data = []
-                for stat in ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS']:
-                    if stat in predictions:
-                        pred = predictions[stat]
-                        
-                        # Get line from saved or input
-                        if stat in existing_lines:
-                            line_val = existing_lines[stat].line
-                        elif stat in line_inputs and line_inputs[stat] > 0:
-                            line_val = line_inputs[stat]
-                        else:
-                            line_val = None
-                        
-                        if line_val and line_val > 0:
-                            comparison = vl.compare_prediction_to_line(pred.value, line_val)
-                            lines_comparison_data.append({
-                                'Stat': stat_labels.get(stat, stat),
-                                'Prediction': round(pred.value, 1),
-                                'Line': round(line_val, 1),
-                                'Edge': round(comparison['diff'], 1),
-                                'Edge %': round(abs(comparison['diff_pct']) / 100, 3),
-                                'Lean': comparison['lean']
-                            })
-                
-                if lines_comparison_data:
-                    # Sort by absolute Edge descending
-                    lines_comparison_data.sort(key=lambda x: abs(x['Edge']), reverse=True)
-                    lines_df = pd.DataFrame(lines_comparison_data)
-                    
-                    # Style the dataframe with colors
-                    def style_lean(val):
-                        if 'Over' in val:
-                            return 'background-color: rgba(76, 175, 80, 0.3)'
-                        elif 'Under' in val:
-                            return 'background-color: rgba(244, 67, 54, 0.3)'
-                        else:
-                            return 'background-color: rgba(158, 158, 158, 0.2)'
-                    
-                    styled_lines = lines_df.style.applymap(style_lean, subset=['Lean'])
-                    st.dataframe(styled_lines, use_container_width=True, hide_index=True)
-                else:
-                    st.info("Enter Vegas lines above to see comparison with predictions.")
                 
                 # Log prediction button
                 st.markdown("### 📝 Track This Prediction")
@@ -2036,7 +1953,7 @@ Estimated Cost: {preview['estimated_cost']}
                             })
                         
                         if acc_data:
-                            st.dataframe(pd.DataFrame(acc_data), use_container_width=True, hide_index=True)
+                            st.dataframe(pd.DataFrame(acc_data), width='stretch', hide_index=True)
                         
                         # By confidence
                         by_conf = pt.calculate_accuracy_by_confidence()
@@ -2050,9 +1967,166 @@ Estimated Cost: {preview['estimated_cost']}
                                     'MAE': metrics['mae'],
                                     'Within 10%': f"{metrics['within_10_pct']}%"
                                 })
-                            st.dataframe(pd.DataFrame(conf_data), use_container_width=True, hide_index=True)
+                            st.dataframe(pd.DataFrame(conf_data), width='stretch', hide_index=True)
                     else:
                         st.info("No prediction history yet. Log predictions and update with actual results to track accuracy.")
+                
+                # Model Backtest Section
+                # Initialize backtest session state
+                if 'backtest_results' not in st.session_state:
+                    st.session_state.backtest_results = None
+                if 'backtest_player_id' not in st.session_state:
+                    st.session_state.backtest_player_id = None
+                
+                with st.expander("📊 Model Backtest - Test Prediction Accuracy", expanded=True):
+                    st.markdown("Test how well the prediction model performs against actual game results.")
+                    
+                    # Use form to prevent reruns on slider change
+                    with st.form(key="backtest_form"):
+                        col_bt1, col_bt2 = st.columns(2)
+                        with col_bt1:
+                            n_games_backtest = st.slider("Games to test", min_value=3, max_value=20, value=10)
+                        with col_bt2:
+                            skip_recent = st.slider("Skip most recent games", min_value=0, max_value=5, value=0, 
+                                                   help="Skip recent games for true out-of-sample testing")
+                        
+                        run_backtest = st.form_submit_button("🧪 Run Backtest")
+                    
+                    # Clear results if player changed
+                    if st.session_state.backtest_player_id != selected_player_id:
+                        st.session_state.backtest_results = None
+                        st.session_state.backtest_player_id = selected_player_id
+                    
+                    if run_backtest:
+                        with st.spinner(f"Testing predictions on last {n_games_backtest} games..."):
+                            try:
+                                # Run backtest for current player
+                                results = bt.run_player_backtest(
+                                    player_id=str(selected_player_id),
+                                    player_name=player_data['player_info_name'],
+                                    player_team_id=int(player_data['team_id']),
+                                    n_games=n_games_backtest,
+                                    skip_recent=skip_recent
+                                )
+                                
+                                if results:
+                                    # Store in session state
+                                    st.session_state.backtest_results = {
+                                        'results': results,
+                                        'summaries': bt.calculate_backtest_summary(results),
+                                        'confidence_metrics': bt.calculate_confidence_accuracy(results),
+                                        'player_name': player_data['player_info_name']
+                                    }
+                                else:
+                                    st.session_state.backtest_results = None
+                                    st.warning("No backtest results generated. Player may not have enough games.")
+                            except Exception as e:
+                                st.error(f"Backtest error: {str(e)}")
+                                st.session_state.backtest_results = None
+                    
+                    # Display results from session state (persists across reruns)
+                    if st.session_state.backtest_results is not None:
+                        results = st.session_state.backtest_results['results']
+                        summaries = st.session_state.backtest_results['summaries']
+                        confidence_metrics = st.session_state.backtest_results['confidence_metrics']
+                        player_name_clean = st.session_state.backtest_results['player_name'].replace(' ', '_').replace("'", "")
+                        
+                        # Display summary
+                        st.markdown("### 📈 Accuracy Summary")
+                        summary_df = bt.format_summary_for_display(summaries)
+                        if len(summary_df) > 0:
+                            st.dataframe(summary_df, width='stretch', hide_index=True)
+                            st.download_button(
+                                label="📥 Download Summary",
+                                data=summary_df.to_csv(index=False),
+                                file_name=f"{player_name_clean}_Accuracy_Summary.csv",
+                                mime="text/csv",
+                                key="download_summary"
+                            )
+                        
+                        # Confidence breakdown
+                        if confidence_metrics:
+                            st.markdown("### 🎯 Accuracy by Confidence Level")
+                            conf_rows = []
+                            for conf, metrics in confidence_metrics.items():
+                                conf_rows.append({
+                                    'Confidence': conf.capitalize(),
+                                    'Predictions': metrics['count'],
+                                    'MAE': metrics['mae'],
+                                    'Within 10%': f"{metrics['within_10_pct']}%"
+                                })
+                            conf_df = pd.DataFrame(conf_rows)
+                            st.dataframe(conf_df, width='stretch', hide_index=True)
+                            st.download_button(
+                                label="📥 Download Confidence",
+                                data=conf_df.to_csv(index=False),
+                                file_name=f"{player_name_clean}_Accuracy_By_Confidence.csv",
+                                mime="text/csv",
+                                key="download_confidence"
+                            )
+                        
+                        # Player Type breakdown (for PTS)
+                        player_type_metrics = bt.calculate_player_type_accuracy(results, stat='PTS')
+                        if player_type_metrics:
+                            # Show regression tier used
+                            regression_tier = bt.get_regression_tier_from_results(results)
+                            tier_emoji = "👑" if regression_tier == "Ultra-elite" else "⭐" if "Elite" in regression_tier else "📊"
+                            st.markdown(f"### 👤 Accuracy by Player Type (Points) — {tier_emoji} **Regression Tier: {regression_tier}**")
+                            st.caption("Ultra-elite: ≥27 PPG | Star: >18 PPG or ≥32 MPG | Starter: 12-18 PPG & ≥25 MPG | Role Player: <12 PPG or <25 MPG")
+                            player_type_df = bt.format_player_type_summary(player_type_metrics)
+                            if len(player_type_df) > 0:
+                                st.dataframe(player_type_df, width='stretch', hide_index=True)
+                                st.download_button(
+                                    label="📥 Download Player Type",
+                                    data=player_type_df.to_csv(index=False),
+                                    file_name=f"{player_name_clean}_Accuracy_By_Player_Type.csv",
+                                    mime="text/csv",
+                                    key="download_player_type"
+                                )
+                        
+                        # Show individual results
+                        st.markdown("### 📋 Individual Predictions vs Actuals")
+                        results_df = pd.DataFrame([{
+                            'Date': r.game_date,
+                            'vs': r.opponent_abbr,
+                            'Stat': r.stat,
+                            'Pred': r.predicted,
+                            'Actual': r.actual,
+                            'Error': f"{'+' if r.error > 0 else ''}{r.error}",
+                            'Conf': r.confidence.capitalize(),
+                            'Type': r.player_type
+                        } for r in results])
+                        
+                        # Filter by stat
+                        stat_filter = st.selectbox("Filter by stat", 
+                                                   options=['All'] + list(results_df['Stat'].unique()),
+                                                   key="backtest_stat_filter")
+                        if stat_filter != 'All':
+                            filtered_df = results_df[results_df['Stat'] == stat_filter]
+                        else:
+                            filtered_df = results_df
+                        
+                        st.dataframe(filtered_df, width='stretch', hide_index=True, height=300)
+                        st.download_button(
+                            label="📥 Download Predictions",
+                            data=results_df.to_csv(index=False),
+                            file_name=f"{player_name_clean}_Individual_Predictions.csv",
+                            mime="text/csv",
+                            key="download_predictions"
+                        )
+                        
+                        # Interpretation
+                        if summaries:
+                            pts_summary = summaries.get('PTS')
+                            if pts_summary:
+                                st.markdown("---")
+                                st.markdown("**📝 Interpretation:**")
+                                bias_text = "over-predicting" if pts_summary.bias > 0 else "under-predicting"
+                                st.markdown(f"""
+                                - **Points MAE**: {pts_summary.mae} (on average, predictions are off by {pts_summary.mae} points)
+                                - **Bias**: {'+' if pts_summary.bias > 0 else ''}{pts_summary.bias} (model is {bias_text})
+                                - **Accuracy**: {pts_summary.within_10_pct}% of predictions within 10% of actual
+                                """)
             else:
                 st.warning("Could not generate predictions. Please try again.")
         else:

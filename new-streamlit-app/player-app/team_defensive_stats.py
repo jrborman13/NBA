@@ -199,6 +199,20 @@ def load_player_shooting_data():
     return player_stats
 
 
+def _safe_get_float(row, col, default=0.0, multiplier=100, round_to=1):
+    """Safely get a float value from a DataFrame row, handling NaN."""
+    val = row[col].values[0]
+    if pd.notna(val):
+        return round(val * multiplier, round_to)
+    return default
+
+def _safe_get_int(row, col, default=0):
+    """Safely get an int value from a DataFrame row, handling NaN."""
+    val = row[col].values[0]
+    if pd.notna(val):
+        return int(val)
+    return default
+
 def get_player_zone_shooting(player_id, player_stats_df):
     """
     Get zone shooting stats for a specific player.
@@ -223,29 +237,29 @@ def get_player_zone_shooting(player_id, player_stats_df):
     stats['player_name'] = player_row['Name'].values[0]
     
     # Rim shooting
-    stats['rim_acc'] = round(player_row['AtRimAccuracy'].values[0] * 100, 1) if player_row['AtRimAccuracy'].values[0] else 0.0
-    stats['rim_freq'] = round(player_row['AtRimFrequency'].values[0] * 100, 1) if player_row['AtRimFrequency'].values[0] else 0.0
-    stats['rim_fga'] = int(player_row['AtRimFGA'].values[0]) if player_row['AtRimFGA'].values[0] else 0
+    stats['rim_acc'] = _safe_get_float(player_row, 'AtRimAccuracy')
+    stats['rim_freq'] = _safe_get_float(player_row, 'AtRimFrequency')
+    stats['rim_fga'] = _safe_get_int(player_row, 'AtRimFGA')
     
     # Short Mid-Range shooting
-    stats['smr_acc'] = round(player_row['ShortMidRangeAccuracy'].values[0] * 100, 1) if player_row['ShortMidRangeAccuracy'].values[0] else 0.0
-    stats['smr_freq'] = round(player_row['ShortMidRangeFrequency'].values[0] * 100, 1) if player_row['ShortMidRangeFrequency'].values[0] else 0.0
-    stats['smr_fga'] = int(player_row['ShortMidRangeFGA'].values[0]) if player_row['ShortMidRangeFGA'].values[0] else 0
+    stats['smr_acc'] = _safe_get_float(player_row, 'ShortMidRangeAccuracy')
+    stats['smr_freq'] = _safe_get_float(player_row, 'ShortMidRangeFrequency')
+    stats['smr_fga'] = _safe_get_int(player_row, 'ShortMidRangeFGA')
     
     # Long Mid-Range shooting
-    stats['lmr_acc'] = round(player_row['LongMidRangeAccuracy'].values[0] * 100, 1) if player_row['LongMidRangeAccuracy'].values[0] else 0.0
-    stats['lmr_freq'] = round(player_row['LongMidRangeFrequency'].values[0] * 100, 1) if player_row['LongMidRangeFrequency'].values[0] else 0.0
-    stats['lmr_fga'] = int(player_row['LongMidRangeFGA'].values[0]) if player_row['LongMidRangeFGA'].values[0] else 0
+    stats['lmr_acc'] = _safe_get_float(player_row, 'LongMidRangeAccuracy')
+    stats['lmr_freq'] = _safe_get_float(player_row, 'LongMidRangeFrequency')
+    stats['lmr_fga'] = _safe_get_int(player_row, 'LongMidRangeFGA')
     
     # Corner 3 shooting
-    stats['c3_acc'] = round(player_row['Corner3Accuracy'].values[0] * 100, 1) if player_row['Corner3Accuracy'].values[0] else 0.0
-    stats['c3_freq'] = round(player_row['Corner3Frequency'].values[0] * 100, 1) if player_row['Corner3Frequency'].values[0] else 0.0
-    stats['c3_fga'] = int(player_row['Corner3FGA'].values[0]) if player_row['Corner3FGA'].values[0] else 0
+    stats['c3_acc'] = _safe_get_float(player_row, 'Corner3Accuracy')
+    stats['c3_freq'] = _safe_get_float(player_row, 'Corner3Frequency')
+    stats['c3_fga'] = _safe_get_int(player_row, 'Corner3FGA')
     
     # Above the Break 3 shooting
-    stats['atb3_acc'] = round(player_row['Arc3Accuracy'].values[0] * 100, 1) if player_row['Arc3Accuracy'].values[0] else 0.0
-    stats['atb3_freq'] = round(player_row['Arc3Frequency'].values[0] * 100, 1) if player_row['Arc3Frequency'].values[0] else 0.0
-    stats['atb3_fga'] = int(player_row['Arc3FGA'].values[0]) if player_row['Arc3FGA'].values[0] else 0
+    stats['atb3_acc'] = _safe_get_float(player_row, 'Arc3Accuracy')
+    stats['atb3_freq'] = _safe_get_float(player_row, 'Arc3Frequency')
+    stats['atb3_fga'] = _safe_get_int(player_row, 'Arc3FGA')
     
     return stats
 

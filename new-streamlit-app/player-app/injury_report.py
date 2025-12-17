@@ -389,25 +389,29 @@ def get_injuries_for_matchup(
         return result
     
     # Build matchup pattern (e.g., "NYK@ORL" or "NYK @ ORL")
+    # Only match exact matchup patterns - both teams must be present
     matchup_patterns = [
         f"{away_team_abbr}@{home_team_abbr}",
         f"{away_team_abbr} @ {home_team_abbr}",
         f"{away_team_abbr}vs{home_team_abbr}",
         f"{away_team_abbr} vs {home_team_abbr}",
-        away_team_abbr,  # Just the away team abbr
-        home_team_abbr,  # Just the home team abbr
+        f"{home_team_abbr}@{away_team_abbr}",  # Reverse order just in case
+        f"{home_team_abbr} @ {away_team_abbr}",
+        f"{home_team_abbr}vs{away_team_abbr}",
+        f"{home_team_abbr} vs {away_team_abbr}",
     ]
     
-    # Find matching rows - check if any pattern matches
+    # Find matching rows - must match the specific matchup (both teams)
     def matchup_matches(matchup_str):
         if not matchup_str:
             return False
         matchup_lower = str(matchup_str).lower()
-        # Check for exact matchup patterns first
-        for p in matchup_patterns[:4]:
+        # Check for exact matchup patterns
+        for p in matchup_patterns:
             if p.lower() in matchup_lower:
                 return True
-        # Also match if both team abbreviations appear in the matchup
+        # Also match if BOTH team abbreviations appear in the matchup string
+        # This ensures we only get injuries for this specific game
         if away_team_abbr.lower() in matchup_lower and home_team_abbr.lower() in matchup_lower:
             return True
         return False

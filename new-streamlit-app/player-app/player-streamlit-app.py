@@ -226,6 +226,199 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
             
             # Show info about the matchup
             st.info(f"📊 Showing players from: {selected_matchup['away_team']} @ {selected_matchup['home_team']} (sorted by minutes)")
+            
+            # ============================================================
+            # BEST VALUE PLAYS SECTION
+            # ============================================================
+            game_date_str_bvp = selected_date.strftime('%Y-%m-%d')
+            game_cache_key_bvp = f"{game_date_str_bvp}_{matchup_away_team_abbr}_{matchup_home_team_abbr}"
+            
+            # Initialize session state for game-level prediction cache
+            if 'predictions_game_cache' not in st.session_state:
+                st.session_state.predictions_game_cache = {}
+            
+            with st.expander("🎯 **Best Value Plays** - Find edges across the entire game", expanded=False):
+                st.caption("Generate predictions for all players and compare against Underdog lines to find the best value plays")
+                
+                # Check if we have cached predictions for this game
+                cached_game_predictions = st.session_state.predictions_game_cache.get(game_cache_key_bvp)
+                
+                # Check if we have cached odds for this game
+                if 'odds_game_cache' not in st.session_state:
+                    st.session_state.odds_game_cache = {}
+                cached_game_props = st.session_state.odds_game_cache.get(game_cache_key_bvp)
+                
+                col_gen, col_status = st.columns([1, 2])
+                
+                with col_gen:
+                    # Only enable generation if we have odds
+                    if cached_game_props is None:
+                        st.warning("⚠️ Fetch Underdog lines first (scroll down to Predictions tab)")
+                        gen_disabled = True
+                    elif cached_game_predictions is not None:
+                        st.success(f"✅ {len(cached_game_predictions)} players predicted")
+                        gen_disabled = True
+                    else:
+                        gen_disabled = False
+                    
+                    if st.button("🔮 Generate All Predictions", disabled=gen_disabled, key="gen_all_predictions"):
+                        # Filter to players with at least some minutes
+                        players_to_predict = [
+                            pid for pid in filtered_player_ids_list 
+                            if player_minutes_map.get(int(pid), 0) >= 10  # At least 10 min/game
+                        ]
+                        
+                        # Build required data structures
+                        player_names_map = {pid: player_name_map.get(pid, f"Player {pid}") for pid in players_to_predict}
+                        player_team_ids_map = {}
+                        for pid in players_to_predict:
+                            player_row = players_df[players_df['PERSON_ID'].astype(str) == pid]
+                            if len(player_row) > 0:
+                                player_team_ids_map[pid] = int(player_row['TEAM_ID'].iloc[0])
+                        
+                        progress_bar = st.progress(0, text="Generating predictions...")
+                        
+                        def update_progress(current, total, player_name):
+                            progress_bar.progress(current / total, text=f"({current}/{total}) {player_name}...")
+                        
+                        # Generate predictions for all players
+                        all_predictions = pm.generate_predictions_for_game(
+                            player_ids=players_to_predict,
+                            player_names=player_names_map,
+                            player_team_ids=player_team_ids_map,
+                            away_team_id=matchup_away_team_id,
+                            home_team_id=matchup_home_team_id,
+                            away_team_abbr=matchup_away_team_abbr,
+                            home_team_abbr=matchup_home_team_abbr,
+                            game_date=game_date_str_bvp,
+                            progress_callback=update_progress
+                        )
+                        
+                        progress_bar.empty()
+                        
+                        # Cache the predictions
+                        st.session_state.predictions_game_cache[game_cache_key_bvp] = all_predictions
+                        st.success(f"✅ Generated predictions for {len(all_predictions)} players!")
+                        st.rerun()
+                
+                with col_status:
+                    if cached_game_predictions is not None and cached_game_props is not None:
+                        st.info(f"📊 Predictions: {len(cached_game_predictions)} players | Lines: {len(cached_game_props)} players")
+                    
+                    # Refresh button
+                    if cached_game_predictions is not None:
+                        if st.button("🔄 Regenerate Predictions", key="refresh_all_predictions"):
+                            del st.session_state.predictions_game_cache[game_cache_key_bvp]
+                            st.rerun()
+                
+                # If we have both predictions and props, show the best value plays
+                if cached_game_predictions is not None and cached_game_props is not None:
+                    st.markdown("---")
+                    
+                    # Filters
+                    filter_col1, filter_col2, filter_col3 = st.columns(3)
+                    
+                    with filter_col1:
+                        min_edge = st.slider(
+                            "Minimum Edge %",
+                            min_value=0,
+                            max_value=25,
+                            value=5,
+                            step=1,
+                            key="bvp_min_edge"
+                        )
+                    
+                    with filter_col2:
+                        confidence_options = st.multiselect(
+                            "Confidence Level",
+                            options=['high', 'medium', 'low'],
+                            default=['high', 'medium'],
+                            key="bvp_confidence"
+                        )
+                    
+                    with filter_col3:
+                        stat_options = st.multiselect(
+                            "Stats",
+                            options=['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS'],
+                            default=['PTS', 'REB', 'AST', 'PRA', 'RA', 'FPTS'],
+                            key="bvp_stats"
+                        )
+                    
+                    # Find best value plays
+                    best_plays = pm.find_best_value_plays(
+                        all_predictions=cached_game_predictions,
+                        all_props=cached_game_props,
+                        min_edge_pct=float(min_edge),
+                        confidence_filter=confidence_options if confidence_options else ['high', 'medium', 'low'],
+                        stat_filter=stat_options if stat_options else ['PTS', 'REB', 'AST', 'PRA']
+                    )
+                    
+                    if best_plays:
+                        st.markdown(f"### 🏆 Top {min(len(best_plays), 20)} Value Plays")
+                        
+                        # Sort by absolute edge descending before taking top 20
+                        sorted_plays = sorted(best_plays, key=lambda x: abs(x['edge']), reverse=True)
+                        
+                        # Create DataFrame for display
+                        plays_df = pd.DataFrame(sorted_plays[:20])  # Top 20
+                        
+                        # Format the display
+                        display_df = plays_df[[
+                            'player_name', 'team', 'stat', 'prediction', 'line', 
+                            'edge', 'edge_pct', 'lean', 'confidence'
+                        ]].copy()
+                        
+                        display_df.columns = [
+                            'Player', 'Team', 'Stat', 'Pred', 'Line', 
+                            'Edge', 'Edge %', 'Lean', 'Conf'
+                        ]
+                        
+                        # Format columns - all numbers formatted to consistent decimal places
+                        display_df['Pred'] = display_df['Pred'].apply(lambda x: f"{x:.1f}")
+                        display_df['Line'] = display_df['Line'].apply(lambda x: f"{x:.1f}")
+                        display_df['Edge'] = display_df['Edge'].apply(lambda x: f"{abs(x):.1f}")  # Absolute value
+                        display_df['Edge %'] = display_df['Edge %'].apply(lambda x: f"{abs(x) / 100:.3f}")
+                        display_df['Conf'] = display_df['Conf'].str.capitalize()
+                        
+                        # Style function for lean column
+                        def style_lean_bvp(row):
+                            styles = [''] * len(row)
+                            lean_idx = display_df.columns.get_loc('Lean')
+                            lean_val = row['Lean']
+                            
+                            if 'Strong Over' in lean_val:
+                                styles[lean_idx] = 'background-color: rgba(46, 125, 50, 0.4); font-weight: bold'
+                            elif 'Lean Over' in lean_val:
+                                styles[lean_idx] = 'background-color: rgba(76, 175, 80, 0.3)'
+                            elif 'Strong Under' in lean_val:
+                                styles[lean_idx] = 'background-color: rgba(183, 28, 28, 0.4); font-weight: bold'
+                            elif 'Lean Under' in lean_val:
+                                styles[lean_idx] = 'background-color: rgba(244, 67, 54, 0.3)'
+                            
+                            # Also color confidence
+                            conf_idx = display_df.columns.get_loc('Conf')
+                            if row['Conf'] == 'High':
+                                styles[conf_idx] = 'background-color: rgba(33, 150, 243, 0.3)'
+                            elif row['Conf'] == 'Medium':
+                                styles[conf_idx] = 'background-color: rgba(255, 193, 7, 0.3)'
+                            
+                            return styles
+                        
+                        styled_plays = display_df.style.apply(style_lean_bvp, axis=1)
+                        st.dataframe(styled_plays, use_container_width=True, hide_index=True)
+                        
+                        # Summary stats
+                        overs = len([p for p in best_plays if 'Over' in p['lean']])
+                        unders = len([p for p in best_plays if 'Under' in p['lean']])
+                        st.caption(f"📈 {overs} Over plays | 📉 {unders} Under plays | Total: {len(best_plays)} plays found")
+                    else:
+                        st.info("No plays found matching your filters. Try lowering the minimum edge % or expanding filters.")
+                
+                elif cached_game_predictions is None and cached_game_props is not None:
+                    st.info("👆 Click 'Generate All Predictions' to find value plays")
+                elif cached_game_predictions is not None and cached_game_props is None:
+                    st.warning("⚠️ Need to fetch Underdog lines first to compare predictions")
+            
         else:
             # If TEAM_ID column doesn't exist, try to filter by team abbreviation
             st.warning("⚠️ Could not filter by team ID. Showing all players.")
@@ -1348,10 +1541,11 @@ with tab3:
                 else:
                     st.markdown("### Predicted Statline")
                 
-                pred_cols = st.columns(8)
-                stat_order = ['PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'FG3M', 'FTM']
+                pred_cols = st.columns(10)
+                stat_order = ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS']
                 stat_labels = {'PTS': 'Points', 'REB': 'Rebounds', 'AST': 'Assists', 
-                              'PRA': 'PRA', 'STL': 'Steals', 'BLK': 'Blocks', 'FG3M': '3PM', 'FTM': 'FTM'}
+                              'PRA': 'PRA', 'RA': 'R+A', 'STL': 'Steals', 'BLK': 'Blocks', 
+                              'FG3M': '3PM', 'FTM': 'FTM', 'FPTS': 'Fantasy'}
                 
                 for i, stat in enumerate(stat_order):
                     if stat in predictions:
@@ -1484,7 +1678,7 @@ with tab3:
                     # Map prediction stat names to averages_df column names
                     stat_to_col = {'FG3M': '3PM'}  # averages_df uses '3PM', predictions use 'FG3M'
                     
-                    for stat in ['PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'FG3M', 'FTM']:
+                    for stat in ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS']:
                         if stat in predictions:
                             pred = predictions[stat]
                             col_name = stat_to_col.get(stat, stat)  # Use mapped name if exists
@@ -1514,8 +1708,190 @@ with tab3:
                 # Get existing lines for this player/game
                 existing_lines = vl.get_player_lines(selected_player_id, game_date_str)
                 
+                # === UNDERDOG API INTEGRATION ===
+                with st.expander("🎰 **Fetch Underdog Lines** (The Odds API)", expanded=True):
+                    st.caption("Fetch live player props from Underdog Fantasy via The Odds API")
+                    
+                    # Initialize session state for API data (GAME-LEVEL CACHE)
+                    if 'odds_game_cache' not in st.session_state:
+                        st.session_state.odds_game_cache = {}  # game_key -> all_props dict
+                    if 'odds_api_credits' not in st.session_state:
+                        st.session_state.odds_api_credits = None
+                    
+                    # Create cache key for this GAME (not player-specific)
+                    game_cache_key = f"{game_date_str}_{matchup_away_team_abbr}_{matchup_home_team_abbr}"
+                    
+                    # Check if we have cached data for this GAME
+                    cached_game_props = st.session_state.odds_game_cache.get(game_cache_key)
+                    
+                    # Get player-specific props from cache if available
+                    if cached_game_props is not None:
+                        cached_props = vl.get_player_props_from_cached(cached_game_props, player_data['player_info_name'])
+                        players_with_props = len(cached_game_props)
+                    else:
+                        cached_props = None
+                        players_with_props = 0
+                    
+                    # Dry-run preview section
+                    col_preview, col_fetch = st.columns([2, 1])
+                    
+                    with col_preview:
+                        if st.button("🔍 Preview Request (Free)", key="preview_odds_request"):
+                            with st.spinner("Checking for available events..."):
+                                preview = vl.preview_odds_request(
+                                    matchup_home_team_abbr,
+                                    matchup_away_team_abbr,
+                                    game_date_str
+                                )
+                                
+                                if preview.get('error'):
+                                    st.error(f"❌ {preview['error']}")
+                                    if preview.get('events_on_date'):
+                                        st.info(f"Events found on {game_date_str}: {', '.join(preview['events_on_date'])}")
+                                else:
+                                    st.success(f"✅ Event found: {preview['event_details']['away_team']} @ {preview['event_details']['home_team']}")
+                                    
+                                    with st.container():
+                                        st.markdown("**Request Details (Dry Run)**")
+                                        st.code(f"""
+Event ID: {preview['event_id']}
+Region: {preview['request_info']['region']}
+Bookmaker: {preview['request_info']['bookmaker']}
+Markets: {', '.join(preview['request_info']['markets_requested'])}
+Estimated Cost: {preview['estimated_cost']}
+""", language=None)
+                    
+                    with col_fetch:
+                        fetch_disabled = cached_game_props is not None
+                        if fetch_disabled:
+                            fetch_label = f"✅ Game Cached ({players_with_props} players)"
+                        else:
+                            fetch_label = "📥 Fetch Lines (1 Credit)"
+                        
+                        if st.button(fetch_label, key="fetch_odds", disabled=fetch_disabled):
+                            with st.spinner("Fetching ALL player props for this game..."):
+                                # Fetch ALL props for the game (costs 1 credit)
+                                all_props, api_response = vl.fetch_all_props_for_game(
+                                    matchup_home_team_abbr,
+                                    matchup_away_team_abbr,
+                                    game_date_str
+                                )
+                                
+                                if api_response.success:
+                                    # Cache at GAME level
+                                    st.session_state.odds_game_cache[game_cache_key] = all_props
+                                    st.session_state.odds_api_credits = api_response.credits_remaining
+                                    
+                                    if all_props:
+                                        st.success(f"✅ Cached props for {len(all_props)} players! Switch players freely - no additional credits needed.")
+                                    else:
+                                        st.warning("⚠️ No props found for this game on Underdog")
+                                    
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ API Error: {api_response.error}")
+                                    if api_response.credits_remaining is not None:
+                                        st.session_state.odds_api_credits = api_response.credits_remaining
+                    
+                    # Clear cache button
+                    if cached_game_props is not None:
+                        if st.button("🔄 Refresh Game Lines", key="refresh_odds"):
+                            del st.session_state.odds_game_cache[game_cache_key]
+                            st.rerun()
+                    
+                    # Show credit info and cache status
+                    if st.session_state.odds_api_credits is not None:
+                        st.info(f"💳 API Credits Remaining: **{st.session_state.odds_api_credits}** / 500 (monthly)")
+                    
+                    if cached_game_props is not None and cached_props:
+                        st.success(f"📊 Found {len(cached_props)} props for **{player_data['player_info_name']}** from cached game data")
+                    elif cached_game_props is not None and not cached_props:
+                        st.warning(f"⚠️ No props available for {player_data['player_info_name']} on Underdog (game data cached)")
+                    
+                    # Display fetched props
+                    if cached_props:
+                        st.markdown("**Underdog Lines:**")
+                        
+                        # Build comparison table with fetched props
+                        api_comparison_data = []
+                        for stat in ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS']:
+                            if stat in predictions and stat in cached_props:
+                                pred = predictions[stat]
+                                prop = cached_props[stat]
+                                comparison = vl.compare_prediction_to_line(pred.value, prop.line)
+                                
+                                api_comparison_data.append({
+                                    'Stat': stat_labels.get(stat, stat),
+                                    'Prediction': round(pred.value, 1),
+                                    'Underdog Line': round(prop.line, 1),
+                                    'Edge': round(comparison['diff'], 1),
+                                    'Edge %': round(abs(comparison['diff_pct']) / 100, 3),
+                                    'Lean': comparison['lean']
+                                })
+                                
+                                # Also save to existing lines for persistence
+                                vl.set_player_line(
+                                    selected_player_id,
+                                    game_date_str,
+                                    stat,
+                                    prop.line,
+                                    prop.over_odds,
+                                    prop.under_odds,
+                                    source='underdog'
+                                )
+                        
+                        if api_comparison_data:
+                            # Sort by absolute Edge descending
+                            api_comparison_data.sort(key=lambda x: abs(x['Edge']), reverse=True)
+                            api_df = pd.DataFrame(api_comparison_data)
+                            
+                            # Style the lean column
+                            def style_api_lean(val):
+                                if 'Strong Over' in val:
+                                    return 'background-color: rgba(46, 125, 50, 0.4); font-weight: bold'
+                                elif 'Lean Over' in val:
+                                    return 'background-color: rgba(76, 175, 80, 0.3)'
+                                elif 'Strong Under' in val:
+                                    return 'background-color: rgba(183, 28, 28, 0.4); font-weight: bold'
+                                elif 'Lean Under' in val:
+                                    return 'background-color: rgba(244, 67, 54, 0.3)'
+                                else:
+                                    return 'background-color: rgba(158, 158, 158, 0.2)'
+                            
+                            def style_edge(val):
+                                try:
+                                    num = float(val) if not isinstance(val, (int, float)) else val
+                                    if num >= 1.5:
+                                        return 'color: #2E7D32; font-weight: bold'
+                                    elif num >= 0.5:
+                                        return 'color: #4CAF50'
+                                    elif num <= -1.5:
+                                        return 'color: #B71C1C; font-weight: bold'
+                                    elif num <= -0.5:
+                                        return 'color: #F44336'
+                                    return ''
+                                except:
+                                    return ''
+                            
+                            styled_api_df = api_df.style.applymap(style_api_lean, subset=['Lean']).applymap(style_edge, subset=['Edge'])
+                            st.dataframe(styled_api_df, use_container_width=True, hide_index=True)
+                            
+                            # Summary callout for best plays
+                            strong_plays = [row for row in api_comparison_data if 'Strong' in row['Lean']]
+                            if strong_plays:
+                                st.markdown("**🎯 Best Plays:**")
+                                for play in strong_plays:
+                                    direction = "OVER" if "Over" in play['Lean'] else "UNDER"
+                                    st.markdown(f"- **{play['Stat']}** {direction} {play['Underdog Line']} (Pred: {play['Prediction']}, Edge: {play['Edge']})")
+                        else:
+                            st.info("No matching props found between predictions and Underdog lines.")
+                    elif cached_props is not None and len(cached_props) == 0:
+                        st.warning(f"No Underdog props available for {player_data['player_info_name']} in this game.")
+                
+                st.markdown("---")
+                
                 # Allow manual line entry
-                with st.expander("➕ Enter Vegas Lines (Optional)", expanded=len(existing_lines) == 0):
+                with st.expander("➕ Enter Vegas Lines Manually (Optional)", expanded=len(existing_lines) == 0 and not cached_props):
                     st.caption("Enter the betting lines to compare against predictions")
                     
                     # First row: main stats
@@ -1562,7 +1938,7 @@ with tab3:
                 
                 # Show comparison if lines exist
                 lines_comparison_data = []
-                for stat in ['PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'FG3M', 'FTM']:
+                for stat in ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS']:
                     if stat in predictions:
                         pred = predictions[stat]
                         
@@ -1578,13 +1954,16 @@ with tab3:
                             comparison = vl.compare_prediction_to_line(pred.value, line_val)
                             lines_comparison_data.append({
                                 'Stat': stat_labels.get(stat, stat),
-                                'Prediction': pred.value,
-                                'Line': line_val,
-                                'Edge': f"{comparison['diff']:+.1f}",
+                                'Prediction': round(pred.value, 1),
+                                'Line': round(line_val, 1),
+                                'Edge': round(comparison['diff'], 1),
+                                'Edge %': round(abs(comparison['diff_pct']) / 100, 3),
                                 'Lean': comparison['lean']
                             })
                 
                 if lines_comparison_data:
+                    # Sort by absolute Edge descending
+                    lines_comparison_data.sort(key=lambda x: abs(x['Edge']), reverse=True)
                     lines_df = pd.DataFrame(lines_comparison_data)
                     
                     # Style the dataframe with colors
@@ -1614,7 +1993,7 @@ with tab3:
                             is_home=is_home
                         )
                         
-                        for stat in ['PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'FG3M', 'FTM']:
+                        for stat in ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS']:
                             if stat in predictions:
                                 line_val = existing_lines.get(stat, vl.PropLine(stat, 0, -110, -110, 'manual')).line if stat in existing_lines else None
                                 

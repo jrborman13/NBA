@@ -1,0 +1,46 @@
+{
+  "1641705_2025-12-16": {
+    "BLK": {
+      "line": 2.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "FG3M": {
+      "line": 1.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "PTS": {
+      "line": 20.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "PRA": {
+      "line": 32.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "FTM": {
+      "line": 4.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "FPTS": {
+      "line": 44.15,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "AST": {
+      "line": 2.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    }
+  }
+}

@@ -264,9 +264,10 @@ class PlayerStatPredictor:
         """
         Generate predictions for all key stats.
         PRA is calculated as the sum of PTS + REB + AST, not predicted independently.
+        FPTS uses Underdog formula: PTS*1 + REB*1.2 + AST*1.5 + STL*3 + BLK*3 - TOV*1
         """
-        # Predict individual stats first
-        stats_to_predict = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'FG3M', 'FTM']
+        # Predict individual stats first (including TOV for fantasy calculation)
+        stats_to_predict = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'FG3M', 'FTM', 'TOV']
         
         predictions = {}
         for stat in stats_to_predict:
@@ -302,6 +303,77 @@ class PlayerStatPredictor:
             },
             factors={
                 'calculation': f"PTS ({pts_pred}) + REB ({reb_pred}) + AST ({ast_pred})"
+            }
+        )
+        
+        # Calculate RA (Rebounds + Assists) from the sum of REB + AST predictions
+        ra_value = round(reb_pred + ast_pred, 1)
+        
+        # Determine RA confidence (use the lowest confidence of the two components)
+        ra_min_confidence = min(
+            confidence_levels[predictions['REB'].confidence],
+            confidence_levels[predictions['AST'].confidence]
+        )
+        ra_confidence = {3: 'high', 2: 'medium', 1: 'low'}[ra_min_confidence]
+        
+        # Create RA prediction
+        predictions['RA'] = Prediction(
+            stat='RA',
+            value=ra_value,
+            confidence=ra_confidence,
+            breakdown={
+                'REB': reb_pred,
+                'AST': ast_pred,
+                'season_avg': predictions['REB'].breakdown.get('season_avg', 0) + 
+                             predictions['AST'].breakdown.get('season_avg', 0),
+            },
+            factors={
+                'calculation': f"REB ({reb_pred}) + AST ({ast_pred})"
+            }
+        )
+        
+        # Calculate FPTS (Fantasy Points) using Underdog formula:
+        # PTS*1 + REB*1.2 + AST*1.5 + STL*3 + BLK*3 - TOV*1
+        stl_pred = predictions['STL'].value
+        blk_pred = predictions['BLK'].value
+        tov_pred = predictions['TOV'].value
+        
+        fpts_value = round(
+            pts_pred * 1.0 +
+            reb_pred * 1.2 +
+            ast_pred * 1.5 +
+            stl_pred * 3.0 +
+            blk_pred * 3.0 -
+            tov_pred * 1.0,
+            1
+        )
+        
+        # Determine FPTS confidence (use the lowest confidence of all components)
+        fpts_min_confidence = min(
+            confidence_levels[predictions['PTS'].confidence],
+            confidence_levels[predictions['REB'].confidence],
+            confidence_levels[predictions['AST'].confidence],
+            confidence_levels[predictions['STL'].confidence],
+            confidence_levels[predictions['BLK'].confidence],
+            confidence_levels[predictions['TOV'].confidence]
+        )
+        fpts_confidence = {3: 'high', 2: 'medium', 1: 'low'}[fpts_min_confidence]
+        
+        # Create FPTS prediction
+        predictions['FPTS'] = Prediction(
+            stat='FPTS',
+            value=fpts_value,
+            confidence=fpts_confidence,
+            breakdown={
+                'PTS': pts_pred,
+                'REB': reb_pred,
+                'AST': ast_pred,
+                'STL': stl_pred,
+                'BLK': blk_pred,
+                'TOV': tov_pred,
+            },
+            factors={
+                'calculation': f"PTS({pts_pred})×1 + REB({reb_pred})×1.2 + AST({ast_pred})×1.5 + STL({stl_pred})×3 + BLK({blk_pred})×3 - TOV({tov_pred})×1"
             }
         )
         
@@ -384,4 +456,227 @@ def get_prediction_summary(predictions: Dict[str, Prediction]) -> str:
     summary += f"- PRA: {pra.value} ({pra.confidence} confidence)\n"
     
     return summary
+
+
+def generate_predictions_for_game(
+    player_ids: List[str],
+    player_names: Dict[str, str],
+    player_team_ids: Dict[str, int],
+    away_team_id: int,
+    home_team_id: int,
+    away_team_abbr: str,
+    home_team_abbr: str,
+    game_date: str,
+    progress_callback=None
+) -> Dict[str, Dict[str, Prediction]]:
+    """
+    Generate predictions for ALL players in a game.
+    Used for batch processing and game-level caching.
+    
+    Args:
+        player_ids: List of player IDs to generate predictions for
+        player_names: Dict of player_id -> player_name
+        player_team_ids: Dict of player_id -> team_id
+        away_team_id: Away team ID
+        home_team_id: Home team ID
+        away_team_abbr: Away team abbreviation
+        home_team_abbr: Home team abbreviation
+        game_date: Game date (YYYY-MM-DD)
+        progress_callback: Optional callback(current, total, player_name) for progress updates
+    
+    Returns:
+        Dict of player_id -> Dict of stat -> Prediction
+    """
+    all_predictions = {}
+    total = len(player_ids)
+    
+    for idx, player_id in enumerate(player_ids):
+        player_name = player_names.get(player_id, f"Player {player_id}")
+        player_team_id = player_team_ids.get(player_id)
+        
+        if not player_team_id:
+            continue
+        
+        # Determine opponent and home/away status
+        if int(player_team_id) == int(away_team_id):
+            opponent_team_id = home_team_id
+            opponent_abbr = home_team_abbr
+            is_home = False
+        elif int(player_team_id) == int(home_team_id):
+            opponent_team_id = away_team_id
+            opponent_abbr = away_team_abbr
+            is_home = True
+        else:
+            continue  # Player not in this matchup
+        
+        # Update progress
+        if progress_callback:
+            progress_callback(idx + 1, total, player_name)
+        
+        try:
+            # Generate predictions for this player
+            predictions = generate_prediction(
+                player_id=player_id,
+                player_team_id=int(player_team_id),
+                opponent_team_id=int(opponent_team_id),
+                opponent_abbr=opponent_abbr,
+                game_date=game_date,
+                is_home=is_home
+            )
+            
+            all_predictions[player_id] = {
+                'predictions': predictions,
+                'player_name': player_name,
+                'opponent_abbr': opponent_abbr,
+                'is_home': is_home,
+                'team_abbr': home_team_abbr if is_home else away_team_abbr
+            }
+        except Exception as e:
+            # Log error but continue with other players
+            print(f"Error generating predictions for {player_name}: {e}")
+            continue
+    
+    return all_predictions
+
+
+def calculate_edge(prediction: float, line: float) -> Tuple[float, float, str]:
+    """
+    Calculate edge between prediction and line.
+    
+    Returns:
+        Tuple of (edge_value, edge_pct, lean)
+    """
+    if line == 0:
+        return 0.0, 0.0, "N/A"
+    
+    edge = round(prediction - line, 1)
+    edge_pct = round((edge / line) * 100, 1)
+    
+    if edge >= 1.5:
+        lean = "Strong Over"
+    elif edge >= 0.5:
+        lean = "Lean Over"
+    elif edge <= -1.5:
+        lean = "Strong Under"
+    elif edge <= -0.5:
+        lean = "Lean Under"
+    else:
+        lean = "Push"
+    
+    return edge, edge_pct, lean
+
+
+def find_best_value_plays(
+    all_predictions: Dict[str, Dict],
+    all_props: Dict[str, Dict],
+    min_edge_pct: float = 0.0,
+    confidence_filter: List[str] = None,
+    stat_filter: List[str] = None
+) -> List[Dict]:
+    """
+    Find best value plays by comparing predictions to props.
+    
+    Args:
+        all_predictions: Dict from generate_predictions_for_game()
+        all_props: Dict from fetch_all_props_for_game() (player_name_lower -> stat -> PropLine)
+        min_edge_pct: Minimum absolute edge % to include
+        confidence_filter: List of confidence levels to include (e.g., ['high', 'medium'])
+        stat_filter: List of stats to include (e.g., ['PTS', 'REB', 'AST'])
+    
+    Returns:
+        List of play dicts sorted by absolute edge %
+    """
+    if confidence_filter is None:
+        confidence_filter = ['high', 'medium', 'low']
+    
+    if stat_filter is None:
+        stat_filter = ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS']
+    
+    plays = []
+    
+    for player_id, player_data in all_predictions.items():
+        predictions = player_data.get('predictions', {})
+        player_name = player_data.get('player_name', '')
+        team_abbr = player_data.get('team_abbr', '')
+        opponent_abbr = player_data.get('opponent_abbr', '')
+        is_home = player_data.get('is_home', True)
+        
+        # Find matching props for this player
+        player_name_lower = player_name.lower().strip()
+        player_props = None
+        
+        # Try to find props with fuzzy matching
+        for prop_name, props in all_props.items():
+            # Check if names match
+            if _names_match(prop_name, player_name_lower):
+                player_props = props
+                break
+        
+        if not player_props:
+            continue
+        
+        for stat in stat_filter:
+            if stat not in predictions or stat not in player_props:
+                continue
+            
+            pred = predictions[stat]
+            prop = player_props[stat]
+            
+            # Apply confidence filter
+            if pred.confidence not in confidence_filter:
+                continue
+            
+            edge, edge_pct, lean = calculate_edge(pred.value, prop.line)
+            
+            # Apply minimum edge filter
+            if abs(edge_pct) < min_edge_pct:
+                continue
+            
+            plays.append({
+                'player_id': player_id,
+                'player_name': player_name,
+                'team': team_abbr,
+                'opponent': opponent_abbr,
+                'location': 'Home' if is_home else 'Away',
+                'stat': stat,
+                'prediction': pred.value,
+                'line': prop.line,
+                'edge': edge,
+                'edge_pct': edge_pct,
+                'lean': lean,
+                'confidence': pred.confidence,
+                'over_odds': getattr(prop, 'over_odds', -110),
+                'under_odds': getattr(prop, 'under_odds', -110),
+            })
+    
+    # Sort by absolute edge percentage (descending)
+    plays.sort(key=lambda x: abs(x['edge_pct']), reverse=True)
+    
+    return plays
+
+
+def _names_match(name1: str, name2: str) -> bool:
+    """Check if two player names match (fuzzy matching)."""
+    if not name1 or not name2:
+        return False
+    
+    name1 = name1.lower().strip()
+    name2 = name2.lower().strip()
+    
+    # Exact match
+    if name1 == name2:
+        return True
+    
+    # One contains the other
+    if name1 in name2 or name2 in name1:
+        return True
+    
+    # Check if major parts match
+    parts1 = set(name1.replace(',', '').split())
+    parts2 = set(name2.replace(',', '').split())
+    
+    if len(parts1 & parts2) >= 2:
+        return True
+    
+    return False
 

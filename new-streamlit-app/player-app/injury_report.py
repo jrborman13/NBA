@@ -284,11 +284,26 @@ def normalize_player_name(name: str) -> str:
     """Normalize player name for matching."""
     if not name:
         return ""
+    
+    # Common suffixes to handle
+    suffixes = ['Jr.', 'Jr', 'Sr.', 'Sr', 'II', 'III', 'IV', 'V']
+    
+    # Add space before suffixes that might be attached (e.g., "PorterJr." -> "Porter Jr.")
+    for suffix in suffixes:
+        # Handle case like "PorterJr." -> "Porter Jr."
+        name = re.sub(rf'([a-z])({re.escape(suffix)})', rf'\1 \2', name, flags=re.IGNORECASE)
+    
     # Convert "Last, First" to "First Last"
     if ',' in name:
         parts = name.split(',')
         if len(parts) == 2:
-            name = f"{parts[1].strip()} {parts[0].strip()}"
+            last_part = parts[0].strip()
+            first_part = parts[1].strip()
+            name = f"{first_part} {last_part}"
+    
+    # Clean up multiple spaces
+    name = re.sub(r'\s+', ' ', name).strip()
+    
     return name.lower().strip()
 
 
@@ -337,12 +352,58 @@ def match_player_to_id(
         return str(exact_match['PERSON_ID'].iloc[0])
     
     # Try last name match
-    if ',' in player_name:
-        last_name = player_name.split(',')[0].strip().lower()
-    else:
-        last_name = player_name.split()[-1].lower() if ' ' in player_name else player_name.lower()
+    # Handle suffixes like Jr., Sr., II, III when extracting last name
+    suffixes_lower = ['jr.', 'jr', 'sr.', 'sr', 'ii', 'iii', 'iv', 'v']
     
-    last_name_match = search_df[search_df['PLAYER_LAST_NAME'].str.lower() == last_name]
+    last_name_with_suffix = None  # Keep track of full last name with suffix
+    
+    if ',' in player_name:
+        last_name_raw = player_name.split(',')[0].strip().lower()
+        last_name = last_name_raw
+        
+        # Check if suffix is attached and extract both versions
+        for suffix in suffixes_lower:
+            if last_name.endswith(suffix):
+                # Add space before suffix for "with suffix" version
+                last_name_with_suffix = last_name[:-len(suffix)].strip() + ' ' + suffix
+                last_name = last_name[:-len(suffix)].strip()
+                break
+        # Also handle space before suffix
+        for suffix in suffixes_lower:
+            if f' {suffix}' in last_name:
+                last_name_with_suffix = last_name  # Already has space
+                last_name = last_name.replace(f' {suffix}', '').strip()
+                break
+    else:
+        # For "First Last Jr." format, get the actual last name (not the suffix)
+        name_parts = player_name.split()
+        if len(name_parts) >= 2:
+            # Check if last part is a suffix
+            last_part_clean = name_parts[-1].lower().rstrip('.')
+            if last_part_clean in [s.rstrip('.') for s in suffixes_lower]:
+                last_name = name_parts[-2].lower() if len(name_parts) >= 2 else name_parts[-1].lower()
+                # Build "last name + suffix" version (e.g., "pippen jr.")
+                last_name_with_suffix = f"{last_name} {name_parts[-1].lower()}"
+            else:
+                last_name = name_parts[-1].lower()
+        else:
+            last_name = player_name.lower()
+    
+    # Try matching with suffix first (since that's how NBA stores it, e.g., "Pippen Jr.")
+    if last_name_with_suffix:
+        last_name_match = search_df[search_df['PLAYER_LAST_NAME'].str.lower() == last_name_with_suffix]
+        if len(last_name_match) == 0:
+            # Also try with period variations
+            last_name_match = search_df[
+                search_df['PLAYER_LAST_NAME'].str.lower().str.replace('.', '', regex=False) == 
+                last_name_with_suffix.replace('.', '')
+            ]
+    else:
+        last_name_match = pd.DataFrame()
+    
+    # If no match with suffix, try without suffix
+    if len(last_name_match) == 0:
+        last_name_match = search_df[search_df['PLAYER_LAST_NAME'].str.lower() == last_name]
     if len(last_name_match) == 1:
         return str(last_name_match['PERSON_ID'].iloc[0])
     elif len(last_name_match) > 1:

@@ -1644,3 +1644,167 @@ la_atb3_acc = round(team_stats_diff['Arc3Accuracy'].mean(), 3)
 
 la_c3_freq = round(team_stats_diff['Corner3Frequency'].mean(), 3)
 la_c3_acc = round(team_stats_diff['Corner3Accuracy'].mean(), 3)
+
+# ============================================================
+# PLAYER ROSTER FUNCTIONS FOR TEAMS PAGE
+# ============================================================
+
+league_id = '00'  # NBA league ID
+
+def get_players_dataframe():
+    """Get players dataframe from PlayerIndex endpoint for the current season"""
+    try:
+        player_index = nba_api.stats.endpoints.PlayerIndex(
+            league_id=league_id,
+            season=current_season
+        )
+        players_df = player_index.get_data_frames()[0]
+        if len(players_df) > 0 and 'PERSON_ID' in players_df.columns:
+            return players_df
+    except Exception:
+        pass
+    
+    try:
+        player_index = nba_api.stats.endpoints.PlayerIndex(
+            league_id_nullable=league_id,
+            season_nullable=current_season
+        )
+        players_df = player_index.get_data_frames()[0]
+        if len(players_df) > 0 and 'PERSON_ID' in players_df.columns:
+            return players_df
+    except Exception:
+        pass
+    
+    return pd.DataFrame()
+
+
+def get_all_player_game_logs():
+    """Get game logs for all players in the current season"""
+    try:
+        game_logs = nba_api.stats.endpoints.PlayerGameLogs(
+            season_nullable=current_season,
+            league_id_nullable=league_id
+        ).get_data_frames()[0]
+        
+        # Filter out preseason games (keep regular season '2' and playoffs '4')
+        if len(game_logs) > 0:
+            game_logs = game_logs[
+                game_logs['GAME_ID'].astype(str).str[2].isin(['2', '4'])
+            ].copy()
+        
+        return game_logs
+    except Exception as e:
+        print(f"Error fetching player game logs: {e}")
+        return pd.DataFrame()
+
+
+def get_team_roster_stats(team_id: int, players_df: pd.DataFrame, game_logs_df: pd.DataFrame, num_games: int = None):
+    """
+    Get rolling averages for all players on a team.
+    
+    Args:
+        team_id: NBA team ID
+        players_df: DataFrame from PlayerIndex
+        game_logs_df: DataFrame from PlayerGameLogs
+        num_games: Number of recent games to average (None = all games / season)
+    
+    Returns:
+        DataFrame with player stats
+    """
+    # Filter players by team
+    team_players = players_df[players_df['TEAM_ID'].astype(int) == team_id].copy()
+    
+    if len(team_players) == 0:
+        return pd.DataFrame()
+    
+    roster_stats = []
+    
+    for _, player in team_players.iterrows():
+        player_id = player['PERSON_ID']
+        player_name = f"{player['PLAYER_FIRST_NAME']} {player['PLAYER_LAST_NAME']}"
+        position = player.get('POSITION', '')
+        
+        # Get player's game logs
+        player_logs = game_logs_df[game_logs_df['PLAYER_ID'] == player_id].copy()
+        
+        if len(player_logs) == 0:
+            continue
+        
+        # Sort by date descending (most recent first)
+        player_logs = player_logs.sort_values(by='GAME_DATE', ascending=False)
+        
+        # Limit to num_games if specified
+        if num_games is not None and num_games > 0:
+            player_logs = player_logs.head(num_games)
+        
+        if len(player_logs) == 0:
+            continue
+        
+        # Calculate averages
+        games_played = len(player_logs)
+        min_avg = round(player_logs['MIN'].mean(), 1)
+        pts_avg = round(player_logs['PTS'].mean(), 1)
+        reb_avg = round(player_logs['REB'].mean(), 1)
+        ast_avg = round(player_logs['AST'].mean(), 1)
+        pra_avg = round(pts_avg + reb_avg + ast_avg, 1)
+        stl_avg = round(player_logs['STL'].mean(), 1)
+        blk_avg = round(player_logs['BLK'].mean(), 1)
+        tov_avg = round(player_logs['TOV'].mean(), 1)
+        
+        # Field Goal stats
+        fgm_avg = round(player_logs['FGM'].mean(), 1)
+        fga_avg = round(player_logs['FGA'].mean(), 1)
+        total_fgm = player_logs['FGM'].sum()
+        total_fga = player_logs['FGA'].sum()
+        fg_pct = round((total_fgm / total_fga * 100), 1) if total_fga > 0 else 0.0
+        
+        # 3-Point stats
+        fg3m_avg = round(player_logs['FG3M'].mean(), 1)
+        fg3a_avg = round(player_logs['FG3A'].mean(), 1)
+        total_fg3m = player_logs['FG3M'].sum()
+        total_fg3a = player_logs['FG3A'].sum()
+        fg3_pct = round((total_fg3m / total_fg3a * 100), 1) if total_fg3a > 0 else 0.0
+        
+        # Free Throw stats
+        ftm_avg = round(player_logs['FTM'].mean(), 1)
+        fta_avg = round(player_logs['FTA'].mean(), 1)
+        total_ftm = player_logs['FTM'].sum()
+        total_fta = player_logs['FTA'].sum()
+        ft_pct = round((total_ftm / total_fta * 100), 1) if total_fta > 0 else 0.0
+        
+        # Headshot URL
+        headshot_url = f'https://cdn.nba.com/headshots/nba/latest/1040x760/{player_id}.png'
+        
+        roster_stats.append({
+            'headshot': headshot_url,
+            'Player': player_name,
+            'Pos': position,
+            'GP': games_played,
+            'MIN': min_avg,
+            'PTS': pts_avg,
+            'REB': reb_avg,
+            'AST': ast_avg,
+            'PRA': pra_avg,
+            'STL': stl_avg,
+            'BLK': blk_avg,
+            'TOV': tov_avg,
+            'FGM': fgm_avg,
+            'FGA': fga_avg,
+            'FG%': fg_pct,
+            '3PM': fg3m_avg,
+            '3PA': fg3a_avg,
+            '3P%': fg3_pct,
+            'FTM': ftm_avg,
+            'FTA': fta_avg,
+            'FT%': ft_pct,
+            '_player_id': player_id,  # Hidden column for sorting
+        })
+    
+    if not roster_stats:
+        return pd.DataFrame()
+    
+    # Create DataFrame and sort by minutes (descending)
+    df = pd.DataFrame(roster_stats)
+    df = df.sort_values(by='MIN', ascending=False)
+    
+    return df

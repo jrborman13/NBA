@@ -1358,34 +1358,86 @@ with tab3:
                 if all_injuries_away or all_injuries_home:
                     st.success(f"✅ Found {len(all_injuries_away) + len(all_injuries_home)} injuries for this matchup")
                     
-                    # Display all injuries for both teams with formatted names
+                    # Helper function to get status color
+                    def get_status_color(status):
+                        status_lower = status.lower() if status else ''
+                        if 'out' in status_lower:
+                            return '#dc3545'  # Red
+                        elif 'doubtful' in status_lower:
+                            return '#fd7e14'  # Orange
+                        elif 'questionable' in status_lower:
+                            return '#ffc107'  # Yellow
+                        elif 'probable' in status_lower:
+                            return '#28a745'  # Green
+                        else:
+                            return '#6c757d'  # Gray
+                    
+                    # Helper function to get status sort order (Probable first, Out last)
+                    def get_status_order(status):
+                        status_lower = status.lower() if status else ''
+                        if 'probable' in status_lower:
+                            return 0
+                        elif 'questionable' in status_lower:
+                            return 1
+                        elif 'doubtful' in status_lower:
+                            return 2
+                        elif 'out' in status_lower:
+                            return 3
+                        else:
+                            return 4
+                    
+                    # Sort injuries by status (Probable first, Out last)
+                    sorted_away_injuries = sorted(all_injuries_away, key=lambda x: get_status_order(x.get('status', '')))
+                    sorted_home_injuries = sorted(all_injuries_home, key=lambda x: get_status_order(x.get('status', '')))
+                    
+                    # Display all injuries for both teams with formatted badges
                     inj_col1, inj_col2 = st.columns(2)
                     
                     with inj_col1:
                         st.markdown(f"**{matchup_away_team_abbr}:**")
-                        if all_injuries_away:
-                            for injury_item in all_injuries_away:
-                                display_text = ir.format_injury_display(
-                                    injury_item['player_name'], 
-                                    injury_item['status'], 
-                                    injury_item.get('reason', '')
-                                )
-                                st.write(f"• {display_text}")
+                        if sorted_away_injuries:
+                            for injury_item in sorted_away_injuries:
+                                status = injury_item['status']
+                                status_color = get_status_color(status)
+                                formatted_name = ir.format_player_name(injury_item['player_name'])
+                                formatted_reason = ir.format_injury_reason(injury_item.get('reason', ''))
+                                player_id = injury_item.get('player_id', '')
+                                headshot_url = f"https://cdn.nba.com/headshots/nba/latest/1040x760/{player_id}.png" if player_id else ""
+                                st.markdown(f"""
+                                    <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #eee;">
+                                        <img src="{headshot_url}" style="width: 75px; height: 55px; object-fit: cover; border-radius: 4px; background-color: #f0f0f0;" onerror="this.style.display='none'">
+                                        <div style="flex: 1;">
+                                            <span style="font-weight: bold;">{formatted_name}</span>
+                                            <span style="background-color: {status_color}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-left: 8px;">{status}</span>
+                                            <br><span style="font-size: 13px; color: #666;">{formatted_reason}</span>
+                                        </div>
+                                    </div>
+                                """, unsafe_allow_html=True)
                         else:
-                            st.write("*No injuries reported*")
+                            st.info("No injuries reported")
                     
                     with inj_col2:
                         st.markdown(f"**{matchup_home_team_abbr}:**")
-                        if all_injuries_home:
-                            for injury_item in all_injuries_home:
-                                display_text = ir.format_injury_display(
-                                    injury_item['player_name'], 
-                                    injury_item['status'], 
-                                    injury_item.get('reason', '')
-                                )
-                                st.write(f"• {display_text}")
+                        if sorted_home_injuries:
+                            for injury_item in sorted_home_injuries:
+                                status = injury_item['status']
+                                status_color = get_status_color(status)
+                                formatted_name = ir.format_player_name(injury_item['player_name'])
+                                formatted_reason = ir.format_injury_reason(injury_item.get('reason', ''))
+                                player_id = injury_item.get('player_id', '')
+                                headshot_url = f"https://cdn.nba.com/headshots/nba/latest/1040x760/{player_id}.png" if player_id else ""
+                                st.markdown(f"""
+                                    <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #eee;">
+                                        <img src="{headshot_url}" style="width: 75px; height: 55px; object-fit: cover; border-radius: 4px; background-color: #f0f0f0;" onerror="this.style.display='none'">
+                                        <div style="flex: 1;">
+                                            <span style="font-weight: bold;">{formatted_name}</span>
+                                            <span style="background-color: {status_color}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-left: 8px;">{status}</span>
+                                            <br><span style="font-size: 13px; color: #666;">{formatted_reason}</span>
+                                        </div>
+                                    </div>
+                                """, unsafe_allow_html=True)
                         else:
-                            st.write("*No injuries reported*")
+                            st.info("No injuries reported")
                     
                     # Show which players are being auto-selected as OUT
                     if fetched_away_out or fetched_home_out:

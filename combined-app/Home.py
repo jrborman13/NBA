@@ -38,20 +38,24 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #1d428a 0%, #c8102e 100%); 
-                padding: 20px; border-radius: 10px; text-align: center;">
-        <h2 style="color: white; margin: 0;">Teams</h2>
-        <p style="color: white; margin: 10px 0 0 0;">Matchup & Team Analytics</p>
-    </div>
+    <a href="/Teams" style="text-decoration: none;">
+        <div style="background: linear-gradient(135deg, #1d428a 0%, #c8102e 100%); 
+                    padding: 20px; border-radius: 10px; text-align: center; cursor: pointer;">
+            <h2 style="color: white; margin: 0;">Teams</h2>
+            <p style="color: white; margin: 10px 0 0 0;">Matchup & Team Analytics</p>
+        </div>
+    </a>
     """, unsafe_allow_html=True)
 
 with col2:
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #c8102e 0%, #1d428a 100%); 
-                padding: 20px; border-radius: 10px; text-align: center;">
-        <h2 style="color: white; margin: 0;">Players</h2>
-        <p style="color: white; margin: 10px 0 0 0;">Individual Stats & Predictions</p>
-    </div>
+    <a href="/Players" style="text-decoration: none;">
+        <div style="background: linear-gradient(135deg, #c8102e 0%, #1d428a 100%); 
+                    padding: 20px; border-radius: 10px; text-align: center; cursor: pointer;">
+            <h2 style="color: white; margin: 0;">Players</h2>
+            <p style="color: white; margin: 10px 0 0 0;">Individual Stats & Predictions</p>
+        </div>
+    </a>
     """, unsafe_allow_html=True)
 
 st.markdown("---")

@@ -511,7 +511,10 @@ def generate_prediction(
     opponent_team_id: int,
     opponent_abbr: str,
     game_date: str,
-    is_home: bool
+    is_home: bool,
+    bulk_game_logs: pd.DataFrame = None,
+    bulk_advanced_stats: pd.DataFrame = None,
+    bulk_drives_stats: pd.DataFrame = None
 ) -> Dict[str, Prediction]:
     """
     Main entry point for generating predictions.
@@ -523,6 +526,9 @@ def generate_prediction(
         opponent_abbr: Opponent's team abbreviation (e.g., 'LAL')
         game_date: Date of the game (YYYY-MM-DD)
         is_home: Whether player's team is playing at home
+        bulk_game_logs: Optional pre-fetched bulk game logs (for batch processing)
+        bulk_advanced_stats: Optional pre-fetched bulk advanced stats (for batch processing)
+        bulk_drives_stats: Optional pre-fetched bulk drives stats (for batch processing)
     
     Returns:
         Dict of stat -> Prediction
@@ -534,7 +540,10 @@ def generate_prediction(
         opponent_team_id=opponent_team_id,
         opponent_abbr=opponent_abbr,
         game_date=game_date,
-        is_home=is_home
+        is_home=is_home,
+        bulk_game_logs=bulk_game_logs,
+        bulk_advanced_stats=bulk_advanced_stats,
+        bulk_drives_stats=bulk_drives_stats
     )
     
     # Store player_id in features for use in prediction
@@ -620,6 +629,15 @@ def generate_predictions_for_game(
     all_predictions = {}
     total = len(player_ids)
     
+    # OPTIMIZATION: Fetch ALL bulk data in a few API calls upfront
+    # This replaces 100+ individual API calls with just a handful of bulk calls
+    bulk_game_logs = features.get_bulk_player_game_logs()
+    bulk_advanced_stats = features.get_bulk_player_advanced_stats()
+    
+    # Import drives_stats module for bulk drives data
+    import drives_stats as ds
+    bulk_drives_stats = ds.get_all_player_drives_stats()
+    
     for idx, player_id in enumerate(player_ids):
         player_name = player_names.get(player_id, f"Player {player_id}")
         player_team_id = player_team_ids.get(player_id)
@@ -644,14 +662,17 @@ def generate_predictions_for_game(
             progress_callback(idx + 1, total, player_name)
         
         try:
-            # Generate predictions for this player
+            # Generate predictions for this player using bulk data
             predictions = generate_prediction(
                 player_id=player_id,
                 player_team_id=int(player_team_id),
                 opponent_team_id=int(opponent_team_id),
                 opponent_abbr=opponent_abbr,
                 game_date=game_date,
-                is_home=is_home
+                is_home=is_home,
+                bulk_game_logs=bulk_game_logs,
+                bulk_advanced_stats=bulk_advanced_stats,
+                bulk_drives_stats=bulk_drives_stats
             )
             
             all_predictions[player_id] = {

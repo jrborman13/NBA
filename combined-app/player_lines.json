@@ -42,5 +42,41 @@
       "under_odds": -137,
       "source": "underdog"
     }
+  },
+  "1630183_2025-12-17": {
+    "PTS": {
+      "line": 17.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "PRA": {
+      "line": 25.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "FG3M": {
+      "line": 1.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    }
+  },
+  "1630217_2025-12-18": {
+    "PRA": {
+      "line": 33.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    }
+  },
+  "1630595_2025-12-18": {
+    "PTS": {
+      "line": 26.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    }
   }
 }

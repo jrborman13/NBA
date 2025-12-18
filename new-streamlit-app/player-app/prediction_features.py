@@ -21,6 +21,57 @@ CURRENT_SEASON = "2025-26"
 LEAGUE_ID = "00"
 
 
+@st.cache_data(ttl=1800, show_spinner="Fetching all player game logs...")
+def get_bulk_player_game_logs(season: str = CURRENT_SEASON) -> pd.DataFrame:
+    """
+    Fetch ALL player game logs for the season in ONE API call.
+    This is much faster than fetching individually for each player.
+    
+    Returns:
+        DataFrame with all player game logs, sorted by date descending
+    """
+    try:
+        from nba_api.stats.endpoints import PlayerGameLogs
+        
+        game_logs = PlayerGameLogs(
+            season_nullable=season,
+            league_id_nullable=LEAGUE_ID
+        ).get_data_frames()[0]
+        
+        # Filter to regular season games only (game_id starts with '002')
+        if len(game_logs) > 0:
+            game_logs = game_logs[
+                game_logs['GAME_ID'].astype(str).str[2].isin(['2', '4'])
+            ].copy()
+            
+            # Convert date and sort
+            game_logs['GAME_DATE'] = pd.to_datetime(game_logs['GAME_DATE'])
+            game_logs = game_logs.sort_values('GAME_DATE', ascending=False)
+        
+        return game_logs
+    except Exception as e:
+        print(f"Error fetching bulk player game logs: {e}")
+        return pd.DataFrame()
+
+
+def get_player_logs_from_bulk(player_id: str, bulk_game_logs: pd.DataFrame) -> pd.DataFrame:
+    """
+    Extract a single player's game logs from the bulk DataFrame.
+    
+    Args:
+        player_id: Player's NBA ID
+        bulk_game_logs: DataFrame from get_bulk_player_game_logs()
+    
+    Returns:
+        DataFrame with just this player's game logs
+    """
+    if bulk_game_logs is None or len(bulk_game_logs) == 0:
+        return pd.DataFrame()
+    
+    player_logs = bulk_game_logs[bulk_game_logs['PLAYER_ID'] == int(player_id)].copy()
+    return player_logs
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_player_position_from_index(player_id: str) -> str:
     """
@@ -303,10 +354,52 @@ def get_league_averages(season: str = CURRENT_SEASON) -> Dict[str, float]:
         return {'pace': 100.0, 'def_rating': 110.0, 'off_rating': 110.0}
 
 
+@st.cache_data(ttl=3600, show_spinner="Fetching player advanced stats...")
+def get_bulk_player_advanced_stats(season: str = CURRENT_SEASON) -> pd.DataFrame:
+    """
+    Fetch ALL players' advanced stats (including usage rate) in ONE API call.
+    This is much faster than fetching individually for each player.
+    
+    Returns:
+        DataFrame with all player advanced stats
+    """
+    try:
+        player_stats = endpoints.LeagueDashPlayerStats(
+            season=season,
+            measure_type_detailed_defense='Advanced',
+            per_mode_detailed='PerGame'
+        ).get_data_frames()[0]
+        return player_stats
+    except Exception as e:
+        print(f"Error fetching bulk player advanced stats: {e}")
+        return pd.DataFrame()
+
+
+def get_usage_rate_from_bulk(player_id: str, bulk_advanced_stats: pd.DataFrame) -> float:
+    """
+    Extract a single player's usage rate from the bulk DataFrame.
+    
+    Args:
+        player_id: Player's NBA ID
+        bulk_advanced_stats: DataFrame from get_bulk_player_advanced_stats()
+    
+    Returns:
+        Player's usage rate as a percentage (e.g., 25.3)
+    """
+    if bulk_advanced_stats is None or len(bulk_advanced_stats) == 0:
+        return 20.0  # League average default
+    
+    player_row = bulk_advanced_stats[bulk_advanced_stats['PLAYER_ID'] == int(player_id)]
+    if len(player_row) > 0 and 'USG_PCT' in player_row.columns:
+        return round(player_row['USG_PCT'].iloc[0] * 100, 1)
+    
+    return 20.0  # League average default
+
+
 @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def get_player_usage_rate(player_id: str, season: str = CURRENT_SEASON) -> float:
     """
-    Get player's usage rate.
+    Get player's usage rate. Falls back to individual fetch if bulk not available.
     """
     try:
         player_stats = endpoints.LeagueDashPlayerStats(
@@ -380,7 +473,11 @@ def get_all_prediction_features(
     opponent_team_id: int,
     opponent_abbr: str,
     game_date: str,
-    is_home: bool
+    is_home: bool,
+    bulk_game_logs: pd.DataFrame = None,
+    bulk_advanced_stats: pd.DataFrame = None,
+    bulk_misc_stats: pd.DataFrame = None,
+    bulk_drives_stats: pd.DataFrame = None
 ) -> Dict:
     """
     Gather all features needed for prediction.
@@ -392,14 +489,21 @@ def get_all_prediction_features(
         opponent_abbr: Opponent's team abbreviation (e.g., 'LAL')
         game_date: Date of the game (YYYY-MM-DD)
         is_home: Whether player's team is playing at home
+        bulk_game_logs: Optional pre-fetched bulk game logs (for batch processing)
+        bulk_advanced_stats: Optional pre-fetched bulk advanced stats (for batch processing)
+        bulk_misc_stats: Optional pre-fetched bulk misc stats (for batch processing)
+        bulk_drives_stats: Optional pre-fetched bulk drives stats (for batch processing)
     
     Returns:
         Dict with all prediction features
     """
     features = {}
     
-    # Get player game logs (cached)
-    game_logs = get_player_game_logs(player_id)
+    # Get player game logs - use bulk if provided, otherwise fetch individually
+    if bulk_game_logs is not None and len(bulk_game_logs) > 0:
+        game_logs = get_player_logs_from_bulk(player_id, bulk_game_logs)
+    else:
+        game_logs = get_player_game_logs(player_id)
     
     # Store game_logs in features for reuse in prediction model
     features['game_logs'] = game_logs
@@ -437,8 +541,11 @@ def get_all_prediction_features(
     # League averages for normalization
     features['league_avg'] = get_league_averages()
     
-    # Player usage
-    features['usage_rate'] = get_player_usage_rate(player_id)
+    # Player usage - use bulk if provided, otherwise fetch individually
+    if bulk_advanced_stats is not None and len(bulk_advanced_stats) > 0:
+        features['usage_rate'] = get_usage_rate_from_bulk(player_id, bulk_advanced_stats)
+    else:
+        features['usage_rate'] = get_player_usage_rate(player_id)
     
     # Minutes trend
     features['minutes_trend'] = get_player_minutes_trend(game_logs)
@@ -522,8 +629,9 @@ def get_all_prediction_features(
         }
     
     # Player drives tracking data (for FTM and AST predictions)
+    # Use bulk if provided, otherwise fetch individually
     try:
-        features['drives'] = ds.get_player_drives_stats(player_id)
+        features['drives'] = ds.get_player_drives_stats(player_id, drives_df=bulk_drives_stats)
         
         # Calculate drives adjustment factors
         opp_ft_rate = features['opponent'].get('ft_rate_allowed', 25.0)

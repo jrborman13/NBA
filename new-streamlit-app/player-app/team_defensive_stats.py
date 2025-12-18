@@ -280,18 +280,19 @@ def compare_player_vs_opponent_zones(player_zones, opponent_def_stats):
     
     comparisons = {}
     
-    # Zone definitions: (zone_key, player_stat_key, opp_stat_key, zone_display_name)
+    # Zone definitions: (zone_key, player_stat_key, opp_stat_key, opp_rank_key, zone_display_name)
     zones = [
-        ('rim', 'rim_acc', 'opp_rim_acc', 'At Rim'),
-        ('smr', 'smr_acc', 'opp_smr_acc', 'Short Mid-Range'),
-        ('lmr', 'lmr_acc', 'opp_lmr_acc', 'Long Mid-Range'),
-        ('c3', 'c3_acc', 'opp_c3_acc', 'Corner 3'),
-        ('atb3', 'atb3_acc', 'opp_atb3_acc', 'Above Break 3'),
+        ('rim', 'rim_acc', 'opp_rim_acc', 'opp_rim_acc_rank', 'At Rim'),
+        ('smr', 'smr_acc', 'opp_smr_acc', 'opp_smr_acc_rank', 'Short Mid-Range'),
+        ('lmr', 'lmr_acc', 'opp_lmr_acc', 'opp_lmr_acc_rank', 'Long Mid-Range'),
+        ('c3', 'c3_acc', 'opp_c3_acc', 'opp_c3_acc_rank', 'Corner 3'),
+        ('atb3', 'atb3_acc', 'opp_atb3_acc', 'opp_atb3_acc_rank', 'Above Break 3'),
     ]
     
-    for zone_key, player_key, opp_key, zone_name in zones:
+    for zone_key, player_key, opp_key, opp_rank_key, zone_name in zones:
         player_pct = player_zones.get(player_key, 0.0)
         opp_allowed_pct = opponent_def_stats.get(opp_key, 0.0)
+        opp_acc_rank = opponent_def_stats.get(opp_rank_key, 15)  # Default to middle rank
         
         # Calculate difference: positive = opponent allows MORE than player typically shoots (favorable)
         # If opponent allows 65% and player shoots 60%, difference is +5% (good matchup - weak defense)
@@ -319,6 +320,7 @@ def compare_player_vs_opponent_zones(player_zones, opponent_def_stats):
             'zone_name': zone_name,
             'player_pct': player_pct,
             'opp_allowed_pct': opp_allowed_pct,
+            'opp_acc_rank': opp_acc_rank,  # Added opponent FG% allowed rank
             'difference': difference,
             'rating': rating,
             'color': color,
@@ -345,3 +347,41 @@ def get_matchup_color(difference):
         return "rgba(244, 67, 54, 0.3)"  # Red - unfavorable
     else:
         return "rgba(183, 28, 28, 0.3)"  # Dark red - very unfavorable
+
+
+def get_matchup_color_by_rank(rank):
+    """
+    Get background color based on opponent's defensive FG% rank.
+    For defensive FG% allowed:
+    - Lower rank (1-10) = team allows LESS FG% = good defense = RED (tough matchup)
+    - Middle rank (11-20) = average defense = YELLOW
+    - Higher rank (21-30) = team allows MORE FG% = bad defense = GREEN (easy matchup)
+    """
+    try:
+        rank = int(rank)
+    except:
+        return "rgba(158, 158, 158, 0.2)"  # Gray for invalid
+    
+    # Normalize rank to 0-1 scale (1=best defense, 30=worst defense)
+    normalized = (rank - 1) / 29  # 0 = rank 1, 1 = rank 30
+    
+    if normalized < 0.33:
+        # Red gradient (rank 1-10) - good defense = tough matchup
+        intensity = normalized / 0.33
+        r = 255
+        g = int(100 + (100 * intensity))  # 100 -> 200
+        b = 100
+    elif normalized < 0.66:
+        # Yellow gradient (rank 11-20) - average defense
+        intensity = (normalized - 0.33) / 0.33
+        r = 255
+        g = int(200 + (55 * intensity))  # 200 -> 255
+        b = 100
+    else:
+        # Green gradient (rank 21-30) - bad defense = easy matchup
+        intensity = (normalized - 0.66) / 0.34
+        r = int(255 * (1 - intensity))  # 255 -> 0
+        g = 255
+        b = 100
+    
+    return f"rgba({r}, {g}, {b}, 0.3)"

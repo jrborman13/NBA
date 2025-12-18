@@ -267,11 +267,30 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                         gen_disabled = False
                     
                     if st.button("🔮 Generate All Predictions", disabled=gen_disabled, key="gen_all_predictions"):
-                        # Filter to players with at least some minutes
+                        # Get list of players who are OUT or DOUBTFUL from injury report
+                        out_player_ids = set()
+                        if injury_report_df is not None and len(injury_report_df) > 0:
+                            matchup_inj = ir.get_injuries_for_matchup(
+                                injury_report_df,
+                                matchup_away_team_abbr,
+                                matchup_home_team_abbr,
+                                players_df
+                            )
+                            for inj in matchup_inj.get('away', []) + matchup_inj.get('home', []):
+                                status_lower = inj.get('status', '').lower()
+                                if 'out' in status_lower or 'doubtful' in status_lower:
+                                    if inj.get('player_id'):
+                                        out_player_ids.add(str(inj['player_id']))
+                        
+                        # Filter to players with at least some minutes AND not injured
                         players_to_predict = [
                             pid for pid in filtered_player_ids_list 
                             if player_minutes_map.get(int(pid), 0) >= 10  # At least 10 min/game
+                            and pid not in out_player_ids  # Skip players who are OUT or DOUBTFUL
                         ]
+                        
+                        if out_player_ids:
+                            st.info(f"⏭️ Skipping {len(out_player_ids)} players who are Out/Doubtful")
                         
                         # Build required data structures
                         player_names_map = {pid: player_name_map.get(pid, f"Player {pid}") for pid in players_to_predict}
@@ -852,27 +871,27 @@ with tab1:
                                 
                                 with zone_col1:
                                     st.markdown("**At Rim**")
-                                    st.markdown(styled_stat("Freq", f"{opp_def_stats['opp_rim_freq']}%", opp_def_stats['opp_rim_freq_rank'], inverse=True), unsafe_allow_html=True)
+                                    st.markdown(styled_stat("Freq", f"{opp_def_stats['opp_rim_freq']}%", opp_def_stats['opp_rim_freq_rank']), unsafe_allow_html=True)
                                     st.markdown(styled_stat("FG%", f"{opp_def_stats['opp_rim_acc']}%", opp_def_stats['opp_rim_acc_rank']), unsafe_allow_html=True)
                                 
                                 with zone_col2:
                                     st.markdown("**Short Mid-Range**")
-                                    st.markdown(styled_stat("Freq", f"{opp_def_stats['opp_smr_freq']}%", opp_def_stats['opp_smr_freq_rank'], inverse=True), unsafe_allow_html=True)
+                                    st.markdown(styled_stat("Freq", f"{opp_def_stats['opp_smr_freq']}%", opp_def_stats['opp_smr_freq_rank']), unsafe_allow_html=True)
                                     st.markdown(styled_stat("FG%", f"{opp_def_stats['opp_smr_acc']}%", opp_def_stats['opp_smr_acc_rank']), unsafe_allow_html=True)
                                 
                                 with zone_col3:
                                     st.markdown("**Long Mid-Range**")
-                                    st.markdown(styled_stat("Freq", f"{opp_def_stats['opp_lmr_freq']}%", opp_def_stats['opp_lmr_freq_rank'], inverse=True), unsafe_allow_html=True)
+                                    st.markdown(styled_stat("Freq", f"{opp_def_stats['opp_lmr_freq']}%", opp_def_stats['opp_lmr_freq_rank']), unsafe_allow_html=True)
                                     st.markdown(styled_stat("FG%", f"{opp_def_stats['opp_lmr_acc']}%", opp_def_stats['opp_lmr_acc_rank']), unsafe_allow_html=True)
                                 
                                 with zone_col4:
                                     st.markdown("**Corner 3**")
-                                    st.markdown(styled_stat("Freq", f"{opp_def_stats['opp_c3_freq']}%", opp_def_stats['opp_c3_freq_rank'], inverse=True), unsafe_allow_html=True)
+                                    st.markdown(styled_stat("Freq", f"{opp_def_stats['opp_c3_freq']}%", opp_def_stats['opp_c3_freq_rank']), unsafe_allow_html=True)
                                     st.markdown(styled_stat("FG%", f"{opp_def_stats['opp_c3_acc']}%", opp_def_stats['opp_c3_acc_rank']), unsafe_allow_html=True)
                                 
                                 with zone_col5:
                                     st.markdown("**Above Break 3**")
-                                    st.markdown(styled_stat("Freq", f"{opp_def_stats['opp_atb3_freq']}%", opp_def_stats['opp_atb3_freq_rank'], inverse=True), unsafe_allow_html=True)
+                                    st.markdown(styled_stat("Freq", f"{opp_def_stats['opp_atb3_freq']}%", opp_def_stats['opp_atb3_freq_rank']), unsafe_allow_html=True)
                                     st.markdown(styled_stat("FG%", f"{opp_def_stats['opp_atb3_acc']}%", opp_def_stats['opp_atb3_acc_rank']), unsafe_allow_html=True)
                                 
                                 # Add legend
@@ -887,7 +906,7 @@ with tab1:
                             
                             # Zone Matchup Analysis - Player vs Opponent
                             st.subheader("🎯 Zone Matchup Analysis")
-                            st.caption("Green = opponent allows more than player shoots (weak defense), Red = opponent allows less (strong defense)")
+                            st.caption("Color based on opponent defensive FG% rank: 🔴 Rank 1-10 (tough defense) → 🟡 Rank 11-20 (average) → 🟢 Rank 21-30 (weak defense)")
                             
                             # Load player shooting data
                             player_shooting_df, player_shooting_error = get_cached_player_shooting_data()
@@ -909,7 +928,8 @@ with tab1:
                                         
                                         for i, zone_key in enumerate(zone_keys):
                                             zone_data = zone_comparisons[zone_key]
-                                            bg_color = tds.get_matchup_color(zone_data['difference'])
+                                            # Use rank-based coloring instead of difference-based
+                                            bg_color = tds.get_matchup_color_by_rank(zone_data['opp_acc_rank'])
                                             
                                             with matchup_cols[i]:
                                                 # Create a styled card using markdown
@@ -918,7 +938,7 @@ with tab1:
                                                 <div style="background-color: {bg_color}; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 8px;">
                                                     <div style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">{zone_data['zone_name']}</div>
                                                     <div style="font-size: 15px; color: #444;">Player: <strong>{zone_data['player_pct']}%</strong></div>
-                                                    <div style="font-size: 15px; color: #444;">Opp Allows: <strong>{zone_data['opp_allowed_pct']}%</strong></div>
+                                                    <div style="font-size: 15px; color: #444;">Opp Allows: <strong>{zone_data['opp_allowed_pct']}%</strong> (#{zone_data['opp_acc_rank']})</div>
                                                     <div style="font-size: 22px; font-weight: bold; margin-top: 10px;">{diff_sign}{zone_data['difference']}%</div>
                                                     <div style="font-size: 13px; color: #666;">Freq: {zone_data['player_freq']}% ({zone_data['player_fga']} FGA)</div>
                                                 </div>
@@ -1728,6 +1748,7 @@ with tab3:
                 
                 comparison_data = []
                 rolling_avgs = player_data.get('averages_df')
+                game_logs = player_data.get('recent_games_df')  # Get game logs for computed stats
                 
                 if rolling_avgs is not None and len(rolling_avgs) > 0:
                     season_row = rolling_avgs.iloc[-1]  # Season averages
@@ -1735,13 +1756,44 @@ with tab3:
                     # Map prediction stat names to averages_df column names
                     stat_to_col = {'FG3M': '3PM'}  # averages_df uses '3PM', predictions use 'FG3M'
                     
+                    # Calculate computed season averages from game logs if available
+                    computed_season_avgs = {}
+                    if game_logs is not None and len(game_logs) > 0:
+                        # R+A (Rebounds + Assists)
+                        if 'REB' in game_logs.columns and 'AST' in game_logs.columns:
+                            ra_avg = game_logs['REB'].mean() + game_logs['AST'].mean()
+                            computed_season_avgs['RA'] = ra_avg
+                        
+                        # FPTS (Fantasy Points) using Underdog formula: PTS×1 + REB×1.2 + AST×1.5 + STL×3 + BLK×3 - TOV×1
+                        fpts_cols = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV']
+                        if all(col in game_logs.columns for col in fpts_cols):
+                            game_logs_copy = game_logs.copy()
+                            game_logs_copy['FPTS'] = (
+                                game_logs_copy['PTS'] * 1.0 +
+                                game_logs_copy['REB'] * 1.2 +
+                                game_logs_copy['AST'] * 1.5 +
+                                game_logs_copy['STL'] * 3.0 +
+                                game_logs_copy['BLK'] * 3.0 -
+                                game_logs_copy['TOV'] * 1.0
+                            )
+                            computed_season_avgs['FPTS'] = game_logs_copy['FPTS'].mean()
+                    
                     for stat in ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS']:
                         if stat in predictions:
                             pred = predictions[stat]
                             col_name = stat_to_col.get(stat, stat)  # Use mapped name if exists
-                            season_val = season_row.get(col_name)
+                            
+                            # First check computed averages for RA and FPTS
+                            if stat in computed_season_avgs:
+                                season_val_float = computed_season_avgs[stat]
+                            else:
+                                season_val = season_row.get(col_name)
+                                try:
+                                    season_val_float = float(str(season_val).replace(',', '')) if season_val is not None else None
+                                except:
+                                    season_val_float = None
+                            
                             try:
-                                season_val_float = float(str(season_val).replace(',', '')) if season_val is not None else None
                                 if season_val_float is not None:
                                     diff = round(pred.value - season_val_float, 1)
                                     diff_str = f"+{diff}" if diff >= 0 else str(diff)
@@ -1875,17 +1927,19 @@ Estimated Cost: {preview['estimated_cost']}
                     if cached_props:
                         st.markdown("**Underdog Lines:**")
                         
-                        # Build comparison table with fetched props
+                        # Build comparison table with fetched props - USE INJURY-ADJUSTED PREDICTIONS
                         api_comparison_data = []
                         for stat in ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS']:
                             if stat in predictions and stat in cached_props:
                                 pred = predictions[stat]
                                 prop = cached_props[stat]
-                                comparison = vl.compare_prediction_to_line(pred.value, prop.line)
+                                # Use injury-adjusted value if available
+                                adjusted_value = adjusted_predictions.get(stat, pred.value)
+                                comparison = vl.compare_prediction_to_line(adjusted_value, prop.line)
                                 
                                 api_comparison_data.append({
                                     'Stat': stat_labels.get(stat, stat),
-                                    'Prediction': round(pred.value, 1),
+                                    'Prediction': round(adjusted_value, 1),  # Show adjusted prediction
                                     'Underdog Line': round(prop.line, 1),
                                     'Edge': round(comparison['diff'], 1),
                                     'Edge %': round(abs(comparison['diff_pct']) / 100, 3),

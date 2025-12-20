@@ -123,6 +123,48 @@ def try_fetch_injury_report(report_date: date = None) -> Tuple[Optional[bytes], 
     return None, f"No injury report found for {report_date.strftime('%Y-%m-%d')}"
 
 
+def get_team_abbreviation(team_name: str) -> str:
+    """Get team abbreviation from team name."""
+    if not team_name:
+        return ""
+    
+    team_abbr_map = {
+        'atlanta hawks': 'ATL',
+        'boston celtics': 'BOS',
+        'brooklyn nets': 'BKN',
+        'charlotte hornets': 'CHA',
+        'chicago bulls': 'CHI',
+        'cleveland cavaliers': 'CLE',
+        'dallas mavericks': 'DAL',
+        'denver nuggets': 'DEN',
+        'detroit pistons': 'DET',
+        'golden state warriors': 'GSW',
+        'houston rockets': 'HOU',
+        'indiana pacers': 'IND',
+        'la clippers': 'LAC',
+        'los angeles clippers': 'LAC',
+        'los angeles lakers': 'LAL',
+        'memphis grizzlies': 'MEM',
+        'miami heat': 'MIA',
+        'milwaukee bucks': 'MIL',
+        'minnesota timberwolves': 'MIN',
+        'new orleans pelicans': 'NOP',
+        'new york knicks': 'NYK',
+        'oklahoma city thunder': 'OKC',
+        'orlando magic': 'ORL',
+        'philadelphia 76ers': 'PHI',
+        'phoenix suns': 'PHX',
+        'portland trail blazers': 'POR',
+        'sacramento kings': 'SAC',
+        'san antonio spurs': 'SAS',
+        'toronto raptors': 'TOR',
+        'utah jazz': 'UTA',
+        'washington wizards': 'WAS',
+    }
+    
+    return team_abbr_map.get(team_name.lower().strip(), "")
+
+
 def parse_injury_report_pdf(pdf_bytes: bytes) -> pd.DataFrame:
     """
     Parse NBA injury report PDF into a DataFrame using text extraction.
@@ -261,10 +303,20 @@ def parse_injury_report_pdf(pdf_bytes: bytes) -> pd.DataFrame:
                     if reason.startswith('-'):
                         reason = reason[1:].strip()
                     
+                    # Determine the correct matchup for this team
+                    # Only use current_matchup if the team is actually in that matchup
+                    team_matchup = current_matchup
+                    if current_team and current_matchup:
+                        # Get team abbreviation for current team
+                        team_abbr = get_team_abbreviation(current_team)
+                        if team_abbr and team_abbr not in current_matchup:
+                            # This team is not in the current matchup - need to find correct one
+                            team_matchup = None  # Will be matched later by team name
+                    
                     injuries.append({
                         'game_date': current_game_date,
                         'game_time': current_game_time,
-                        'matchup': current_matchup,
+                        'matchup': team_matchup,
                         'team': current_team,
                         'player_name': player_name,
                         'status': found_status,
@@ -462,22 +514,18 @@ def get_injuries_for_matchup(
         f"{home_team_abbr} vs {away_team_abbr}",
     ]
     
-    # Find matching rows - must match the specific matchup (both teams)
-    def matchup_matches(matchup_str):
-        if not matchup_str:
+    # Find matching rows - must be one of the teams in this matchup
+    # Match by TEAM NAME, not by matchup string (more reliable)
+    def team_in_matchup(team_name):
+        if not team_name:
             return False
-        matchup_lower = str(matchup_str).lower()
-        # Check for exact matchup patterns
-        for p in matchup_patterns:
-            if p.lower() in matchup_lower:
-                return True
-        # Also match if BOTH team abbreviations appear in the matchup string
-        # This ensures we only get injuries for this specific game
-        if away_team_abbr.lower() in matchup_lower and home_team_abbr.lower() in matchup_lower:
-            return True
-        return False
+        team_abbr = get_team_abbreviation(team_name)
+        if not team_abbr:
+            return False
+        # Check if this team is in the requested matchup
+        return team_abbr.upper() == away_team_abbr.upper() or team_abbr.upper() == home_team_abbr.upper()
     
-    matchup_injuries = injury_df[injury_df['matchup'].apply(matchup_matches)]
+    matchup_injuries = injury_df[injury_df['team'].apply(team_in_matchup)]
     
     if len(matchup_injuries) == 0:
         return result

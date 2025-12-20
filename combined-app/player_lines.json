@@ -78,5 +78,71 @@
       "under_odds": -137,
       "source": "underdog"
     }
+  },
+  "1628973_2025-12-18": {
+    "PTS": {
+      "line": 28.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "REB": {
+      "line": 3.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "AST": {
+      "line": 6.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "PRA": {
+      "line": 39.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "FPTS": {
+      "line": 43.85,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    }
+  },
+  "1641708_2025-12-18": {
+    "PRA": {
+      "line": 29.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "FPTS": {
+      "line": 38.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    }
+  },
+  "1630162_2025-12-19": {
+    "PTS": {
+      "line": 25.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "PRA": {
+      "line": 34.5,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    },
+    "FPTS": {
+      "line": 37.25,
+      "over_odds": -137,
+      "under_odds": -137,
+      "source": "underdog"
+    }
   }
 }

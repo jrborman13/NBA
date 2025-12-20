@@ -13,6 +13,7 @@ import prediction_tracker as pt
 import injury_adjustments as inj
 import backtest as bt
 import injury_report as ir
+import player_similarity as ps
 import pandas as pd
 import nba_api.stats.endpoints
 from datetime import datetime, date
@@ -948,6 +949,112 @@ with tab1:
                             
                             st.divider()
 
+        # ============================================================
+        # SIMILAR PLAYERS SECTION
+        # ============================================================
+        st.subheader("👥 Similar Players")
+        st.caption("Players with similar statistical profiles based on scoring, shooting, playmaking, and play style")
+        
+        with st.spinner("Finding similar players..."):
+            similar_players = ps.get_similar_players(
+                player_id=int(selected_player_id),
+                n=5,
+                min_similarity=0.0,
+                exclude_same_team=False
+            )
+        
+        if similar_players:
+            # Create columns for player cards
+            sim_cols = st.columns(5)
+            
+            # Team abbreviation to full name mapping
+            team_full_names = {
+                'ATL': 'Atlanta Hawks', 'BOS': 'Boston Celtics', 'BKN': 'Brooklyn Nets',
+                'CHA': 'Charlotte Hornets', 'CHI': 'Chicago Bulls', 'CLE': 'Cleveland Cavaliers',
+                'DAL': 'Dallas Mavericks', 'DEN': 'Denver Nuggets', 'DET': 'Detroit Pistons',
+                'GSW': 'Golden State Warriors', 'HOU': 'Houston Rockets', 'IND': 'Indiana Pacers',
+                'LAC': 'LA Clippers', 'LAL': 'Los Angeles Lakers', 'MEM': 'Memphis Grizzlies',
+                'MIA': 'Miami Heat', 'MIL': 'Milwaukee Bucks', 'MIN': 'Minnesota Timberwolves',
+                'NOP': 'New Orleans Pelicans', 'NYK': 'New York Knicks', 'OKC': 'Oklahoma City Thunder',
+                'ORL': 'Orlando Magic', 'PHI': 'Philadelphia 76ers', 'PHX': 'Phoenix Suns',
+                'POR': 'Portland Trail Blazers', 'SAC': 'Sacramento Kings', 'SAS': 'San Antonio Spurs',
+                'TOR': 'Toronto Raptors', 'UTA': 'Utah Jazz', 'WAS': 'Washington Wizards'
+            }
+            
+            for i, sim_player in enumerate(similar_players):
+                with sim_cols[i]:
+                    sim_headshot = f"https://cdn.nba.com/headshots/nba/latest/1040x760/{sim_player['player_id']}.png"
+                    similarity_color = "#28a745" if sim_player['similarity'] >= 70 else "#ffc107" if sim_player['similarity'] >= 55 else "#6c757d"
+                    
+                    # Look up position from players dataframe
+                    sim_player_row = players_df[players_df['PERSON_ID'] == sim_player['player_id']]
+                    position = sim_player_row['POSITION'].iloc[0] if len(sim_player_row) > 0 else ''
+                    
+                    # Get team abbreviation and full name
+                    team_abbr = sim_player.get('team_abbr', sim_player.get('team', ''))
+                    team_full = team_full_names.get(team_abbr, team_abbr)
+                    
+                    # Get shooting percentages
+                    fg_pct = sim_player.get('fg_pct', 0)
+                    fg3_pct = sim_player.get('fg3_pct', 0)
+                    ft_pct = sim_player.get('ft_pct', 0)
+                    
+                    st.markdown(f"""
+                        <div style="text-align: center; padding: 15px; border: 1px solid #ddd; border-radius: 12px; background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);">
+                            <img src="{sim_headshot}" style="width: 225px; height: 170px; object-fit: cover; border-radius: 8px; margin-bottom: 12px;" onerror="this.style.display='none'">
+                            <div style="font-weight: bold; font-size: 18px; margin-bottom: 6px;">{sim_player['player_name']}</div>
+                            <div style="font-size: 15px; color: #555; margin-bottom: 10px;">{position} | {team_full}</div>
+                            <div style="background: {similarity_color}; color: white; padding: 5px 12px; border-radius: 14px; font-size: 16px; font-weight: bold; display: inline-block;">
+                                {sim_player['similarity']}% Match
+                            </div>
+                            <div style="font-size: 16px; color: #333; margin-top: 12px; font-weight: 500;">
+                                {sim_player['ppg']} PPG | {sim_player['rpg']} RPG | {sim_player['apg']} APG
+                            </div>
+                            <div style="font-size: 14px; color: #555; margin-top: 6px;">
+                                {fg_pct}% FG | {fg3_pct}% 3PT | {ft_pct}% FT
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            
+            # Show what stats are being used
+            with st.expander("ℹ️ How similarity is calculated"):
+                st.markdown("""
+                **Stats included in similarity calculation:**
+                - **Per-game stats**: PTS, REB, AST, STL, BLK, TOV, MIN
+                - **Shooting volume**: FGM, FGA, 3PM, 3PA, FTM, FTA
+                - **Shooting efficiency**: FG%, 3P%, FT%
+                - **Shot distribution**: 3PA rate, FTA rate, zone frequencies
+                - **Play style**: Drives/game, points in paint, fast break points
+                - **Role**: Usage rate
+                
+                Players are compared using cosine similarity on standardized (z-score normalized) stats.
+                Higher similarity % means more similar statistical profile.
+                """)
+        else:
+            st.info("No similar players found. This may happen for players with limited games or unique stat profiles.")
+            
+            # Debug info in expander
+            with st.expander("🔍 Debug Info"):
+                try:
+                    features_df, feature_cols = ps.build_similarity_features()
+                    if features_df.empty:
+                        st.warning("Feature DataFrame is empty - data fetching may have failed")
+                    else:
+                        st.write(f"Total players in database: {len(features_df)}")
+                        st.write(f"Features used: {len(feature_cols)}")
+                        
+                        # Check if selected player is in the data
+                        player_in_data = int(selected_player_id) in features_df['PLAYER_ID'].values
+                        st.write(f"Selected player in data: {player_in_data}")
+                        
+                        if player_in_data:
+                            player_row = features_df[features_df['PLAYER_ID'] == int(selected_player_id)].iloc[0]
+                            st.write(f"Player GP: {player_row.get('GP', 'N/A')}, MIN: {player_row.get('MIN', 'N/A')}")
+                except Exception as e:
+                    st.error(f"Debug error: {e}")
+        
+        st.divider()
+
         # Display recent game logs table with pagination
         if player_data.get('recent_games_df') is not None and len(player_data['recent_games_df']) > 0:
             st.subheader("Game Logs")
@@ -1137,6 +1244,259 @@ with tab1:
                 else:
                     st.divider()
                     st.info(f"ℹ️ No games played against {opponent_abbr} this season yet.")
+                
+                # ============================================================
+                # SIMILAR PLAYERS VS OPPONENT SECTION
+                # ============================================================
+                # Show this section even if selected player has no games vs opponent
+                if similar_players and len(similar_players) > 0:
+                        st.divider()
+                        st.markdown(f"### 👥 Similar Players vs {opponent_abbr}")
+                        st.caption(f"How players with similar profiles performed against {opponent_abbr} this season")
+                        
+                        # Get game logs for similar players vs this opponent
+                        # Use the bulk game logs from prediction_features
+                        all_player_game_logs = pf_features.get_bulk_player_game_logs()
+                        
+                        if all_player_game_logs is not None and len(all_player_game_logs) > 0:
+                            # Filter to only show players with 70%+ similarity in game logs section
+                            filtered_similar_players = [p for p in similar_players if p['similarity'] >= 70.0]
+                            
+                            # Exclude similar players who play for the opponent team
+                            if opponent_abbr:
+                                filtered_similar_players = [
+                                    p for p in filtered_similar_players 
+                                    if p.get('team_abbr', '').upper() != opponent_abbr.upper()
+                                ]
+                            
+                            # Collect all games from all similar players vs opponent
+                            all_similar_games = []
+                            for sim_player in filtered_similar_players:
+                                sim_id = sim_player['player_id']
+                                sim_games = all_player_game_logs[
+                                    (all_player_game_logs['PLAYER_ID'] == sim_id) &
+                                    (all_player_game_logs['MATCHUP'].str.contains(opponent_abbr, na=False))
+                                ]
+                                if len(sim_games) > 0:
+                                    all_similar_games.append(sim_games)
+                            
+                            # Calculate aggregate averages across all similar players
+                            if len(all_similar_games) > 0:
+                                combined_games = pd.concat(all_similar_games, ignore_index=True)
+                                
+                                # Calculate aggregate averages
+                                agg_avg_pts = round(combined_games['PTS'].astype(float).mean(), 1) if 'PTS' in combined_games.columns else 0
+                                agg_avg_reb = round(combined_games['REB'].astype(float).mean(), 1) if 'REB' in combined_games.columns else 0
+                                agg_avg_ast = round(combined_games['AST'].astype(float).mean(), 1) if 'AST' in combined_games.columns else 0
+                                agg_avg_pra = round((combined_games['REB'].astype(float) + combined_games['AST'].astype(float)).mean(), 1) if 'REB' in combined_games.columns and 'AST' in combined_games.columns else 0
+                                agg_avg_stl = round(combined_games['STL'].astype(float).mean(), 1) if 'STL' in combined_games.columns else 0
+                                agg_avg_blk = round(combined_games['BLK'].astype(float).mean(), 1) if 'BLK' in combined_games.columns else 0
+                                
+                                # Calculate aggregate shooting percentages
+                                agg_3p_pct = 0
+                                agg_ft_pct = 0
+                                
+                                if 'FG3M' in combined_games.columns and 'FG3A' in combined_games.columns:
+                                    total_agg_3pm = combined_games['FG3M'].astype(float).sum()
+                                    total_agg_3pa = combined_games['FG3A'].astype(float).sum()
+                                    agg_3p_pct = round(total_agg_3pm / total_agg_3pa * 100, 1) if total_agg_3pa > 0 else 0
+                                
+                                if 'FTM' in combined_games.columns and 'FTA' in combined_games.columns:
+                                    total_agg_ftm = combined_games['FTM'].astype(float).sum()
+                                    total_agg_fta = combined_games['FTA'].astype(float).sum()
+                                    agg_ft_pct = round(total_agg_ftm / total_agg_fta * 100, 1) if total_agg_fta > 0 else 0
+                                
+                                # Display aggregate averages as metric tiles
+                                st.markdown(f"**Combined Averages** ({len(combined_games)} games from {len(filtered_similar_players)} similar players)")
+                                agg_avg_cols = st.columns(8)
+                                agg_stat_labels = ['PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', '3P%', 'FT%']
+                                agg_stat_values = [agg_avg_pts, agg_avg_reb, agg_avg_ast, agg_avg_pra, agg_avg_stl, agg_avg_blk, f"{agg_3p_pct}%", f"{agg_ft_pct}%"]
+                                
+                                for i, (stat, value) in enumerate(zip(agg_stat_labels, agg_stat_values)):
+                                    with agg_avg_cols[i]:
+                                        st.metric(label=stat, value=value)
+                                
+                                st.divider()
+                            
+                            # Track if any games were found
+                            games_found = False
+                            
+                            # Group games by player (individual player sections)
+                            for sim_player in filtered_similar_players:
+                                sim_id = sim_player['player_id']
+                                sim_name = sim_player['player_name']
+                                sim_similarity = sim_player['similarity']
+                                
+                                # Filter game logs for this similar player vs opponent
+                                sim_games = all_player_game_logs[
+                                    (all_player_game_logs['PLAYER_ID'] == sim_id) &
+                                    (all_player_game_logs['MATCHUP'].str.contains(opponent_abbr, na=False))
+                                ].copy()
+                                
+                                if len(sim_games) > 0:
+                                    games_found = True
+                                    
+                                    # Format the dataframe to match player's game logs
+                                    sim_games_formatted = sim_games.copy()
+                                    
+                                    # Round MIN to whole number
+                                    if 'MIN' in sim_games_formatted.columns:
+                                        sim_games_formatted['MIN'] = sim_games_formatted['MIN'].apply(lambda x: int(round(float(x))) if pd.notna(x) else 0)
+                                    
+                                    # Format date as MM/DD/YYYY and rename to "Date"
+                                    if 'GAME_DATE' in sim_games_formatted.columns:
+                                        def format_date_mmddyyyy(date_val):
+                                            try:
+                                                from datetime import datetime
+                                                # Handle both datetime objects and strings
+                                                if isinstance(date_val, pd.Timestamp):
+                                                    return date_val.strftime('%m/%d/%Y')
+                                                elif isinstance(date_val, datetime):
+                                                    return date_val.strftime('%m/%d/%Y')
+                                                else:
+                                                    # Try parsing as string
+                                                    date_str = str(date_val)
+                                                    # Handle "2025-11-12 00:00:00" format
+                                                    if ' ' in date_str:
+                                                        date_str = date_str.split(' ')[0]
+                                                    dt = datetime.strptime(date_str, '%Y-%m-%d')
+                                                    return dt.strftime('%m/%d/%Y')
+                                            except Exception as e:
+                                                return str(date_val)
+                                        sim_games_formatted['Date'] = sim_games_formatted['GAME_DATE'].apply(format_date_mmddyyyy)
+                                    
+                                    # Rename WL to W/L
+                                    if 'WL' in sim_games_formatted.columns:
+                                        sim_games_formatted['W/L'] = sim_games_formatted['WL']
+                                    
+                                    # Calculate PRA (REB + AST)
+                                    if 'REB' in sim_games_formatted.columns and 'AST' in sim_games_formatted.columns:
+                                        sim_games_formatted['PRA'] = sim_games_formatted['REB'].astype(float) + sim_games_formatted['AST'].astype(float)
+                                    
+                                    # Calculate 2PM and 2PA (FGM - FG3M, FGA - FG3A)
+                                    if 'FGM' in sim_games_formatted.columns and 'FG3M' in sim_games_formatted.columns:
+                                        sim_games_formatted['2PM'] = (sim_games_formatted['FGM'].astype(float) - sim_games_formatted['FG3M'].astype(float)).apply(lambda x: int(x) if pd.notna(x) else 0)
+                                    if 'FGA' in sim_games_formatted.columns and 'FG3A' in sim_games_formatted.columns:
+                                        sim_games_formatted['2PA'] = (sim_games_formatted['FGA'].astype(float) - sim_games_formatted['FG3A'].astype(float)).apply(lambda x: int(x) if pd.notna(x) else 0)
+                                    
+                                    # Calculate 2P%
+                                    if '2PM' in sim_games_formatted.columns and '2PA' in sim_games_formatted.columns:
+                                        sim_games_formatted['2P%'] = sim_games_formatted.apply(
+                                            lambda row: f"{round(row['2PM'] / row['2PA'] * 100, 1)}%" if pd.notna(row['2PA']) and row['2PA'] > 0 else "0.0%",
+                                            axis=1
+                                        )
+                                    
+                                    # Format 3PM and 3PA as integers
+                                    if 'FG3M' in sim_games_formatted.columns:
+                                        sim_games_formatted['3PM'] = sim_games_formatted['FG3M'].apply(lambda x: int(x) if pd.notna(x) else 0)
+                                    if 'FG3A' in sim_games_formatted.columns:
+                                        sim_games_formatted['3PA'] = sim_games_formatted['FG3A'].apply(lambda x: int(x) if pd.notna(x) else 0)
+                                    
+                                    # Format 3P%
+                                    if 'FG3_PCT' in sim_games_formatted.columns:
+                                        sim_games_formatted['3P%'] = sim_games_formatted['FG3_PCT'].apply(lambda x: f"{round(float(x) * 100, 1)}%" if pd.notna(x) else '0.0%')
+                                    
+                                    # Format FTM and FTA as integers
+                                    if 'FTM' in sim_games_formatted.columns:
+                                        sim_games_formatted['FTM'] = sim_games_formatted['FTM'].apply(lambda x: int(x) if pd.notna(x) else 0)
+                                    if 'FTA' in sim_games_formatted.columns:
+                                        sim_games_formatted['FTA'] = sim_games_formatted['FTA'].apply(lambda x: int(x) if pd.notna(x) else 0)
+                                    
+                                    # Format FT%
+                                    if 'FT_PCT' in sim_games_formatted.columns:
+                                        sim_games_formatted['FT%'] = sim_games_formatted['FT_PCT'].apply(lambda x: f"{round(float(x) * 100, 1)}%" if pd.notna(x) else '0.0%')
+                                    
+                                    # Select columns in the exact order specified
+                                    display_cols = ['Date', 'MATCHUP', 'W/L', 'MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', '2PM', '2PA', '2P%', '3PM', '3PA', '3P%', 'FTM', 'FTA', 'FT%']
+                                    
+                                    # Filter to only columns that exist
+                                    display_cols = [col for col in display_cols if col in sim_games_formatted.columns]
+                                    sim_games_display = sim_games_formatted[display_cols].copy()
+                                    
+                                    # Header with "Similarity" word
+                                    st.markdown(f"**Game Logs for {sim_name} ({sim_similarity}% Similarity) vs {opponent_abbr}**")
+                                    
+                                    # Display dataframe
+                                    st.dataframe(sim_games_display, width='stretch', hide_index=True)
+                                    
+                                    # Calculate averages for this player
+                                    sim_avg_pts = round(sim_games['PTS'].astype(float).mean(), 1) if 'PTS' in sim_games.columns else 0
+                                    sim_avg_reb = round(sim_games['REB'].astype(float).mean(), 1) if 'REB' in sim_games.columns else 0
+                                    sim_avg_ast = round(sim_games['AST'].astype(float).mean(), 1) if 'AST' in sim_games.columns else 0
+                                    sim_avg_pra = round((sim_games['REB'].astype(float) + sim_games['AST'].astype(float)).mean(), 1) if 'REB' in sim_games.columns and 'AST' in sim_games.columns else 0
+                                    sim_avg_stl = round(sim_games['STL'].astype(float).mean(), 1) if 'STL' in sim_games.columns else 0
+                                    sim_avg_blk = round(sim_games['BLK'].astype(float).mean(), 1) if 'BLK' in sim_games.columns else 0
+                                    
+                                    # Calculate shooting percentages
+                                    sim_fg_pct = 0
+                                    sim_3p_pct = 0
+                                    sim_ft_pct = 0
+                                    
+                                    if 'FGM' in sim_games.columns and 'FGA' in sim_games.columns:
+                                        total_fgm = sim_games['FGM'].astype(float).sum()
+                                        total_fga = sim_games['FGA'].astype(float).sum()
+                                        sim_fg_pct = round(total_fgm / total_fga * 100, 1) if total_fga > 0 else 0
+                                    
+                                    if 'FG3M' in sim_games.columns and 'FG3A' in sim_games.columns:
+                                        total_3pm = sim_games['FG3M'].astype(float).sum()
+                                        total_3pa = sim_games['FG3A'].astype(float).sum()
+                                        sim_3p_pct = round(total_3pm / total_3pa * 100, 1) if total_3pa > 0 else 0
+                                    
+                                    if 'FTM' in sim_games.columns and 'FTA' in sim_games.columns:
+                                        total_ftm = sim_games['FTM'].astype(float).sum()
+                                        total_fta = sim_games['FTA'].astype(float).sum()
+                                        sim_ft_pct = round(total_ftm / total_fta * 100, 1) if total_fta > 0 else 0
+                                    
+                                    # Get season averages for this similar player (for delta calculation)
+                                    sim_season_games = all_player_game_logs[all_player_game_logs['PLAYER_ID'] == sim_id]
+                                    sim_season_avg_pts = round(sim_season_games['PTS'].astype(float).mean(), 1) if len(sim_season_games) > 0 and 'PTS' in sim_season_games.columns else 0
+                                    sim_season_avg_reb = round(sim_season_games['REB'].astype(float).mean(), 1) if len(sim_season_games) > 0 and 'REB' in sim_season_games.columns else 0
+                                    sim_season_avg_ast = round(sim_season_games['AST'].astype(float).mean(), 1) if len(sim_season_games) > 0 and 'AST' in sim_season_games.columns else 0
+                                    sim_season_avg_pra = round((sim_season_games['REB'].astype(float) + sim_season_games['AST'].astype(float)).mean(), 1) if len(sim_season_games) > 0 and 'REB' in sim_season_games.columns and 'AST' in sim_season_games.columns else 0
+                                    sim_season_avg_stl = round(sim_season_games['STL'].astype(float).mean(), 1) if len(sim_season_games) > 0 and 'STL' in sim_season_games.columns else 0
+                                    sim_season_avg_blk = round(sim_season_games['BLK'].astype(float).mean(), 1) if len(sim_season_games) > 0 and 'BLK' in sim_season_games.columns else 0
+                                    
+                                    # Calculate season shooting percentages
+                                    sim_season_3p_pct = 0
+                                    sim_season_ft_pct = 0
+                                    
+                                    if len(sim_season_games) > 0:
+                                        if 'FG3M' in sim_season_games.columns and 'FG3A' in sim_season_games.columns:
+                                            total_season_3pm = sim_season_games['FG3M'].astype(float).sum()
+                                            total_season_3pa = sim_season_games['FG3A'].astype(float).sum()
+                                            sim_season_3p_pct = round(total_season_3pm / total_season_3pa * 100, 1) if total_season_3pa > 0 else 0
+                                        
+                                        if 'FTM' in sim_season_games.columns and 'FTA' in sim_season_games.columns:
+                                            total_season_ftm = sim_season_games['FTM'].astype(float).sum()
+                                            total_season_fta = sim_season_games['FTA'].astype(float).sum()
+                                            sim_season_ft_pct = round(total_season_ftm / total_season_fta * 100, 1) if total_season_fta > 0 else 0
+                                    
+                                    # Calculate deltas
+                                    delta_pts = round(sim_avg_pts - sim_season_avg_pts, 1) if sim_season_avg_pts > 0 else None
+                                    delta_reb = round(sim_avg_reb - sim_season_avg_reb, 1) if sim_season_avg_reb > 0 else None
+                                    delta_ast = round(sim_avg_ast - sim_season_avg_ast, 1) if sim_season_avg_ast > 0 else None
+                                    delta_pra = round(sim_avg_pra - sim_season_avg_pra, 1) if sim_season_avg_pra > 0 else None
+                                    delta_stl = round(sim_avg_stl - sim_season_avg_stl, 1) if sim_season_avg_stl > 0 else None
+                                    delta_blk = round(sim_avg_blk - sim_season_avg_blk, 1) if sim_season_avg_blk > 0 else None
+                                    delta_3p = round(sim_3p_pct - sim_season_3p_pct, 1) if sim_season_3p_pct > 0 else None
+                                    delta_ft = round(sim_ft_pct - sim_season_ft_pct, 1) if sim_season_ft_pct > 0 else None
+                                    
+                                    # Display averages as metric tiles with deltas (matching player's format)
+                                    st.markdown(f"**Averages vs {opponent_abbr}** ({len(sim_games)} games) - *Delta shows difference from season avg*")
+                                    sim_avg_cols = st.columns(8)
+                                    sim_stat_labels = ['PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', '3P%', 'FT%']
+                                    sim_stat_values = [sim_avg_pts, sim_avg_reb, sim_avg_ast, sim_avg_pra, sim_avg_stl, sim_avg_blk, f"{sim_3p_pct}%", f"{sim_ft_pct}%"]
+                                    sim_stat_deltas = [delta_pts, delta_reb, delta_ast, delta_pra, delta_stl, delta_blk, f"{delta_3p}%" if delta_3p is not None else None, f"{delta_ft}%" if delta_ft is not None else None]
+                                    
+                                    for i, (stat, value, delta) in enumerate(zip(sim_stat_labels, sim_stat_values, sim_stat_deltas)):
+                                        with sim_avg_cols[i]:
+                                            st.metric(label=stat, value=value, delta=delta)
+                                    
+                                    st.divider()
+                            
+                            # Show message if no games found for any similar players
+                            if not games_found:
+                                st.info(f"No games found for similar players vs {opponent_abbr} this season.")
 
 with tab2:
     # YoY Data tab
@@ -1563,22 +1923,63 @@ with tab3:
                 if injury_adjustments.get('factors'):
                     st.warning(f"⚠️ **Injury Adjustments:** {' | '.join(injury_adjustments['factors'])}")
             
-            # Cache predictions
+            # Minutes scaling input
+            season_minutes = None
+            if player_data.get('averages_df') is not None and len(player_data['averages_df']) > 0:
+                season_min_row = player_data['averages_df'][player_data['averages_df']['Period'] == 'Season']
+                if len(season_min_row) > 0:
+                    season_minutes = season_min_row['MIN'].iloc[0]
+            
+            col_min1, col_min2 = st.columns([0.3, 0.7])
+            with col_min1:
+                if season_minutes is not None and pd.notna(season_minutes):
+                    projected_minutes = st.number_input(
+                        "Projected Minutes",
+                        min_value=0.0,
+                        max_value=48.0,
+                        value=float(season_minutes),
+                        step=0.5,
+                        key="projected_minutes",
+                        help=f"Season Avg: {season_minutes:.1f} MPG. Adjust for minutes restrictions or rotation changes."
+                    )
+                else:
+                    projected_minutes = st.number_input(
+                        "Projected Minutes",
+                        min_value=0.0,
+                        max_value=48.0,
+                        value=32.0,
+                        step=0.5,
+                        key="projected_minutes",
+                        help="Enter projected minutes for this game"
+                    )
+            
+            # Cache predictions (include projected_minutes in cache key)
             @st.cache_data(ttl=1800)  # Cache for 30 minutes
-            def get_cached_predictions(player_id, pl_team_id, opp_team_id, opp_abbr, game_dt, home):
+            def get_cached_predictions(player_id, pl_team_id, opp_team_id, opp_abbr, game_dt, home, proj_min, season_min, use_sim):
                 try:
+                    # Only pass projected_minutes if it differs from season average
+                    proj_min_to_use = None
+                    if season_min is not None and pd.notna(season_min):
+                        if abs(proj_min - float(season_min)) > 0.1:
+                            proj_min_to_use = proj_min
+                    else:
+                        # No season average available, use projected minutes
+                        proj_min_to_use = proj_min
+                    
                     return pm.generate_prediction(
                         player_id=player_id,
                         player_team_id=pl_team_id,
                         opponent_team_id=opp_team_id,
                         opponent_abbr=opp_abbr,
                         game_date=game_dt,
-                        is_home=home
+                        is_home=home,
+                        use_similar_players=use_sim,
+                        projected_minutes=proj_min_to_use
                     ), None
                 except Exception as e:
                     return None, str(e)
             
-            # Generate predictions
+            # Generate predictions (enable similar players for individual predictions)
             game_date_str = selected_date.strftime('%Y-%m-%d')
             predictions, pred_error = get_cached_predictions(
                 selected_player_id,
@@ -1586,12 +1987,20 @@ with tab3:
                 opponent_team_id, 
                 opponent_abbr, 
                 game_date_str, 
-                is_home
+                is_home,
+                projected_minutes,
+                season_minutes,
+                True  # Enable similar players for individual predictions
             )
             
             if pred_error:
                 st.error(f"⚠️ Could not generate predictions: {pred_error}")
             elif predictions:
+                # Check if minutes were adjusted
+                has_minutes_adj = False
+                if season_minutes is not None and pd.notna(season_minutes):
+                    has_minutes_adj = abs(projected_minutes - float(season_minutes)) > 0.1
+                
                 # Apply injury adjustments if any
                 adjusted_predictions = {}
                 for stat, pred in predictions.items():
@@ -1613,10 +2022,12 @@ with tab3:
                 
                 # Display main predictions in columns
                 has_injury_adj = injury_adjustments and injury_adjustments.get('factors')
+                header_text = "### Predicted Statline"
                 if has_injury_adj:
-                    st.markdown("### Predicted Statline (Injury Adjusted)")
-                else:
-                    st.markdown("### Predicted Statline")
+                    header_text += " (Injury Adjusted)"
+                if has_minutes_adj:
+                    header_text += f" ({projected_minutes:.1f} MPG)"
+                st.markdown(header_text)
                 
                 pred_cols = st.columns(10)
                 stat_order = ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS']
@@ -1638,21 +2049,20 @@ with tab3:
                             else:
                                 conf_color = '🔴'
                             
-                            # Show delta from base prediction if injury adjusted
+                            # Show delta from base prediction if injury or minutes adjusted
+                            delta_str = None
                             if has_injury_adj and display_value != pred.value:
                                 delta_val = round(display_value - pred.value, 1)
                                 delta_str = f"{'+' if delta_val >= 0 else ''}{delta_val} (inj)"
-                                st.metric(
-                                    label=stat_labels.get(stat, stat),
-                                    value=display_value,
-                                    delta=delta_str
-                                )
-                            else:
-                                st.metric(
-                                    label=stat_labels.get(stat, stat),
-                                    value=display_value,
-                                    delta=f"{conf_color} {pred.confidence}"
-                                )
+                            elif has_minutes_adj:
+                                # Show minutes adjustment indicator
+                                delta_str = f"{conf_color} {pred.confidence}"
+                            
+                            st.metric(
+                                label=stat_labels.get(stat, stat),
+                                value=display_value,
+                                delta=delta_str if delta_str else f"{conf_color} {pred.confidence}"
+                            )
                 
                 # Prediction breakdown
                 with st.expander("📈 Prediction Breakdown"):
@@ -1673,10 +2083,91 @@ with tab3:
                 
                 # Factors affecting prediction
                 with st.expander("🎯 Factors Considered"):
-                    pts_pred = predictions.get('PTS')
-                    if pts_pred and pts_pred.factors:
-                        for factor, description in pts_pred.factors.items():
-                            st.write(f"• **{factor.replace('_', ' ').title()}**: {description}")
+                    # Show factors for PTS, REB, AST
+                    for stat in ['PTS', 'REB', 'AST']:
+                        pred = predictions.get(stat)
+                        if pred and pred.factors:
+                            st.markdown(f"**{stat_labels.get(stat, stat)}**")
+                            for factor, description in pred.factors.items():
+                                # Highlight similar players factor
+                                if 'similar' in factor.lower():
+                                    st.markdown(f"• **{factor.replace('_', ' ').title()}**: {description} ⭐")
+                                else:
+                                    st.write(f"• **{factor.replace('_', ' ').title()}**: {description}")
+                            st.markdown("---")
+                
+                # Similar Players Impact Section
+                if opponent_team_id and opponent_abbr:
+                    # Get similar players vs opponent data
+                    all_player_game_logs = pf_features.get_bulk_player_game_logs()
+                    if all_player_game_logs is not None and len(all_player_game_logs) > 0:
+                        try:
+                            similar_players_impact = ps.get_similar_players_vs_opponent(
+                                player_id=int(selected_player_id),
+                                opponent_team_id=opponent_team_id,
+                                game_logs_df=all_player_game_logs,
+                                opponent_abbr=opponent_abbr,
+                                n_similar=10,
+                                min_games_vs_opponent=1
+                            )
+                            
+                            if similar_players_impact.get('sample_size', 0) > 0:
+                                with st.expander("⭐ Similar Players Impact", expanded=True):
+                                    st.markdown("**How similar players performed against this opponent:**")
+                                    
+                                    # Display adjustment factors
+                                    impact_cols = st.columns(3)
+                                    pts_factor = similar_players_impact.get('pts_adjustment_factor', 1.0)
+                                    reb_factor = similar_players_impact.get('reb_adjustment_factor', 1.0)
+                                    ast_factor = similar_players_impact.get('ast_adjustment_factor', 1.0)
+                                    confidence = similar_players_impact.get('confidence', 'low')
+                                    sample_size = similar_players_impact.get('sample_size', 0)
+                                    total_games = similar_players_impact.get('total_games_analyzed', 0)
+                                    
+                                    with impact_cols[0]:
+                                        pts_change = round((pts_factor - 1.0) * 100, 1)
+                                        pts_color = "🟢" if pts_change > 0 else "🔴" if pts_change < 0 else "⚪"
+                                        st.metric(
+                                            label="Points Adjustment",
+                                            value=f"{pts_change:+.1f}%",
+                                            delta=f"{pts_color} {pts_factor:.3f}x"
+                                        )
+                                    
+                                    with impact_cols[1]:
+                                        reb_change = round((reb_factor - 1.0) * 100, 1)
+                                        reb_color = "🟢" if reb_change > 0 else "🔴" if reb_change < 0 else "⚪"
+                                        st.metric(
+                                            label="Rebounds Adjustment",
+                                            value=f"{reb_change:+.1f}%",
+                                            delta=f"{reb_color} {reb_factor:.3f}x"
+                                        )
+                                    
+                                    with impact_cols[2]:
+                                        ast_change = round((ast_factor - 1.0) * 100, 1)
+                                        ast_color = "🟢" if ast_change > 0 else "🔴" if ast_change < 0 else "⚪"
+                                        st.metric(
+                                            label="Assists Adjustment",
+                                            value=f"{ast_change:+.1f}%",
+                                            delta=f"{ast_color} {ast_factor:.3f}x"
+                                        )
+                                    
+                                    # Show confidence and sample info
+                                    conf_color = "🟢" if confidence == 'high' else "🟡" if confidence == 'medium' else "🔴"
+                                    st.caption(f"{conf_color} **Confidence**: {confidence.capitalize()} | **Sample**: {sample_size} similar players, {total_games} total games vs {opponent_abbr}")
+                                    
+                                    # Show which similar players were used
+                                    sim_player_data = similar_players_impact.get('similar_player_data', [])
+                                    if sim_player_data:
+                                        st.markdown("**Similar Players Analyzed:**")
+                                        sim_display_cols = st.columns(min(5, len(sim_player_data)))
+                                        for i, sim_data in enumerate(sim_player_data[:5]):
+                                            with sim_display_cols[i]:
+                                                st.caption(f"**{sim_data.get('player_name', 'Unknown')}** ({sim_data.get('similarity', 0)}%)\n"
+                                                          f"{sim_data.get('games_vs_opp', 0)} games\n"
+                                                          f"{sim_data.get('pts_diff', 0):+.1f}% vs season")
+                        except Exception as e:
+                            # Silently fail - similar players data not critical
+                            pass
                 
                 # Matchup-specific insights
                 with st.expander("🏀 Matchup Analysis", expanded=True):

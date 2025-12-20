@@ -5,3 +5,8 @@ nba_api
 pdfplumber
 pytz
 requests
+Pillow
+scikit-learn
+scipy
+joblib
+threadpoolctl

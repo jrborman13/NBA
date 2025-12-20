@@ -7,6 +7,8 @@ import streamlit as st
 import streamlit_testing_functions as functions
 import injury_report as ir
 import datetime
+from datetime import date
+import nba_api.stats.endpoints
 
 import altair as alt
 import pandas as pd
@@ -18,16 +20,86 @@ import streamlit as st
 st.set_page_config(layout="wide")
 st.title("NBA Matchup Data App")
 
-# Matchup selector
+# Function to fetch matchups for a given date (same as Players page)
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def get_matchups_for_date(selected_date):
+    """Fetch NBA matchups for a given date from the API"""
+    try:
+        league_schedule = nba_api.stats.endpoints.ScheduleLeagueV2(
+            league_id='00',
+            season='2025-26'
+        ).get_data_frames()[0]
+        
+        # Convert game date column to datetime
+        league_schedule['dateGame'] = pd.to_datetime(league_schedule['gameDate'])
+        
+        # Compare date parts only to handle datetime objects with time components
+        date_games = league_schedule[
+            league_schedule['dateGame'].dt.date == selected_date
+        ]
+        
+        if len(date_games) > 0:
+            matchups = []
+            wolves_id = 1610612750  # Timberwolves team ID
+            
+            for _, row in date_games.iterrows():
+                away_team_id = row['awayTeam_teamId']
+                home_team_id = row['homeTeam_teamId']
+                
+                # Get team abbreviations
+                away_abbr = row.get('awayTeam_teamTricode', '')
+                home_abbr = row.get('homeTeam_teamTricode', '')
+                
+                # Get team names
+                away_name = row.get('awayTeam_teamName', f"Team {away_team_id}")
+                home_name = row.get('homeTeam_teamName', f"Team {home_team_id}")
+                
+                matchups.append({
+                    'game_id': row.get('gameId', ''),
+                    'away_team_id': away_team_id,
+                    'home_team_id': home_team_id,
+                    'away_team_name': away_name,
+                    'home_team_name': home_name,
+                    'away_team': away_abbr,
+                    'home_team': home_abbr,
+                    'game_time': row.get('gameDate', ''),
+                    'is_wolves_game': (away_team_id == wolves_id or home_team_id == wolves_id)
+                })
+            
+            # Sort by game time, with Wolves games first
+            matchups.sort(key=lambda x: (not x['is_wolves_game'], str(x['game_time'])))
+            return matchups, None
+        else:
+            return [], f"No games found for {selected_date}"
+    except Exception as e:
+        return [], f"Error fetching schedule: {str(e)}"
+
+# Date and Matchup selector
 st.markdown("### Select Matchup")
 
-# Get today's matchups
-todays_matchups = functions.get_todays_matchups()
+col_date, col_matchup = st.columns([1, 3])
 
-if todays_matchups:
+with col_date:
+    # Date selector - default to today
+    selected_date = st.date_input(
+        "Select Date:",
+        value=date.today(),
+        key="teams_matchup_date"
+    )
+
+with col_matchup:
+    # Get matchups for selected date
+    matchups_for_date, matchup_error = get_matchups_for_date(selected_date)
+    
+    # Show error if API call failed
+    if matchup_error:
+        st.warning(f"⚠️ {matchup_error}")
+        matchups_for_date = []
+
+if matchups_for_date:
     # Create matchup options for dropdown
     matchup_options = []
-    for matchup in todays_matchups:
+    for matchup in matchups_for_date:
         matchup_str = f"{matchup['away_team_name']} @ {matchup['home_team_name']}"
         if matchup['is_wolves_game']:
             matchup_str += " 🐺"
@@ -37,14 +109,14 @@ if todays_matchups:
     default_idx = 0
     
     selected_matchup_str = st.selectbox(
-        "Choose Today's Matchup:",
+        "Choose Matchup:",
         options=matchup_options,
         index=default_idx,
-        help="Select a matchup from today's scheduled games. Timberwolves games are marked with 🐺"
+        help="Select a matchup from scheduled games. Timberwolves games are marked with 🐺"
     )
     
     # Find the selected matchup
-    selected_matchup = todays_matchups[matchup_options.index(selected_matchup_str)]
+    selected_matchup = matchups_for_date[matchup_options.index(selected_matchup_str)]
     
     # Store in session state to track changes
     matchup_changed = ('selected_matchup' not in st.session_state or 
@@ -59,7 +131,7 @@ if todays_matchups:
         functions.set_matchup_override(st.session_state['matchup_override'])
         functions.update_selected_matchup(st.session_state['matchup_override'])
 else:
-    st.info("ℹ️ No games scheduled for today.")
+    st.info(f"ℹ️ No games scheduled for {selected_date.strftime('%B %d, %Y')}.")
     selected_matchup = None
     if 'selected_matchup' in st.session_state:
         del st.session_state['selected_matchup']
@@ -85,22 +157,28 @@ if selected_matchup:
     away_team_id = selected_matchup['away_team_id']
     home_team_id = selected_matchup['home_team_id']
     
-    # Team name to abbreviation mapping
-    team_name_to_abbr = {
-        'Atlanta Hawks': 'ATL', 'Boston Celtics': 'BOS', 'Brooklyn Nets': 'BKN',
-        'Charlotte Hornets': 'CHA', 'Chicago Bulls': 'CHI', 'Cleveland Cavaliers': 'CLE',
-        'Dallas Mavericks': 'DAL', 'Denver Nuggets': 'DEN', 'Detroit Pistons': 'DET',
-        'Golden State Warriors': 'GSW', 'Houston Rockets': 'HOU', 'Indiana Pacers': 'IND',
-        'LA Clippers': 'LAC', 'Los Angeles Lakers': 'LAL', 'Memphis Grizzlies': 'MEM',
-        'Miami Heat': 'MIA', 'Milwaukee Bucks': 'MIL', 'Minnesota Timberwolves': 'MIN',
-        'New Orleans Pelicans': 'NOP', 'New York Knicks': 'NYK', 'Oklahoma City Thunder': 'OKC',
-        'Orlando Magic': 'ORL', 'Philadelphia 76ers': 'PHI', 'Phoenix Suns': 'PHX',
-        'Portland Trail Blazers': 'POR', 'Sacramento Kings': 'SAC', 'San Antonio Spurs': 'SAS',
-        'Toronto Raptors': 'TOR', 'Utah Jazz': 'UTA', 'Washington Wizards': 'WAS'
-    }
+    # Get tricodes directly from matchup (from API)
+    away_abbr = selected_matchup.get('away_team', '')
+    home_abbr = selected_matchup.get('home_team', '')
     
-    away_abbr = team_name_to_abbr.get(away_team_name, away_team_name.split()[-1][:3].upper())
-    home_abbr = team_name_to_abbr.get(home_team_name, home_team_name.split()[-1][:3].upper())
+    # Fallback to mapping if tricodes not available
+    if not away_abbr or not home_abbr:
+        team_name_to_abbr = {
+            'Atlanta Hawks': 'ATL', 'Boston Celtics': 'BOS', 'Brooklyn Nets': 'BKN',
+            'Charlotte Hornets': 'CHA', 'Chicago Bulls': 'CHI', 'Cleveland Cavaliers': 'CLE',
+            'Dallas Mavericks': 'DAL', 'Denver Nuggets': 'DEN', 'Detroit Pistons': 'DET',
+            'Golden State Warriors': 'GSW', 'Houston Rockets': 'HOU', 'Indiana Pacers': 'IND',
+            'LA Clippers': 'LAC', 'Los Angeles Lakers': 'LAL', 'Memphis Grizzlies': 'MEM',
+            'Miami Heat': 'MIA', 'Milwaukee Bucks': 'MIL', 'Minnesota Timberwolves': 'MIN',
+            'New Orleans Pelicans': 'NOP', 'New York Knicks': 'NYK', 'Oklahoma City Thunder': 'OKC',
+            'Orlando Magic': 'ORL', 'Philadelphia 76ers': 'PHI', 'Phoenix Suns': 'PHX',
+            'Portland Trail Blazers': 'POR', 'Sacramento Kings': 'SAC', 'San Antonio Spurs': 'SAS',
+            'Toronto Raptors': 'TOR', 'Utah Jazz': 'UTA', 'Washington Wizards': 'WAS'
+        }
+        if not away_abbr:
+            away_abbr = team_name_to_abbr.get(away_team_name, away_team_name.split()[-1][:3].upper())
+        if not home_abbr:
+            home_abbr = team_name_to_abbr.get(home_team_name, home_team_name.split()[-1][:3].upper())
     
     # Fetch injury report for matchup summary
     @st.cache_data(ttl=600, show_spinner=False)
@@ -147,7 +225,7 @@ if selected_matchup:
             home_advantages = [m for m in matchup_summary['mismatches'] if m['team_with_advantage'] == home_abbr]
             
             with mismatch_cols[0]:
-                st.markdown(f"**{away_team_name} ({away_abbr}) Advantages**")
+                st.markdown(f"**{away_abbr} Advantages**")
                 if away_advantages:
                     for m in away_advantages[:5]:  # Top 5 per team
                         arrow = "🟢" if m['rank_diff'] >= 15 else "🟡" if m['rank_diff'] >= 10 else "⚪"
@@ -156,7 +234,7 @@ if selected_matchup:
                     st.caption("No significant advantages found")
             
             with mismatch_cols[1]:
-                st.markdown(f"**{home_team_name} ({home_abbr}) Advantages**")
+                st.markdown(f"**{home_abbr} Advantages**")
                 if home_advantages:
                     for m in home_advantages[:5]:  # Top 5 per team
                         arrow = "🟢" if m['rank_diff'] >= 15 else "🟡" if m['rank_diff'] >= 10 else "⚪"
@@ -174,7 +252,7 @@ if selected_matchup:
         hot_cols = st.columns(2)
         
         with hot_cols[0]:
-            st.markdown(f"**{away_team_name}**")
+            st.markdown(f"**{away_abbr}**")
             if matchup_summary['hot_players']['away']:
                 for p in matchup_summary['hot_players']['away'][:5]:
                     hot_stat = p['hot_stats'][0]
@@ -184,7 +262,7 @@ if selected_matchup:
                 st.caption("No hot players found")
         
         with hot_cols[1]:
-            st.markdown(f"**{home_team_name}**")
+            st.markdown(f"**{home_abbr}**")
             if matchup_summary['hot_players']['home']:
                 for p in matchup_summary['hot_players']['home'][:5]:
                     hot_stat = p['hot_stats'][0]
@@ -201,7 +279,7 @@ if selected_matchup:
         cold_cols = st.columns(2)
         
         with cold_cols[0]:
-            st.markdown(f"**{away_team_name}**")
+            st.markdown(f"**{away_abbr}**")
             if matchup_summary['cold_players']['away']:
                 for p in matchup_summary['cold_players']['away'][:5]:
                     cold_stat = p['cold_stats'][0]
@@ -211,7 +289,7 @@ if selected_matchup:
                 st.caption("No cold players found")
         
         with cold_cols[1]:
-            st.markdown(f"**{home_team_name}**")
+            st.markdown(f"**{home_abbr}**")
             if matchup_summary['cold_players']['home']:
                 for p in matchup_summary['cold_players']['home'][:5]:
                     cold_stat = p['cold_stats'][0]
@@ -228,7 +306,7 @@ if selected_matchup:
         new_cols = st.columns(2)
         
         with new_cols[0]:
-            st.markdown(f"**{away_team_name}**")
+            st.markdown(f"**{away_abbr}**")
             if matchup_summary['new_players']['away']:
                 for p in matchup_summary['new_players']['away'][:5]:
                     pct = int(p['pct_increase'] * 100)
@@ -237,7 +315,7 @@ if selected_matchup:
                 st.caption("No emerging players found")
         
         with new_cols[1]:
-            st.markdown(f"**{home_team_name}**")
+            st.markdown(f"**{home_abbr}**")
             if matchup_summary['new_players']['home']:
                 for p in matchup_summary['new_players']['home'][:5]:
                     pct = int(p['pct_increase'] * 100)
@@ -267,7 +345,7 @@ if selected_matchup:
                 return "⚪"
         
         with inj_cols[0]:
-            st.markdown(f"**{away_team_name}**")
+            st.markdown(f"**{away_abbr}**")
             if matchup_summary['key_injuries']['away']:
                 for inj in matchup_summary['key_injuries']['away']:
                     badge = get_status_badge(inj.get('status', ''))
@@ -282,7 +360,7 @@ if selected_matchup:
                 st.caption("No key injuries")
         
         with inj_cols[1]:
-            st.markdown(f"**{home_team_name}**")
+            st.markdown(f"**{home_abbr}**")
             if matchup_summary['key_injuries']['home']:
                 for inj in matchup_summary['key_injuries']['home']:
                     badge = get_status_badge(inj.get('status', ''))
@@ -337,7 +415,15 @@ if selected_matchup:
 
         # Create the HTML table with column spanners
         html_table_2 = f"""
-    <table style="width:50%; border: {border}px solid black; border-collapse: collapse; text-align: center">
+    <table style="width:75%; border: {border}px solid black; border-collapse: collapse; text-align: center; table-layout: fixed;">
+      <colgroup>
+        <col style="width: 25%;">  <!-- Metric -->
+        <col style="width: 14.5%;">  <!-- Away Season -->
+        <col style="width: 14.5%;">  <!-- Away Last 5 -->
+        <col style="width: 17%;">  <!-- League Average -->
+        <col style="width: 14.5%;">  <!-- Home Season -->
+        <col style="width: 14.5%;">  <!-- Home Last 5 -->
+      </colgroup>
       <thead>
         <!-- First sticky row -->
         <tr>
@@ -1017,7 +1103,17 @@ if selected_matchup:
         st.markdown(header_html_shooting, unsafe_allow_html=True)
 
         html_table_shooting = f"""
-        <table style="width:75%; border: {border}px solid black; border-collapse: collapse; text-align: center">
+        <table style="width:100%; border: {border}px solid black; border-collapse: collapse; text-align: center; table-layout: fixed;">
+          <colgroup>
+            <col style="width: 16.05%;">  <!-- Metric (130px / 810px * 100%) -->
+            <col style="width: 12.35%;">  <!-- Away Team (100px / 810px * 100%) -->
+            <col style="width: 12.35%;">  <!-- Away Opponent (100px / 810px * 100%) -->
+            <col style="width: 12.35%;">  <!-- Away Difference (100px / 810px * 100%) -->
+            <col style="width: 9.88%;">  <!-- League Average (80px / 810px * 100%) -->
+            <col style="width: 12.35%;">  <!-- Home Team (100px / 810px * 100%) -->
+            <col style="width: 12.35%;">  <!-- Home Opponent (100px / 810px * 100%) -->
+            <col style="width: 12.32%;">  <!-- Home Difference (100px / 810px * 100%, rounded) -->
+          </colgroup>
           <thead>
             <!-- First sticky row -->
                 <tr>
@@ -1921,22 +2017,28 @@ if selected_matchup:
         away_team_id = selected_matchup['away_team_id']
         home_team_id = selected_matchup['home_team_id']
         
-        # Team name to abbreviation mapping
-        team_name_to_abbr = {
-            'Atlanta Hawks': 'ATL', 'Boston Celtics': 'BOS', 'Brooklyn Nets': 'BKN',
-            'Charlotte Hornets': 'CHA', 'Chicago Bulls': 'CHI', 'Cleveland Cavaliers': 'CLE',
-            'Dallas Mavericks': 'DAL', 'Denver Nuggets': 'DEN', 'Detroit Pistons': 'DET',
-            'Golden State Warriors': 'GSW', 'Houston Rockets': 'HOU', 'Indiana Pacers': 'IND',
-            'LA Clippers': 'LAC', 'Los Angeles Lakers': 'LAL', 'Memphis Grizzlies': 'MEM',
-            'Miami Heat': 'MIA', 'Milwaukee Bucks': 'MIL', 'Minnesota Timberwolves': 'MIN',
-            'New Orleans Pelicans': 'NOP', 'New York Knicks': 'NYK', 'Oklahoma City Thunder': 'OKC',
-            'Orlando Magic': 'ORL', 'Philadelphia 76ers': 'PHI', 'Phoenix Suns': 'PHX',
-            'Portland Trail Blazers': 'POR', 'Sacramento Kings': 'SAC', 'San Antonio Spurs': 'SAS',
-            'Toronto Raptors': 'TOR', 'Utah Jazz': 'UTA', 'Washington Wizards': 'WAS'
-        }
+        # Get tricodes directly from matchup (from API) - same as Matchup Summary
+        away_team_abbr = selected_matchup.get('away_team', '')
+        home_team_abbr = selected_matchup.get('home_team', '')
         
-        away_team_abbr = team_name_to_abbr.get(away_team_name, away_team_name.split()[-1][:3].upper())
-        home_team_abbr = team_name_to_abbr.get(home_team_name, home_team_name.split()[-1][:3].upper())
+        # Fallback to mapping if tricodes not available
+        if not away_team_abbr or not home_team_abbr:
+            team_name_to_abbr = {
+                'Atlanta Hawks': 'ATL', 'Boston Celtics': 'BOS', 'Brooklyn Nets': 'BKN',
+                'Charlotte Hornets': 'CHA', 'Chicago Bulls': 'CHI', 'Cleveland Cavaliers': 'CLE',
+                'Dallas Mavericks': 'DAL', 'Denver Nuggets': 'DEN', 'Detroit Pistons': 'DET',
+                'Golden State Warriors': 'GSW', 'Houston Rockets': 'HOU', 'Indiana Pacers': 'IND',
+                'LA Clippers': 'LAC', 'Los Angeles Lakers': 'LAL', 'Memphis Grizzlies': 'MEM',
+                'Miami Heat': 'MIA', 'Milwaukee Bucks': 'MIL', 'Minnesota Timberwolves': 'MIN',
+                'New Orleans Pelicans': 'NOP', 'New York Knicks': 'NYK', 'Oklahoma City Thunder': 'OKC',
+                'Orlando Magic': 'ORL', 'Philadelphia 76ers': 'PHI', 'Phoenix Suns': 'PHX',
+                'Portland Trail Blazers': 'POR', 'Sacramento Kings': 'SAC', 'San Antonio Spurs': 'SAS',
+                'Toronto Raptors': 'TOR', 'Utah Jazz': 'UTA', 'Washington Wizards': 'WAS'
+            }
+            if not away_team_abbr:
+                away_team_abbr = team_name_to_abbr.get(away_team_name, away_team_name.split()[-1][:3].upper())
+            if not home_team_abbr:
+                home_team_abbr = team_name_to_abbr.get(home_team_name, home_team_name.split()[-1][:3].upper())
         
         # ============================================================
         # INJURY REPORT SECTION

@@ -15,6 +15,7 @@ import matchup_stats as ms
 import positional_defense as pos_def
 import team_defensive_stats as tds
 import drives_stats as ds
+import player_similarity as ps
 
 # Current season configuration
 CURRENT_SEASON = "2025-26"
@@ -477,7 +478,8 @@ def get_all_prediction_features(
     bulk_game_logs: pd.DataFrame = None,
     bulk_advanced_stats: pd.DataFrame = None,
     bulk_misc_stats: pd.DataFrame = None,
-    bulk_drives_stats: pd.DataFrame = None
+    bulk_drives_stats: pd.DataFrame = None,
+    use_similar_players: bool = False
 ) -> Dict:
     """
     Gather all features needed for prediction.
@@ -493,6 +495,7 @@ def get_all_prediction_features(
         bulk_advanced_stats: Optional pre-fetched bulk advanced stats (for batch processing)
         bulk_misc_stats: Optional pre-fetched bulk misc stats (for batch processing)
         bulk_drives_stats: Optional pre-fetched bulk drives stats (for batch processing)
+        use_similar_players: Whether to fetch similar players data (skip for batch to improve performance)
     
     Returns:
         Dict with all prediction features
@@ -653,6 +656,43 @@ def get_all_prediction_features(
             'drive_ast_vs_league': 1.0,
             'drive_description': 'Data unavailable',
             'ast_description': 'Data unavailable',
+        }
+    
+    # Similar players vs opponent adjustment
+    # Skip for batch predictions to improve performance (can be enabled per-player in UI)
+    # Only fetch if explicitly requested (not in batch mode)
+    
+    if use_similar_players and bulk_game_logs is not None and len(bulk_game_logs) > 0:
+        try:
+            similar_players_data = ps.get_similar_players_vs_opponent(
+                player_id=int(player_id),
+                opponent_team_id=opponent_team_id,
+                game_logs_df=bulk_game_logs,
+                opponent_abbr=opponent_abbr,
+                season=CURRENT_SEASON,
+                n_similar=10,
+                min_games_vs_opponent=1
+            )
+            features['similar_players'] = similar_players_data
+        except Exception as e:
+            print(f"Error getting similar players vs opponent: {e}")
+            features['similar_players'] = {
+                'pts_adjustment_factor': 1.0,
+                'reb_adjustment_factor': 1.0,
+                'ast_adjustment_factor': 1.0,
+                'confidence': 'low',
+                'sample_size': 0,
+                'similar_player_data': []
+            }
+    else:
+        # Skip similar players (default for batch predictions)
+        features['similar_players'] = {
+            'pts_adjustment_factor': 1.0,
+            'reb_adjustment_factor': 1.0,
+            'ast_adjustment_factor': 1.0,
+            'confidence': 'low',
+            'sample_size': 0,
+            'similar_player_data': []
         }
     
     return features

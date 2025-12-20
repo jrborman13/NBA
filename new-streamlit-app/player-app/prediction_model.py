@@ -241,6 +241,74 @@ class PlayerStatPredictor:
         #     pos_factor = pos_defense.get('factor', 1.0)
         #     # ... adjustment logic ...
         
+        # Similar players vs opponent adjustment
+        # Apply this adjustment with moderate weight (10-20% influence)
+        # More weight when player has few games vs opponent themselves
+        similar_players_data = player_features.get('similar_players', {})
+        vs_opp_games = vs_opp.get('games_played', 0)
+        
+        if similar_players_data.get('confidence') != 'low' and similar_players_data.get('sample_size', 0) > 0:
+            # Determine weight based on player's own sample size vs opponent
+            # Also reduce weight if confidence is medium (likely due to low-minute similar players)
+            base_weight = 0.0
+            if vs_opp_games == 0:
+                # No games vs opponent - use similar players more heavily (20%)
+                base_weight = 0.20
+            elif vs_opp_games == 1:
+                # Only 1 game - use similar players moderately (15%)
+                base_weight = 0.15
+            else:
+                # 2+ games - use similar players lightly (10%)
+                base_weight = 0.10
+            
+            # Reduce weight further if confidence is medium (indicates low-minute similar players)
+            confidence = similar_players_data.get('confidence', 'low')
+            if confidence == 'medium':
+                similar_weight = base_weight * 0.7  # Reduce by 30%
+            elif confidence == 'low':
+                similar_weight = base_weight * 0.5  # Reduce by 50%
+            else:
+                similar_weight = base_weight
+            
+            # Apply adjustment based on stat
+            if stat == 'PTS':
+                sim_adjustment_factor = similar_players_data.get('pts_adjustment_factor', 1.0)
+                if sim_adjustment_factor != 1.0:
+                    # Blend: (1 - weight) * current + weight * similar_players_adjustment
+                    similar_adjustment = 1.0 + similar_weight * (sim_adjustment_factor - 1.0)
+                    adjusted_prediction *= similar_adjustment
+                    
+                    sample_size = similar_players_data.get('sample_size', 0)
+                    confidence = similar_players_data.get('confidence', 'low')
+                    factors['similar_players'] = (
+                        f"Similar players vs opponent: {round((sim_adjustment_factor-1)*100, 1)}% "
+                        f"({sample_size} players, {confidence} confidence)"
+                    )
+            elif stat == 'REB':
+                sim_adjustment_factor = similar_players_data.get('reb_adjustment_factor', 1.0)
+                if sim_adjustment_factor != 1.0:
+                    similar_adjustment = 1.0 + similar_weight * (sim_adjustment_factor - 1.0)
+                    adjusted_prediction *= similar_adjustment
+                    
+                    sample_size = similar_players_data.get('sample_size', 0)
+                    confidence = similar_players_data.get('confidence', 'low')
+                    factors['similar_players'] = (
+                        f"Similar players vs opponent: {round((sim_adjustment_factor-1)*100, 1)}% "
+                        f"({sample_size} players, {confidence} confidence)"
+                    )
+            elif stat == 'AST':
+                sim_adjustment_factor = similar_players_data.get('ast_adjustment_factor', 1.0)
+                if sim_adjustment_factor != 1.0:
+                    similar_adjustment = 1.0 + similar_weight * (sim_adjustment_factor - 1.0)
+                    adjusted_prediction *= similar_adjustment
+                    
+                    sample_size = similar_players_data.get('sample_size', 0)
+                    confidence = similar_players_data.get('confidence', 'low')
+                    factors['similar_players'] = (
+                        f"Similar players vs opponent: {round((sim_adjustment_factor-1)*100, 1)}% "
+                        f"({sample_size} players, {confidence} confidence)"
+                    )
+        
         # Home/Away adjustment
         is_home = player_features.get('is_home', True)
         home_away_splits = player_features.get('home_away_splits', {})
@@ -256,6 +324,30 @@ class PlayerStatPredictor:
         if location_avg > 0:
             location_factor = location_avg / season_avg if season_avg > 0 else 1.0
             adjusted_prediction *= (0.7 + 0.3 * location_factor)
+        
+        # Minutes scaling adjustment (if projected_minutes provided)
+        projected_minutes = player_features.get('projected_minutes')
+        avg_minutes = rolling_avgs.get('Season', {}).get('MIN', 0.0)
+        
+        if projected_minutes is not None and avg_minutes > 0 and projected_minutes != avg_minutes:
+            minutes_ratio = projected_minutes / avg_minutes
+            
+            # Most stats scale linearly with minutes
+            if stat in ['PTS', 'REB', 'AST', 'STL', 'BLK']:
+                adjusted_prediction *= minutes_ratio
+            # Shooting stats scale slightly less (usage may not increase proportionally)
+            elif stat in ['FG3M', 'FTM']:
+                adjusted_prediction *= (1 + 0.9 * (minutes_ratio - 1))
+            # TOV scales slightly more (more minutes = more touches = more turnovers)
+            elif stat == 'TOV':
+                adjusted_prediction *= (1 + 1.1 * (minutes_ratio - 1))
+            else:
+                adjusted_prediction *= minutes_ratio
+            
+            factors['minutes_scaling'] = (
+                f"Scaled from {avg_minutes:.1f} to {projected_minutes:.1f} MPG "
+                f"({round((minutes_ratio - 1) * 100, 1):+.1f}%)"
+            )
         
         # Rest adjustment
         days_rest = player_features.get('days_rest', 2)
@@ -514,7 +606,9 @@ def generate_prediction(
     is_home: bool,
     bulk_game_logs: pd.DataFrame = None,
     bulk_advanced_stats: pd.DataFrame = None,
-    bulk_drives_stats: pd.DataFrame = None
+    bulk_drives_stats: pd.DataFrame = None,
+    use_similar_players: bool = False,
+    projected_minutes: Optional[float] = None
 ) -> Dict[str, Prediction]:
     """
     Main entry point for generating predictions.
@@ -543,11 +637,14 @@ def generate_prediction(
         is_home=is_home,
         bulk_game_logs=bulk_game_logs,
         bulk_advanced_stats=bulk_advanced_stats,
-        bulk_drives_stats=bulk_drives_stats
+        bulk_drives_stats=bulk_drives_stats,
+        use_similar_players=use_similar_players
     )
     
-    # Store player_id in features for use in prediction
+    # Store player_id and projected_minutes in features for use in prediction
     player_features['player_id'] = player_id
+    if projected_minutes is not None:
+        player_features['projected_minutes'] = projected_minutes
     
     # Generate predictions
     predictor = PlayerStatPredictor()
@@ -663,6 +760,7 @@ def generate_predictions_for_game(
         
         try:
             # Generate predictions for this player using bulk data
+            # Skip similar players for batch predictions (too slow)
             predictions = generate_prediction(
                 player_id=player_id,
                 player_team_id=int(player_team_id),
@@ -672,7 +770,8 @@ def generate_predictions_for_game(
                 is_home=is_home,
                 bulk_game_logs=bulk_game_logs,
                 bulk_advanced_stats=bulk_advanced_stats,
-                bulk_drives_stats=bulk_drives_stats
+                bulk_drives_stats=bulk_drives_stats,
+                use_similar_players=False  # Skip for batch to improve performance
             )
             
             all_predictions[player_id] = {

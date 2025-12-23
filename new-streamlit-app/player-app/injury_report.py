@@ -22,13 +22,14 @@ except ImportError:
 INJURY_REPORT_BASE_URL = "https://ak-static.cms.nba.com/referee/injury/"
 
 
-def build_injury_report_url(report_date: date = None, hour: int = 1, period: str = "PM") -> str:
+def build_injury_report_url(report_date: date = None, hour: int = 1, minute: int = 0, period: str = "PM") -> str:
     """
     Build NBA injury report PDF URL.
     
     Args:
         report_date: Date of report (defaults to today)
         hour: Hour of report (1-12)
+        minute: Minute of report (0, 15, 30, or 45)
         period: AM or PM
     
     Returns:
@@ -39,17 +40,17 @@ def build_injury_report_url(report_date: date = None, hour: int = 1, period: str
     
     date_str = report_date.strftime('%Y-%m-%d')
     hour_str = f"{hour:02d}"
+    minute_str = f"{minute:02d}"
     
-    return f"{INJURY_REPORT_BASE_URL}Injury-Report_{date_str}_{hour_str}{period}.pdf"
+    return f"{INJURY_REPORT_BASE_URL}Injury-Report_{date_str}_{hour_str}_{minute_str}{period}.pdf"
 
 
 def try_fetch_injury_report(report_date: date = None) -> Tuple[Optional[bytes], str]:
     """
     Try to fetch injury report PDF, trying the most likely time first based on current time.
     
-    Logic: If 30+ minutes past the hour, try current hour first.
-           Otherwise, try previous hour first.
-           Then work backwards through the day.
+    Logic: Tries every 15 minutes (00, 15, 30, 45) going backwards from current time.
+           Starts with the most recent 15-minute increment, then works backwards.
     
     Args:
         report_date: Date of report (defaults to today)
@@ -72,12 +73,8 @@ def try_fetch_injury_report(report_date: date = None) -> Tuple[Optional[bytes], 
     current_hour = now_et.hour
     current_minute = now_et.minute
     
-    # If 30+ minutes past the hour, start with current hour
-    # Otherwise, start with previous hour
-    if current_minute >= 30:
-        start_hour = current_hour
-    else:
-        start_hour = current_hour - 1 if current_hour > 0 else 23
+    # Round down to nearest 15-minute increment
+    rounded_minute = (current_minute // 15) * 15
     
     # Convert 24h to 12h format with AM/PM
     def hour_to_12h(h):
@@ -90,18 +87,32 @@ def try_fetch_injury_report(report_date: date = None) -> Tuple[Optional[bytes], 
         else:
             return (h - 12, "PM")
     
-    # Build list of times to try (most recent first, going backwards)
+    # Build list of times to try (most recent first, going backwards in 15-min increments)
     times_to_try = []
     
-    # Add times going backwards from start_hour to 6 AM
-    for i in range(24):
-        h = (start_hour - i) % 24
-        hour_12, period = hour_to_12h(h)
-        times_to_try.append((hour_12, period))
+    # Start from current rounded time and go backwards
+    start_datetime = now_et.replace(minute=rounded_minute, second=0, microsecond=0)
+    
+    # Create a datetime for 6 AM of the report date (in ET timezone)
+    try:
+        import pytz
+        et_tz_check = pytz.timezone('US/Eastern')
+        report_datetime_6am = et_tz_check.localize(datetime.combine(report_date, datetime.min.time()).replace(hour=6))
+    except:
+        report_datetime_6am = datetime.combine(report_date, datetime.min.time()).replace(hour=6)
+    
+    # Go back up to 24 hours, checking every 15 minutes
+    for i in range(96):  # 24 hours * 4 (15-min intervals) = 96
+        check_time = start_datetime - timedelta(minutes=i * 15)
         
-        # Stop after we've covered reasonable hours (down to 6 AM)
-        if h == 6:
+        # Stop if we've gone back before 6 AM of the report date
+        if check_time < report_datetime_6am:
             break
+        
+        hour_12, period = hour_to_12h(check_time.hour)
+        minute = check_time.minute
+        
+        times_to_try.append((hour_12, minute, period))
     
     # Remove duplicates while preserving order
     seen = set()
@@ -111,8 +122,8 @@ def try_fetch_injury_report(report_date: date = None) -> Tuple[Optional[bytes], 
             seen.add(t)
             unique_times.append(t)
     
-    for hour, period in unique_times:
-        url = build_injury_report_url(report_date, hour, period)
+    for hour, minute, period in unique_times:
+        url = build_injury_report_url(report_date, hour, minute, period)
         try:
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
@@ -642,6 +653,7 @@ def fetch_injuries_for_date(report_date: date = None, players_df: pd.DataFrame =
     """
     Fetch and parse injury report for a specific date.
     Tries multiple URLs until one successfully parses.
+    Checks every 15 minutes (00, 15, 30, 45) going backwards from current time.
     
     Args:
         report_date: Date to fetch injuries for (defaults to today)
@@ -664,11 +676,8 @@ def fetch_injuries_for_date(report_date: date = None, players_df: pd.DataFrame =
     current_hour = now_et.hour
     current_minute = now_et.minute
     
-    # If 30+ minutes past the hour, start with current hour
-    if current_minute >= 30:
-        start_hour = current_hour
-    else:
-        start_hour = current_hour - 1 if current_hour > 0 else 23
+    # Round down to nearest 15-minute increment
+    rounded_minute = (current_minute // 15) * 15
     
     # Convert 24h to 12h format with AM/PM
     def hour_to_12h(h):
@@ -681,21 +690,46 @@ def fetch_injuries_for_date(report_date: date = None, players_df: pd.DataFrame =
         else:
             return (h - 12, "PM")
     
-    # Build list of times to try
+    # Build list of times to try (most recent first, going backwards in 15-min increments)
     times_to_try = []
-    for i in range(24):
-        h = (start_hour - i) % 24
-        hour_12, period = hour_to_12h(h)
-        if (hour_12, period) not in times_to_try:
-            times_to_try.append((hour_12, period))
-        if h == 6:
+    
+    # Start from current rounded time and go backwards
+    start_datetime = now_et.replace(minute=rounded_minute, second=0, microsecond=0)
+    
+    # Create a datetime for 6 AM of the report date (in ET timezone)
+    try:
+        import pytz
+        et_tz_check = pytz.timezone('US/Eastern')
+        report_datetime_6am = et_tz_check.localize(datetime.combine(report_date, datetime.min.time()).replace(hour=6))
+    except:
+        report_datetime_6am = datetime.combine(report_date, datetime.min.time()).replace(hour=6)
+    
+    # Go back up to 24 hours, checking every 15 minutes
+    for i in range(96):  # 24 hours * 4 (15-min intervals) = 96
+        check_time = start_datetime - timedelta(minutes=i * 15)
+        
+        # Stop if we've gone back before 6 AM of the report date
+        if check_time < report_datetime_6am:
             break
+        
+        hour_12, period = hour_to_12h(check_time.hour)
+        minute = check_time.minute
+        
+        times_to_try.append((hour_12, minute, period))
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_times = []
+    for t in times_to_try:
+        if t not in seen:
+            seen.add(t)
+            unique_times.append(t)
     
     # Try each URL until one successfully parses
     tried_urls = []
-    for hour, period in times_to_try:
-        url = build_injury_report_url(report_date, hour, period)
-        time_str = f"{hour:02d}{period}"
+    for hour, minute, period in unique_times:
+        url = build_injury_report_url(report_date, hour, minute, period)
+        time_str = f"{hour:02d}:{minute:02d}{period}"
         tried_urls.append(time_str)
         
         try:
@@ -710,7 +744,7 @@ def fetch_injuries_for_date(report_date: date = None, players_df: pd.DataFrame =
         except requests.RequestException:
             continue
     
-    return pd.DataFrame(), f"❌ No injury report found for {report_date.strftime('%m/%d/%Y')}. Tried: {', '.join(tried_urls)}"
+    return pd.DataFrame(), f"❌ No injury report found for {report_date.strftime('%m/%d/%Y')}. Tried: {', '.join(tried_urls[:10])}..."  # Show first 10 tried URLs
 
 
 def fetch_todays_injuries(players_df: pd.DataFrame = None) -> Tuple[pd.DataFrame, str]:

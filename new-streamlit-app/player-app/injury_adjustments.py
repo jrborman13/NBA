@@ -14,6 +14,8 @@ def calculate_minutes_redistribution(
 ) -> float:
     """
     Calculate how many extra minutes a player might get when teammates are out.
+    Redistribution is based on role matching: stars/starters get minutes from stars/starters,
+    role players get minutes from role players.
     
     Args:
         teammates_out: List of teammate player IDs who are out
@@ -26,33 +28,102 @@ def calculate_minutes_redistribution(
     if not teammates_out:
         return 0.0
     
-    # Calculate total minutes from players who are out
-    total_minutes_out = sum(
-        player_minutes_map.get(int(p), 0) for p in teammates_out
-    )
+    # Determine the role of the current player
+    if player_minutes >= 32:
+        player_role = "star"
+    elif player_minutes >= 28:
+        player_role = "starter"
+    elif player_minutes >= 22:
+        player_role = "rotation"
+    elif player_minutes >= 15:
+        player_role = "bench"
+    else:
+        player_role = "deep_bench"
     
-    if total_minutes_out == 0:
-        return 0.0
+    # Calculate total minutes from players who are out, grouped by role
+    star_minutes_out = 0
+    starter_minutes_out = 0
+    rotation_minutes_out = 0
+    bench_minutes_out = 0
+    deep_bench_minutes_out = 0
     
-    # Redistribute based on player's current role
-    # Higher-minute players get proportionally more
-    if player_minutes >= 32:  # Star/primary player
-        redistribution_pct = 0.18  # Gets 18% of available minutes
-        max_boost = 6  # Cap at 6 extra minutes
-    elif player_minutes >= 28:  # Starter
-        redistribution_pct = 0.14
-        max_boost = 5
-    elif player_minutes >= 22:  # Rotation player
-        redistribution_pct = 0.10
-        max_boost = 5
-    elif player_minutes >= 15:  # Bench player
-        redistribution_pct = 0.08
-        max_boost = 6  # Bench can get bigger boost
-    else:  # Deep bench
-        redistribution_pct = 0.05
-        max_boost = 8
+    for out_player in teammates_out:
+        out_mins = player_minutes_map.get(int(out_player), 0)
+        if out_mins == 0:
+            continue
+        
+        if out_mins >= 32:
+            star_minutes_out += out_mins
+        elif out_mins >= 28:
+            starter_minutes_out += out_mins
+        elif out_mins >= 22:
+            rotation_minutes_out += out_mins
+        elif out_mins >= 15:
+            bench_minutes_out += out_mins
+        else:
+            deep_bench_minutes_out += out_mins
     
-    extra_minutes = min(total_minutes_out * redistribution_pct, max_boost)
+    # Redistribute based on role matching
+    extra_minutes = 0.0
+    max_boost = 0
+    
+    if player_role == "star":
+        # Stars get minutes from stars and starters
+        if star_minutes_out > 0:
+            extra_minutes += star_minutes_out * 0.16  # Higher % for star-to-star
+            max_boost = 6
+        if starter_minutes_out > 0:
+            extra_minutes += starter_minutes_out * 0.12
+            max_boost = max(max_boost, 5) if max_boost > 0 else 5
+        
+    elif player_role == "starter":
+        # Starters get minutes from stars and starters
+        if star_minutes_out > 0:
+            extra_minutes += star_minutes_out * 0.12
+            max_boost = 5
+        if starter_minutes_out > 0:
+            extra_minutes += starter_minutes_out * 0.11
+            max_boost = max(max_boost, 4) if max_boost > 0 else 4
+        
+    elif player_role == "rotation":
+        # Rotation players get minutes from rotation and bench players
+        if rotation_minutes_out > 0:
+            extra_minutes += rotation_minutes_out * 0.10
+            max_boost = 4
+        if bench_minutes_out > 0:
+            extra_minutes += bench_minutes_out * 0.08
+            max_boost = max(max_boost, 4) if max_boost > 0 else 4
+        # Can also get some from starters if they're out (backup role)
+        if starter_minutes_out > 0:
+            extra_minutes += starter_minutes_out * 0.06
+            max_boost = max(max_boost, 4) if max_boost > 0 else 4
+        
+    elif player_role == "bench":
+        # Bench players get minutes from bench and deep bench
+        if bench_minutes_out > 0:
+            extra_minutes += bench_minutes_out * 0.08
+            max_boost = 5
+        if deep_bench_minutes_out > 0:
+            extra_minutes += deep_bench_minutes_out * 0.06
+            max_boost = max(max_boost, 5) if max_boost > 0 else 5
+        # Can also get some from rotation players
+        if rotation_minutes_out > 0:
+            extra_minutes += rotation_minutes_out * 0.05
+            max_boost = max(max_boost, 5) if max_boost > 0 else 5
+        
+    else:  # deep_bench
+        # Deep bench gets minutes from deep bench and bench
+        if deep_bench_minutes_out > 0:
+            extra_minutes += deep_bench_minutes_out * 0.06
+            max_boost = 6
+        if bench_minutes_out > 0:
+            extra_minutes += bench_minutes_out * 0.05
+            max_boost = max(max_boost, 6) if max_boost > 0 else 6
+    
+    # Apply the cap if we have any minutes to redistribute
+    if max_boost > 0:
+        extra_minutes = min(extra_minutes, max_boost)
+    
     return round(extra_minutes, 1)
 
 
@@ -74,6 +145,11 @@ def calculate_usage_boost(
     for out_player in teammates_out:
         out_mins = player_minutes_map.get(int(out_player), 0)
         
+        # Only apply usage boost if player has actual minutes
+        # Players with 0 minutes are out of rotation - no usage to redistribute
+        if out_mins == 0:
+            continue
+        
         # Higher minute players = more usage to redistribute
         if out_mins >= 34:  # Star player
             usage_boost += 0.08
@@ -84,8 +160,8 @@ def calculate_usage_boost(
         elif out_mins >= 18:  # Rotation
             usage_boost += 0.01
     
-    # Cap the total usage boost
-    return min(usage_boost, 1.25)  # Max 25% usage boost
+    # Cap the total usage boost - REDUCED from 25% to 18%
+    return min(usage_boost, 1.18)  # Max 18% usage boost (down from 25%)
 
 
 def calculate_injury_adjustments(
@@ -147,12 +223,30 @@ def calculate_injury_adjustments(
         
         # Apply adjustments to stats
         # Scoring stats get both minutes and usage boost
-        adjustments['PTS'] *= minutes_mult * usage_mult
-        adjustments['FG3M'] *= minutes_mult * usage_mult
-        adjustments['FTM'] *= minutes_mult * usage_mult
+        # BUT cap total boost based on player role to prevent unrealistic predictions
+        raw_pts_mult = minutes_mult * usage_mult
         
-        # Rebounds get minutes boost + slight usage boost
-        adjustments['REB'] *= minutes_mult * (1 + (usage_mult - 1) * 0.3)
+        
+        # Role-based caps for total injury boost (keeps role differences but prevents extremes)
+        # REDUCED caps to address over-prediction
+        if player_mins >= 32:  # Star - can handle bigger boost
+            max_pts_mult = 1.28  # Max 28% boost (down from 35%)
+        elif player_mins >= 28:  # Starter
+            max_pts_mult = 1.24  # Max 24% boost (down from 30%)
+        elif player_mins >= 22:  # Rotation
+            max_pts_mult = 1.20  # Max 20% boost (down from 25%)
+        elif player_mins >= 15:  # Bench
+            max_pts_mult = 1.18  # Max 18% boost (down from 22%)
+        else:  # Deep bench
+            max_pts_mult = 1.15  # Max 15% boost (down from 20%)
+        
+        adjustments['PTS'] = min(raw_pts_mult, max_pts_mult)
+        adjustments['FG3M'] = min(raw_pts_mult, max_pts_mult)
+        adjustments['FTM'] = min(raw_pts_mult, max_pts_mult)
+        
+        # Rebounds get minutes boost + slight usage boost (with same role-based cap)
+        raw_reb_mult = minutes_mult * (1 + (usage_mult - 1) * 0.3)
+        adjustments['REB'] = min(raw_reb_mult, max_pts_mult * 0.95)  # Slightly lower cap for rebounds
         
         # Assists: depends on who's out
         # If scorers are out, assists might drop (fewer finishers)

@@ -18,6 +18,7 @@ import pandas as pd
 import nba_api.stats.endpoints
 from datetime import datetime, date
 import math
+import requests
 
 st.set_page_config(layout="wide")
 st.title("NBA Player Data")
@@ -63,6 +64,10 @@ def get_cached_player_shooting_data():
 def get_matchups_for_date(selected_date):
     """Fetch NBA matchups for a given date from the API"""
     try:
+        import pytz
+        from datetime import datetime
+        
+        # Get schedule data
         league_schedule = nba_api.stats.endpoints.ScheduleLeagueV2(
             league_id='00',
             season='2025-26'
@@ -84,12 +89,43 @@ def get_matchups_for_date(selected_date):
                 home_team = row['homeTeam_teamTricode']
                 away_team_id = row['awayTeam_teamId']
                 home_team_id = row['homeTeam_teamId']
+                game_id = str(row.get('gameId', ''))
+                
+                # Try to get game time from gameDate field
+                game_time_str = None
+                game_date_raw = row.get('gameDate', '')
+                
+                if pd.notna(game_date_raw) and game_date_raw:
+                    try:
+                        # Parse the gameDate - it might be in UTC or have time info
+                        game_dt = pd.to_datetime(game_date_raw)
+                        
+                        # Check if it's not just midnight (which means no time info)
+                        if game_dt.hour != 0 or game_dt.minute != 0:
+                            # Has actual time info - assume UTC
+                            if game_dt.tzinfo is None:
+                                utc = pytz.UTC
+                                game_dt = utc.localize(game_dt)
+                            
+                            # Convert to Central Time
+                            central = pytz.timezone('US/Central')
+                            game_dt_ct = game_dt.astimezone(central)
+                            
+                            # Format as "7 PM CT"
+                            hour_12 = game_dt_ct.strftime('%I').lstrip('0') or '12'
+                            am_pm = game_dt_ct.strftime('%p')
+                            game_time_str = f"{hour_12} {am_pm} CT"
+                    except:
+                        pass
+                
                 matchups.append({
                     'matchup': matchup_str,
                     'away_team': away_team,
                     'home_team': home_team,
                     'away_team_id': away_team_id,
-                    'home_team_id': home_team_id
+                    'home_team_id': home_team_id,
+                    'game_time': game_time_str,
+                    'game_date': game_date_raw
                 })
             return matchups, None  # Return matchups and error (None)
         else:
@@ -167,12 +203,16 @@ with col_matchup:
     
     # Matchup dropdown
     if matchups:
-        matchup_options = ["All Matchups"] + [m['matchup'] for m in matchups]
+        # Format matchup options
+        matchup_options = ["All Matchups"]
+        for m in matchups:
+            matchup_options.append(m['matchup'])
+        
         selected_matchup_str = st.selectbox(
             "Select Matchup:",
             options=matchup_options,
             key="matchup_selector",
-            help="Select a matchup to filter players, or 'All Players' to see everyone"
+            help="Select a matchup to filter players, or 'All Matchups' to see everyone"
         )
     else:
         selected_matchup_str = "All Players"
@@ -277,11 +317,11 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                                 matchup_home_team_abbr,
                                 players_df
                             )
-                            for inj in matchup_inj.get('away', []) + matchup_inj.get('home', []):
-                                status_lower = inj.get('status', '').lower()
+                            for injury_item in matchup_inj.get('away', []) + matchup_inj.get('home', []):
+                                status_lower = injury_item.get('status', '').lower()
                                 if 'out' in status_lower or 'doubtful' in status_lower:
-                                    if inj.get('player_id'):
-                                        out_player_ids.add(str(inj['player_id']))
+                                    if injury_item.get('player_id'):
+                                        out_player_ids.add(str(injury_item['player_id']))
                         
                         # Filter to players with at least some minutes AND not injured
                         players_to_predict = [
@@ -300,6 +340,11 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                             player_row = players_df[players_df['PERSON_ID'].astype(str) == pid]
                             if len(player_row) > 0:
                                 player_team_ids_map[pid] = int(player_row['TEAM_ID'].iloc[0])
+                        
+                        # Store in session state for later use
+                        if 'player_team_ids_map_cache' not in st.session_state:
+                            st.session_state.player_team_ids_map_cache = {}
+                        st.session_state.player_team_ids_map_cache[game_cache_key_bvp] = player_team_ids_map
                         
                         progress_bar = st.progress(0, text="Generating predictions...")
                         
@@ -369,20 +414,114 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                             key="bvp_stats"
                         )
                     
-                    # Find best value plays
+                    # Calculate injury adjustments for all players in batch predictions
+                    injury_adjustments_map = {}
+                    
+                    # Get player_team_ids_map from session state or reconstruct it
+                    cached_team_ids_map = st.session_state.get('player_team_ids_map_cache', {}).get(game_cache_key_bvp)
+                    if cached_team_ids_map is None:
+                        # Reconstruct from players_df
+                        cached_team_ids_map = {}
+                        for player_id in cached_game_predictions.keys():
+                            player_row = players_df[players_df['PERSON_ID'].astype(str) == str(player_id)]
+                            if len(player_row) > 0:
+                                cached_team_ids_map[str(player_id)] = int(player_row['TEAM_ID'].iloc[0])
+                    
+                    if injury_report_df is not None and len(injury_report_df) > 0:
+                        matchup_inj = ir.get_injuries_for_matchup(
+                            injury_report_df,
+                            matchup_away_team_abbr,
+                            matchup_home_team_abbr,
+                            players_df
+                        )
+                        
+                        # Build lists of out players by team
+                        away_out = []
+                        home_out = []
+                        for injury_item in matchup_inj.get('away', []):
+                            status_lower = injury_item.get('status', '').lower()
+                            if 'out' in status_lower or 'doubtful' in status_lower:
+                                if injury_item.get('player_id'):
+                                    away_out.append(str(injury_item['player_id']))
+                        for injury_item in matchup_inj.get('home', []):
+                            status_lower = injury_item.get('status', '').lower()
+                            if 'out' in status_lower or 'doubtful' in status_lower:
+                                if injury_item.get('player_id'):
+                                    home_out.append(str(injury_item['player_id']))
+                        
+                        # Calculate injury adjustments for each player
+                        for player_id, player_data in cached_game_predictions.items():
+                            # Get player's team ID from cached map or players_df
+                            player_team_id = cached_team_ids_map.get(str(player_id))
+                            
+                            if not player_team_id:
+                                # Fallback: try to get from players_df
+                                player_row = players_df[players_df['PERSON_ID'].astype(str) == str(player_id)]
+                                if len(player_row) > 0:
+                                    player_team_id = int(player_row['TEAM_ID'].iloc[0])
+                                else:
+                                    continue
+                            
+                            # Determine teammates_out and opponents_out
+                            if int(player_team_id) == matchup_away_team_id:
+                                teammates_out = [p for p in away_out if p != str(player_id)]
+                                opponents_out = home_out
+                                opp_team_id = matchup_home_team_id
+                            elif int(player_team_id) == matchup_home_team_id:
+                                teammates_out = [p for p in home_out if p != str(player_id)]
+                                opponents_out = away_out
+                                opp_team_id = matchup_away_team_id
+                            else:
+                                continue
+                            
+                            # Only calculate if there are injuries
+                            if teammates_out or opponents_out:
+                                injury_adj = inj.calculate_injury_adjustments(
+                                    player_id=str(player_id),
+                                    player_team_id=int(player_team_id),
+                                    opponent_team_id=opp_team_id,
+                                    teammates_out=teammates_out,
+                                    opponents_out=opponents_out,
+                                    player_minutes_map=player_minutes_map,
+                                    players_df=players_df
+                                )
+                                if injury_adj.get('factors'):
+                                    injury_adjustments_map[str(player_id)] = injury_adj
+                    
+                    # Find best value plays (with injury adjustments)
                     best_plays = pm.find_best_value_plays(
                         all_predictions=cached_game_predictions,
                         all_props=cached_game_props,
                         min_edge_pct=float(min_edge),
                         confidence_filter=confidence_options if confidence_options else ['high', 'medium', 'low'],
-                        stat_filter=stat_options if stat_options else ['PTS', 'REB', 'AST', 'PRA']
+                        stat_filter=stat_options if stat_options else ['PTS', 'REB', 'AST', 'PRA'],
+                        injury_adjustments_map=injury_adjustments_map if injury_adjustments_map else None
                     )
+                    
+                    # Check for systematic bias
+                    if best_plays:
+                        over_count = sum(1 for p in best_plays if 'Over' in p['lean'])
+                        under_count = sum(1 for p in best_plays if 'Under' in p['lean'])
+                        total_count = len(best_plays)
+                        
+                        if total_count > 0:
+                            over_pct = (over_count / total_count) * 100
+                            under_pct = (under_count / total_count) * 100
+                            avg_edge = sum(p['edge'] for p in best_plays) / total_count
+                            
+                            # Show bias warning if heavily skewed
+                            if over_pct > 80:
+                                st.warning(f"⚠️ **Potential Over-Bias**: {over_pct:.1f}% of plays are Over ({over_count}/{total_count}). Average edge: {avg_edge:+.2f}. Model may be systematically over-predicting.")
+                            elif under_pct > 80:
+                                st.warning(f"⚠️ **Potential Under-Bias**: {under_pct:.1f}% of plays are Under ({under_count}/{total_count}). Average edge: {avg_edge:+.2f}. Model may be systematically under-predicting.")
+                            elif abs(avg_edge) > 1.5:
+                                st.info(f"ℹ️ **Bias Detected**: Average edge = {avg_edge:+.2f} ({over_count} Over, {under_count} Under). This may indicate systematic prediction bias.")
                     
                     if best_plays:
                         st.markdown(f"### 🏆 Top {min(len(best_plays), 20)} Value Plays")
                         
-                        # Sort by absolute edge descending before taking top 20
-                        sorted_plays = sorted(best_plays, key=lambda x: abs(x['edge']), reverse=True)
+                        # Sort by absolute edge % descending before taking top 20
+                        sorted_plays = sorted(best_plays, key=lambda x: abs(x['edge_pct']), reverse=True)
                         
                         # Create DataFrame for display
                         plays_df = pd.DataFrame(sorted_plays[:20])  # Top 20
@@ -401,7 +540,9 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                         # Format columns - all numbers formatted to consistent decimal places
                         display_df['Pred'] = display_df['Pred'].apply(lambda x: f"{x:.1f}")
                         display_df['Line'] = display_df['Line'].apply(lambda x: f"{x:.1f}")
-                        display_df['Edge'] = display_df['Edge'].apply(lambda x: f"{abs(x):.1f}")  # Absolute value
+                        # Keep edge signed (not absolute) so we can see over/under direction
+                        display_df['Edge'] = display_df['Edge'].apply(lambda x: f"{x:+.1f}")
+                        # Edge % should be absolute for sorting, but we'll display signed
                         display_df['Edge %'] = display_df['Edge %'].apply(lambda x: f"{abs(x) / 100:.3f}")
                         display_df['Conf'] = display_df['Conf'].str.capitalize()
                         
@@ -436,6 +577,235 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                         overs = len([p for p in best_plays if 'Over' in p['lean']])
                         unders = len([p for p in best_plays if 'Under' in p['lean']])
                         st.caption(f"📈 {overs} Over plays | 📉 {unders} Under plays | Total: {len(best_plays)} plays found")
+                        
+                        # Show all predicted statlines sorted by team and minutes
+                        st.markdown("---")
+                        st.markdown("### 📊 All Predicted Statlines")
+                        
+                        # Build statlines list
+                        statlines_list = []
+                        for player_id, player_data_dict in cached_game_predictions.items():
+                            # Get actual predictions dict (nested under 'predictions' key)
+                            predictions_dict = player_data_dict.get('predictions', {})
+                            
+                            # Get player info - use cached name if available, otherwise look up
+                            player_name = player_data_dict.get('player_name')
+                            if not player_name:
+                                player_row = players_df[players_df['PERSON_ID'].astype(str) == str(player_id)]
+                                if len(player_row) == 0:
+                                    continue
+                                player_name = f"{player_row['PLAYER_FIRST_NAME'].iloc[0]} {player_row['PLAYER_LAST_NAME'].iloc[0]}"
+                            
+                            # Get team info from cached data or lookup
+                            team_abbr = player_data_dict.get('team_abbr')
+                            if not team_abbr:
+                                player_row = players_df[players_df['PERSON_ID'].astype(str) == str(player_id)]
+                                if len(player_row) == 0:
+                                    continue
+                                player_team_id = int(player_row['TEAM_ID'].iloc[0])
+                                is_away = (player_team_id == matchup_away_team_id)
+                                team_abbr = matchup_away_team_abbr if is_away else matchup_home_team_abbr
+                            else:
+                                # Determine is_away from team_abbr
+                                is_away = (team_abbr == matchup_away_team_abbr)
+                            
+                            # Get predicted minutes from player_minutes_map
+                            minutes = player_minutes_map.get(int(player_id), 25.0)
+                            
+                            # Extract all stat predictions - predictions_dict contains Prediction objects
+                            def get_pred_value(stat_key):
+                                pred_obj = predictions_dict.get(stat_key)
+                                if pred_obj and hasattr(pred_obj, 'value'):
+                                    return pred_obj.value
+                                return 0.0
+                            
+                            statline = {
+                                'Player': player_name,
+                                'Team': team_abbr,
+                                'MIN': minutes,
+                                'PTS': get_pred_value('PTS'),
+                                'REB': get_pred_value('REB'),
+                                'AST': get_pred_value('AST'),
+                                'STL': get_pred_value('STL'),
+                                'BLK': get_pred_value('BLK'),
+                                'TOV': get_pred_value('TOV'),
+                                'FG3M': get_pred_value('FG3M'),
+                                'FTM': get_pred_value('FTM'),
+                                'PRA': get_pred_value('PRA'),
+                                'FPTS': get_pred_value('FPTS'),
+                                'is_away': is_away
+                            }
+                            statlines_list.append(statline)
+                        
+                        # Store original minutes for scaling
+                        for statline in statlines_list:
+                            statline['_original_min'] = statline['MIN']
+                        
+                        # Normalize minutes so each team sums to 240 (5 players × 48 minutes)
+                        away_minutes_total = sum(s['MIN'] for s in statlines_list if s['is_away'])
+                        home_minutes_total = sum(s['MIN'] for s in statlines_list if not s['is_away'])
+                        
+                        if away_minutes_total > 0 and away_minutes_total != 240:
+                            away_scale = 240.0 / away_minutes_total
+                            for statline in statlines_list:
+                                if statline['is_away']:
+                                    statline['MIN'] *= away_scale
+                        
+                        if home_minutes_total > 0 and home_minutes_total != 240:
+                            home_scale = 240.0 / home_minutes_total
+                            for statline in statlines_list:
+                                if not statline['is_away']:
+                                    statline['MIN'] *= home_scale
+                        
+                        # Recalculate stats based on normalized minutes (scale proportionally)
+                        for statline in statlines_list:
+                            original_min = statline.get('_original_min', statline['MIN'])
+                            if original_min > 0:
+                                minutes_ratio = statline['MIN'] / original_min
+                                # Scale all stats proportionally with minutes
+                                statline['PTS'] *= minutes_ratio
+                                statline['REB'] *= minutes_ratio
+                                statline['AST'] *= minutes_ratio
+                                statline['STL'] *= minutes_ratio
+                                statline['BLK'] *= minutes_ratio
+                                statline['TOV'] *= minutes_ratio
+                                statline['FG3M'] *= minutes_ratio
+                                statline['FTM'] *= minutes_ratio
+                                statline['PRA'] *= minutes_ratio
+                                statline['FPTS'] *= minutes_ratio
+                        
+                        # Sort: away team first (minutes descending), then home team (minutes descending)
+                        statlines_list.sort(key=lambda x: (not x['is_away'], -x['MIN']))
+                        
+                        # Create DataFrame
+                        statlines_df = pd.DataFrame(statlines_list)
+                        display_statlines_df = statlines_df[['Player', 'Team', 'MIN', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'FG3M', 'FTM', 'PRA', 'FPTS']].copy()
+                        
+                        # Format numbers
+                        for col in ['MIN', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'FG3M', 'FTM', 'PRA', 'FPTS']:
+                            display_statlines_df[col] = display_statlines_df[col].apply(lambda x: f"{x:.1f}")
+                        
+                        st.dataframe(display_statlines_df, width='stretch', hide_index=True)
+                        
+                        # Calculate team totals
+                        st.markdown("---")
+                        st.markdown("### 🏀 Predicted Final Score")
+                        
+                        # Aggregate points by team
+                        away_total_pts = statlines_df[statlines_df['is_away'] == True]['PTS'].sum()
+                        home_total_pts = statlines_df[statlines_df['is_away'] == False]['PTS'].sum()
+                        total_score = away_total_pts + home_total_pts
+                        
+                        # Team-level sanity checks
+                        # Typical NBA team totals: 100-130 points per game
+                        # If predicted total is way outside this range, show warning
+                        if away_total_pts > 140 or home_total_pts > 140:
+                            st.warning(f"⚠️ **Unusually High Prediction**: Team totals exceed 140 points. This may indicate over-adjustment from injuries or other factors.")
+                        elif total_score > 280:
+                            st.warning(f"⚠️ **Unusually High Total**: Combined score ({total_score:.1f}) exceeds typical NBA game totals (200-260). Model may be over-predicting.")
+                        
+                        # Get game lines (spread and total) from The Odds API
+                        game_lines_total = None
+                        game_lines_spread = None
+                        try:
+                            # Get events for the date
+                            events, error = vl.get_nba_events(game_date_str_bvp)
+                            if not error and events:
+                                # Find the matching event
+                                event = vl.find_event_for_matchup(events, matchup_home_team_abbr, matchup_away_team_abbr)
+                                if event:
+                                    event_id = event['id']
+                                    
+                                    # Fetch odds for game lines (totals and spreads) - FREE, doesn't cost credits
+                                    url = f"{vl.ODDS_API_BASE}/sports/{vl.SPORT}/events/{event_id}/odds"
+                                    params = {
+                                        'apiKey': vl.ODDS_API_KEY,
+                                        'regions': 'us',
+                                        'bookmakers': 'draftkings',
+                                        'markets': 'totals,spreads',
+                                        'oddsFormat': 'american',
+                                        'dateFormat': 'iso'
+                                    }
+                                    
+                                    response = requests.get(url, params=params, timeout=10)
+                                    
+                                    if response.status_code == 200:
+                                        data = response.json()
+                                        
+                                        if 'bookmakers' in data and len(data['bookmakers']) > 0:
+                                            bookmaker = data['bookmakers'][0]
+                                            
+                                            if 'markets' in bookmaker:
+                                                for market in bookmaker['markets']:
+                                                    if market['key'] == 'totals':
+                                                        if 'outcomes' in market and len(market['outcomes']) > 0:
+                                                            game_lines_total = market['outcomes'][0].get('point', None)
+                                                            break
+                                                    
+                                                    if market['key'] == 'spreads':
+                                                        if 'outcomes' in market:
+                                                            for outcome in market['outcomes']:
+                                                                # Find the home team spread
+                                                                if outcome.get('name') == matchup_home_team_abbr:
+                                                                    game_lines_spread = outcome.get('point', None)
+                                                                    break
+                                                            if game_lines_spread is None and len(market['outcomes']) > 0:
+                                                                game_lines_spread = market['outcomes'][0].get('point', None)
+                        except Exception as e:
+                            # Silently fail - game lines are optional
+                            pass
+                        
+                        # Display predicted score
+                        score_col1, score_col2, score_col3 = st.columns(3)
+                        
+                        with score_col1:
+                            st.metric(
+                                label=f"{matchup_away_team_abbr} (Away)",
+                                value=f"{away_total_pts:.1f}",
+                                delta=None
+                            )
+                        
+                        with score_col2:
+                            st.metric(
+                                label=f"{matchup_home_team_abbr} (Home)",
+                                value=f"{home_total_pts:.1f}",
+                                delta=None
+                            )
+                        
+                        with score_col3:
+                            st.metric(
+                                label="Total",
+                                value=f"{total_score:.1f}",
+                                delta=None
+                            )
+                        
+                        # Compare to Vegas lines
+                        if game_lines_total is not None or game_lines_spread is not None:
+                            st.markdown("**📊 Comparison to Vegas Lines:**")
+                            
+                            comparison_lines = []
+                            
+                            if game_lines_total is not None:
+                                total_diff = total_score - game_lines_total
+                                total_lean = "Over" if total_diff > 0 else "Under"
+                                comparison_lines.append(f"**Total**: Predicted {total_score:.1f} vs Line {game_lines_total:.1f} ({total_diff:+.1f}, **{total_lean}**)")
+                            
+                            if game_lines_spread is not None:
+                                # Spread is from home team perspective (positive = home favored)
+                                predicted_spread = home_total_pts - away_total_pts
+                                spread_diff = predicted_spread - game_lines_spread
+                                # Show which team covers based on spread
+                                if spread_diff > 0:
+                                    covering_team = matchup_home_team_abbr
+                                else:
+                                    covering_team = matchup_away_team_abbr
+                                comparison_lines.append(f"**Spread**: Predicted {matchup_home_team_abbr} {predicted_spread:+.1f} vs Line {game_lines_spread:+.1f} ({spread_diff:+.1f}, **{covering_team} covers**)")
+                            
+                            if comparison_lines:
+                                for line in comparison_lines:
+                                    st.write(line)
+                        else:
+                            st.info("ℹ️ Game lines (spread/total) not available. These are fetched from DraftKings via The Odds API.")
                     else:
                         st.info("No plays found matching your filters. Try lowering the minimum edge % or expanding filters.")
                 
@@ -509,10 +879,10 @@ with st.container(border=False):
         """, unsafe_allow_html=True)
 
         st.write(
-            f"**{player_data['player_info_position']}**"
+            f"**{player_data['player_info_position']}** | **{player_data['player_info_height']}**"
         )
         st.write(
-            f"Height: **{player_data['player_info_height']}** | Weight: **{player_data['player_info_weight']} pounds**"
+            f"Weight: **{player_data['player_info_weight']} pounds**"
         )
 
     with col3:
@@ -581,8 +951,8 @@ with st.container(border=False):
 # with st.container(height=1000, border=True):
 #     st.altair_chart(player_data['final_chart'], width='content')
 
-# Create tabs for Current Season, YoY Data, and Predictions
-tab1, tab2, tab3 = st.tabs(["Current Season", "YoY Data", "Predictions"])
+# Create tabs for Current Season, Predictions, and YoY Data
+tab1, tab2, tab3 = st.tabs(["Current Season", "Predictions", "YoY Data"])
 
 with tab1:
     # Display averages table with heatmap
@@ -1499,139 +1869,6 @@ with tab1:
                                 st.info(f"No games found for similar players vs {opponent_abbr} this season.")
 
 with tab2:
-    # YoY Data tab
-    st.subheader("Historical Season Stats")
-    
-    # Get YoY data for all seasons
-    @st.cache_data
-    def get_cached_yoy_data(player_id, players_df):
-        """Cache YoY player data to avoid repeated API calls"""
-        return pf.get_player_yoy_data(player_id, players_df)
-    
-    yoy_data = get_cached_yoy_data(selected_player_id, players_df)
-    
-    if yoy_data and yoy_data.get('averages_df') is not None and len(yoy_data['averages_df']) > 0:
-        show_yoy_comparison = st.toggle("Show +/- vs Current Season", value=False, key="show_yoy_comparison")
-        
-        # Create heatmap styling for YoY data
-        yoy_averages_df = yoy_data['averages_df'].copy()
-        
-        # Ensure all numeric columns are formatted to 1 decimal place
-        numeric_cols_to_format = ['MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', '2PM', '2PA', '3PM', '3PA', 'FTM', 'FTA']
-        for col in numeric_cols_to_format:
-            if col in yoy_averages_df.columns:
-                yoy_averages_df[col] = yoy_averages_df[col].apply(lambda x: f"{float(x):.1f}" if pd.notna(x) and str(x) != '' else x)
-        
-        # Heatmap comparing each season to current season
-        def style_yoy_heatmap(row):
-            styles = [''] * len(row)
-            
-            if not show_yoy_comparison or player_data.get('averages_df') is None:
-                return styles
-            
-            current_season_avg = player_data['averages_df'].iloc[-1]  # Last row is current season
-            numeric_cols = ['MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', '2PM', '2PA', '3PM', '3PA', 'FTM', 'FTA']
-            pct_cols = ['2P%', '3P%', 'FT%']
-            
-            for i, col in enumerate(yoy_averages_df.columns):
-                if col == 'Period' or '+/-' in col:
-                    continue
-                
-                if col in numeric_cols:
-                    try:
-                        current_val_str = str(row[col]).replace(',', '')
-                        current_season_val_str = str(current_season_avg[col]).replace(',', '')
-                        current_val = float(current_val_str)
-                        current_season_val = float(current_season_val_str)
-                        
-                        if current_val > current_season_val:
-                            diff_pct = ((current_val - current_season_val) / current_season_val * 100) if current_season_val > 0 else 0
-                            intensity = min(diff_pct / 20, 1.0)
-                            green_intensity = int(200 + (55 * intensity))
-                            styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
-                        elif current_val < current_season_val:
-                            diff_pct = ((current_season_val - current_val) / current_season_val * 100) if current_season_val > 0 else 0
-                            intensity = min(diff_pct / 20, 1.0)
-                            red_intensity = int(200 + (55 * intensity))
-                            styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
-                        else:
-                            styles[i] = 'background-color: rgb(240, 240, 240);'
-                    except (ValueError, TypeError, KeyError):
-                        pass
-                elif col in pct_cols:
-                    try:
-                        current_str = str(row[col]).replace('%', '')
-                        current_season_str = str(current_season_avg[col]).replace('%', '')
-                        current_val = float(current_str)
-                        current_season_val = float(current_season_str)
-                        
-                        if current_val > current_season_val:
-                            diff_pct = ((current_val - current_season_val) / current_season_val * 100) if current_season_val > 0 else 0
-                            intensity = min(diff_pct / 20, 1.0)
-                            green_intensity = int(200 + (55 * intensity))
-                            styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
-                        elif current_val < current_season_val:
-                            diff_pct = ((current_season_val - current_val) / current_season_val * 100) if current_season_val > 0 else 0
-                            intensity = min(diff_pct / 20, 1.0)
-                            red_intensity = int(200 + (55 * intensity))
-                            styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
-                        else:
-                            styles[i] = 'background-color: rgb(240, 240, 240);'
-                    except (ValueError, TypeError, KeyError):
-                        pass
-            
-            return styles
-        
-        # Add comparison columns if toggle is on
-        if show_yoy_comparison:
-            # Get current season averages for comparison
-            if player_data.get('averages_df') is not None:
-                current_season_avg = player_data['averages_df'].iloc[-1]  # Last row is current season
-                
-                # Create comparison dataframe
-                yoy_comparison_df = yoy_averages_df.copy()
-                
-                numeric_cols = ['MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', '2PM', '2PA', '3PM', '3PA', 'FTM', 'FTA']
-                pct_cols = ['2P%', '3P%', 'FT%']
-                
-                # Insert comparison columns after each stat
-                new_cols = ['Period']
-                for col in yoy_averages_df.columns[1:]:  # Skip Period column
-                    new_cols.append(col)
-                    if col in numeric_cols:
-                        # Add +/- column comparing to current season
-                        try:
-                            yoy_comparison_df[f'{col} +/-'] = yoy_comparison_df.apply(
-                                lambda row: f"{round(float(str(row[col]).replace(',', '')) - float(str(current_season_avg[col]).replace(',', '')), 1):+.1f}" if pd.notna(row[col]) and str(row[col]) != '' else '—',
-                                axis=1
-                            )
-                            new_cols.append(f'{col} +/-')
-                        except (KeyError, ValueError):
-                            pass
-                    elif col in pct_cols:
-                        # Add +/- column for percentages
-                        try:
-                            yoy_comparison_df[f'{col} +/-'] = yoy_comparison_df.apply(
-                                lambda row: f"{round(float(str(row[col]).replace('%', '')) - float(str(current_season_avg[col]).replace('%', '')), 1):+.1f}%" if pd.notna(row[col]) and str(row[col]) != '' else '—',
-                                axis=1
-                            )
-                            new_cols.append(f'{col} +/-')
-                        except (KeyError, ValueError):
-                            pass
-                
-                # Reorder columns
-                yoy_comparison_df = yoy_comparison_df[new_cols]
-                styled_yoy_df = yoy_comparison_df.style.apply(style_yoy_heatmap, axis=1)
-            else:
-                styled_yoy_df = yoy_averages_df.style.apply(style_yoy_heatmap, axis=1)
-        else:
-            styled_yoy_df = yoy_averages_df.style.apply(style_yoy_heatmap, axis=1)
-        
-        st.dataframe(styled_yoy_df, width='stretch', hide_index=True)
-    else:
-        st.info("No historical season stats available for this player.")
-
-with tab3:
     # Predictions tab
     st.subheader("🔮 Stat Predictions")
     
@@ -1656,6 +1893,9 @@ with tab3:
         
         if opponent_team_id and opponent_abbr:
             st.info(f"📊 Generating predictions for **{player_data['player_info_name']}** vs **{opponent_abbr}** ({'Home' if is_home else 'Away'})")
+            
+            # Get game date string
+            game_date_str = selected_date.strftime('%Y-%m-%d')
             
             # === INJURY REPORT SECTION ===
             st.markdown("---")
@@ -1766,18 +2006,15 @@ with tab3:
                         else:
                             return 4
                     
-                    # Sort injuries by status (Probable first, Out last)
-                    sorted_away_injuries = sorted(all_injuries_away, key=lambda x: get_status_order(x.get('status', '')))
-                    sorted_home_injuries = sorted(all_injuries_home, key=lambda x: get_status_order(x.get('status', '')))
+                    # Two-column layout for injuries
+                    col_away, col_home = st.columns(2)
                     
-                    # Display all injuries for both teams with formatted badges
-                    inj_col1, inj_col2 = st.columns(2)
-                    
-                    with inj_col1:
-                        st.markdown(f"**{matchup_away_team_abbr}:**")
-                        if sorted_away_injuries:
-                            for injury_item in sorted_away_injuries:
-                                status = injury_item['status']
+                    with col_away:
+                        if all_injuries_away:
+                            st.markdown(f"### {matchup_away_team_abbr}")
+                            sorted_away = sorted(all_injuries_away, key=lambda x: get_status_order(x.get('status', '')))
+                            for injury_item in sorted_away:
+                                status = injury_item.get('status', 'Unknown')
                                 status_color = get_status_color(status)
                                 formatted_name = ir.format_player_name(injury_item['player_name'])
                                 formatted_reason = ir.format_injury_reason(injury_item.get('reason', ''))
@@ -1794,13 +2031,15 @@ with tab3:
                                     </div>
                                 """, unsafe_allow_html=True)
                         else:
-                            st.info("No injuries reported")
+                            st.markdown(f"### {matchup_away_team_abbr}")
+                            st.info("No injuries")
                     
-                    with inj_col2:
-                        st.markdown(f"**{matchup_home_team_abbr}:**")
-                        if sorted_home_injuries:
-                            for injury_item in sorted_home_injuries:
-                                status = injury_item['status']
+                    with col_home:
+                        if all_injuries_home:
+                            st.markdown(f"### {matchup_home_team_abbr}")
+                            sorted_home = sorted(all_injuries_home, key=lambda x: get_status_order(x.get('status', '')))
+                            for injury_item in sorted_home:
+                                status = injury_item.get('status', 'Unknown')
                                 status_color = get_status_color(status)
                                 formatted_name = ir.format_player_name(injury_item['player_name'])
                                 formatted_reason = ir.format_injury_reason(injury_item.get('reason', ''))
@@ -1817,111 +2056,130 @@ with tab3:
                                     </div>
                                 """, unsafe_allow_html=True)
                         else:
-                            st.info("No injuries reported")
-                    
-                    # Show which players are being auto-selected as OUT
-                    if fetched_away_out or fetched_home_out:
-                        st.caption(f"🔴 Only players marked OUT or Doubtful are auto-selected below")
+                            st.markdown(f"### {matchup_home_team_abbr}")
+                            st.info("No injuries")
                 else:
-                    st.warning(f"⚠️ No injuries found for {matchup_away_team_abbr}@{matchup_home_team_abbr}")
-                    
-                    # Show debug info
-                    with st.expander("🔍 Debug: Show all injuries from report"):
-                        if injury_report_df is not None and len(injury_report_df) > 0:
-                            st.write("All matchups in report:")
-                            unique_matchups = injury_report_df['matchup'].unique()
-                            for m in unique_matchups:
-                                st.write(f"  • {m}")
-                            st.dataframe(injury_report_df, width='stretch')
-                        else:
-                            st.write("No data available")
+                    st.info("No injuries reported")
                 
-                st.divider()
-                
-                # Get players from both teams for the injury selection
-                player_team_abbr = matchup_away_team_abbr if is_home == False else matchup_home_team_abbr
-                
-                # Filter players by team
-                away_team_players_df = players_df[players_df['TEAM_ID'].astype(int) == matchup_away_team_id].copy()
-                home_team_players_df = players_df[players_df['TEAM_ID'].astype(int) == matchup_home_team_id].copy()
-                
-                # Add minutes for sorting
-                away_team_players_df['AVG_MIN'] = away_team_players_df['PERSON_ID'].apply(
-                    lambda x: player_minutes_map.get(int(x), 0)
-                )
-                home_team_players_df['AVG_MIN'] = home_team_players_df['PERSON_ID'].apply(
-                    lambda x: player_minutes_map.get(int(x), 0)
-                )
-                
-                # Sort by minutes and get top players (likely to matter most)
-                away_team_players_df = away_team_players_df.sort_values('AVG_MIN', ascending=False)
-                home_team_players_df = home_team_players_df.sort_values('AVG_MIN', ascending=False)
-                
-                # Get player IDs and create name maps
-                away_player_ids = away_team_players_df['PERSON_ID'].astype(str).tolist()
-                home_player_ids = home_team_players_df['PERSON_ID'].astype(str).tolist()
-                
-                def format_player_with_mins(pid):
-                    name = player_name_map.get(pid, f"Player {pid}")
-                    mins = player_minutes_map.get(int(pid), 0)
-                    return f"{name} ({mins:.1f} mpg)"
-                
-                st.markdown("**Select Players Out (adjust manually if needed):**")
-                inj_col1, inj_col2 = st.columns(2)
-                
-                with inj_col1:
-                    st.markdown(f"**{matchup_away_team_abbr} Players Out:**")
-                    # Use fetched data as default if available
-                    default_away_out = [p for p in fetched_away_out if p in away_player_ids]
-                    away_players_out = st.multiselect(
-                        "Away team injuries",
-                        options=away_player_ids,
-                        default=default_away_out,
-                        format_func=format_player_with_mins,
-                        key=f"away_injuries_{matchup_key}",
-                        label_visibility="collapsed"
-                    )
-                
-                with inj_col2:
-                    st.markdown(f"**{matchup_home_team_abbr} Players Out:**")
-                    # Use fetched data as default if available
-                    default_home_out = [p for p in fetched_home_out if p in home_player_ids]
-                    home_players_out = st.multiselect(
-                        "Home team injuries",
-                        options=home_player_ids,
-                        default=default_home_out,
-                        format_func=format_player_with_mins,
-                        key=f"home_injuries_{matchup_key}",
-                        label_visibility="collapsed"
-                    )
-                
-                # Determine which are teammates vs opponents for the selected player
-                if is_home:
-                    teammates_out = home_players_out
-                    opponents_out = away_players_out
-                else:
-                    teammates_out = away_players_out
-                    opponents_out = home_players_out
-                
-                # Remove the selected player from teammates_out if somehow selected
-                teammates_out = [p for p in teammates_out if p != selected_player_id]
+                # Show which players are being auto-selected as OUT
+                if fetched_away_out or fetched_home_out:
+                    st.caption(f"🔴 Only players marked OUT or Doubtful are auto-selected below")
             
-            # Calculate injury adjustments if any players are out
-            injury_adjustments = None
-            if teammates_out or opponents_out:
-                injury_adjustments = inj.calculate_injury_adjustments(
-                    player_id=selected_player_id,
-                    player_team_id=int(player_team_id),
-                    opponent_team_id=opponent_team_id,
-                    teammates_out=teammates_out,
-                    opponents_out=opponents_out,
-                    player_minutes_map=player_minutes_map,
-                    players_df=players_df
+            st.divider()
+            
+            # Get players from both teams for the injury selection
+            player_team_abbr = matchup_away_team_abbr if is_home == False else matchup_home_team_abbr
+            
+            # Filter players by team
+            away_team_players_df = players_df[players_df['TEAM_ID'].astype(int) == matchup_away_team_id].copy()
+            home_team_players_df = players_df[players_df['TEAM_ID'].astype(int) == matchup_home_team_id].copy()
+            
+            # Add minutes for sorting
+            away_team_players_df['AVG_MIN'] = away_team_players_df['PERSON_ID'].apply(
+                lambda x: player_minutes_map.get(int(x), 0)
+            )
+            home_team_players_df['AVG_MIN'] = home_team_players_df['PERSON_ID'].apply(
+                lambda x: player_minutes_map.get(int(x), 0)
+            )
+            
+            # Sort by minutes and get top players (likely to matter most)
+            away_team_players_df = away_team_players_df.sort_values('AVG_MIN', ascending=False).head(15)
+            home_team_players_df = home_team_players_df.sort_values('AVG_MIN', ascending=False).head(15)
+            
+            # Get player IDs and create name maps
+            away_player_ids = away_team_players_df['PERSON_ID'].astype(str).tolist()
+            home_player_ids = home_team_players_df['PERSON_ID'].astype(str).tolist()
+            
+            def format_player_with_mins(pid):
+                name = player_name_map.get(pid, f"Player {pid}")
+                mins = player_minutes_map.get(int(pid), 0)
+                return f"{name} ({mins:.1f} mpg)"
+            
+            st.markdown("**Select Players Out (adjust manually if needed):**")
+            inj_col1, inj_col2 = st.columns(2)
+            
+            with inj_col1:
+                st.markdown(f"**{matchup_away_team_abbr} Players Out:**")
+                # Use fetched data as default if available
+                default_away_out = [p for p in fetched_away_out if p in away_player_ids]
+                away_players_out = st.multiselect(
+                    "Away team injuries",
+                    options=away_player_ids,
+                    default=default_away_out,
+                    format_func=format_player_with_mins,
+                    key=f"away_injuries_tab2_{matchup_key}",
+                    label_visibility="collapsed"
                 )
+            
+            with inj_col2:
+                st.markdown(f"**{matchup_home_team_abbr} Players Out:**")
+                # Use fetched data as default if available
+                default_home_out = [p for p in fetched_home_out if p in home_player_ids]
+                home_players_out = st.multiselect(
+                    "Home team injuries",
+                    options=home_player_ids,
+                    default=default_home_out,
+                    format_func=format_player_with_mins,
+                    key=f"home_injuries_tab2_{matchup_key}",
+                    label_visibility="collapsed"
+                )
+            
+            # Determine teammates_out and opponents_out for this player
+            teammates_out = []
+            opponents_out = []
+            if player_team_id == matchup_away_team_id:
+                teammates_out = away_players_out
+                opponents_out = home_players_out
+            elif player_team_id == matchup_home_team_id:
+                teammates_out = home_players_out
+                opponents_out = away_players_out
+            
+            # Remove the selected player from teammates_out if somehow selected
+            teammates_out = [p for p in teammates_out if p != str(selected_player_id)]
+            
+            # Calculate injury adjustments
+            injury_adjustments = inj.calculate_injury_adjustments(
+                player_id=str(selected_player_id),
+                player_team_id=int(player_team_id),
+                opponent_team_id=opponent_team_id,
+                teammates_out=teammates_out,
+                opponents_out=opponents_out,
+                player_minutes_map=player_minutes_map,
+                players_df=players_df
+            )
+            
+            # Show injury impact summary
+            if injury_adjustments.get('factors'):
+                st.warning(f"⚠️ **Injury Adjustments:** {' | '.join(injury_adjustments['factors'])}")
                 
-                # Show injury impact summary
-                if injury_adjustments.get('factors'):
-                    st.warning(f"⚠️ **Injury Adjustments:** {' | '.join(injury_adjustments['factors'])}")
+                # Add explanation expander
+                with st.expander("ℹ️ How Injury Adjustments Work"):
+                    st.markdown("""
+                    **Teammates Out:**
+                    - **Minutes Redistribution**: Based on player role and available minutes from injured teammates
+                      - Stars (32+ MPG): Get 18% of available minutes (max +6 min)
+                      - Starters (28+ MPG): Get 14% of available minutes (max +5 min)
+                      - Rotation (22+ MPG): Get 10% of available minutes (max +5 min)
+                      - Bench (15+ MPG): Get 8% of available minutes (max +6 min)
+                      - Deep bench (<15 MPG): Get 5% of available minutes (max +8 min)
+                    
+                    - **Usage Boost**: Based on minutes of injured teammates
+                      - Star out (34+ MPG): +8% usage
+                      - High-usage starter (30+ MPG): +5% usage
+                      - Starter (25+ MPG): +3% usage
+                      - Rotation (18+ MPG): +1% usage
+                      - Max total usage boost: 25%
+                    
+                    - **Stat Adjustments**:
+                      - Scoring stats (PTS, FG3M, FTM): Get both minutes multiplier AND usage boost
+                      - Rebounds: Get minutes multiplier + 30% of usage boost
+                      - Assists: Get minutes multiplier but slight reduction (95% multiplier) due to fewer finishers
+                      - Steals/Blocks: Get minutes multiplier only
+                    
+                    **Opponents Out:**
+                    - Only applies if 30+ total minutes are out
+                    - Scoring boost: +3% to PTS, +2% to FG3M (easier defensive matchup)
+                    """)
             
             # Minutes scaling input
             season_minutes = None
@@ -1939,7 +2197,7 @@ with tab3:
                         max_value=48.0,
                         value=float(season_minutes),
                         step=0.5,
-                        key="projected_minutes",
+                        key="projected_minutes_tab2",
                         help=f"Season Avg: {season_minutes:.1f} MPG. Adjust for minutes restrictions or rotation changes."
                     )
                 else:
@@ -1949,7 +2207,7 @@ with tab3:
                         max_value=48.0,
                         value=32.0,
                         step=0.5,
-                        key="projected_minutes",
+                        key="projected_minutes_tab2",
                         help="Enter projected minutes for this game"
                     )
             
@@ -1975,26 +2233,26 @@ with tab3:
                         is_home=home,
                         use_similar_players=use_sim,
                         projected_minutes=proj_min_to_use
-                    ), None
+                    )
                 except Exception as e:
-                    return None, str(e)
+                    st.error(f"Error generating predictions: {e}")
+                    return None
             
-            # Generate predictions (enable similar players for individual predictions)
-            game_date_str = selected_date.strftime('%Y-%m-%d')
-            predictions, pred_error = get_cached_predictions(
+            # Generate predictions
+            predictions = get_cached_predictions(
                 selected_player_id,
-                int(player_team_id),  # Player's team ID for rest calculation
-                opponent_team_id, 
-                opponent_abbr, 
-                game_date_str, 
+                player_team_id,
+                opponent_team_id,
+                opponent_abbr,
+                game_date_str,
                 is_home,
                 projected_minutes,
                 season_minutes,
-                True  # Enable similar players for individual predictions
+                True  # use_similar_players
             )
             
-            if pred_error:
-                st.error(f"⚠️ Could not generate predictions: {pred_error}")
+            if predictions is None:
+                st.error("Could not generate predictions")
             elif predictions:
                 # Check if minutes were adjusted
                 has_minutes_adj = False
@@ -2073,13 +2331,29 @@ with tab3:
                         if stat in predictions:
                             pred = predictions[stat]
                             with breakdown_cols[i]:
-                                st.markdown(f"**{stat_labels.get(stat, stat)}**")
-                                st.write(f"Season Avg: {pred.breakdown.get('season_avg', 'N/A')}")
-                                st.write(f"L5 Avg: {pred.breakdown.get('L5_avg', 'N/A')}")
-                                st.write(f"Weighted Avg: {pred.breakdown.get('weighted_avg', 'N/A')}")
-                                if 'vs_opponent' in pred.breakdown:
-                                    st.write(f"vs {opponent_abbr}: {pred.breakdown['vs_opponent']}")
-                                st.write(f"**Final: {pred.value}**")
+                                st.markdown(f"**{stat}**")
+                                breakdown = pred.breakdown
+                                if breakdown:
+                                    # Helper function to format breakdown values
+                                    def format_breakdown_val(val):
+                                        if val is None or val == 'N/A':
+                                            return 'N/A'
+                                        try:
+                                            return f"{float(val):.1f}"
+                                        except (ValueError, TypeError):
+                                            return str(val)
+                                    
+                                    st.write(f"Season Avg: {format_breakdown_val(breakdown.get('season_avg', 'N/A'))}")
+                                    st.write(f"L5 Avg: {format_breakdown_val(breakdown.get('L5_avg', 'N/A'))}")
+                                    st.write(f"vs Opponent: {format_breakdown_val(breakdown.get('vs_opponent', 'N/A'))}")
+                                
+                                # Show factors
+                                factors = pred.factors
+                                if factors:
+                                    st.markdown("**Factors:**")
+                                    for factor_name, factor_value in factors.items():
+                                        if factor_name not in ['regression_tier', 'confidence']:
+                                            st.write(f"- {factor_name}: {factor_value}")
                 
                 # Factors affecting prediction
                 with st.expander("🎯 Factors Considered"):
@@ -2498,76 +2772,6 @@ Estimated Cost: {preview['estimated_cost']}
                 
                 st.markdown("---")
                 
-                # Log prediction button
-                st.markdown("### 📝 Track This Prediction")
-                if st.button("📊 Log Prediction for Tracking", key="log_prediction"):
-                    try:
-                        # Get features for logging
-                        player_features = pf_features.get_all_prediction_features(
-                            player_id=selected_player_id,
-                            opponent_team_id=opponent_team_id,
-                            opponent_abbr=opponent_abbr,
-                            game_date=game_date_str,
-                            is_home=is_home
-                        )
-                        
-                        for stat in ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS']:
-                            if stat in predictions:
-                                line_val = existing_lines.get(stat, vl.PropLine(stat, 0, -110, -110, 'manual')).line if stat in existing_lines else None
-                                
-                                record = pt.create_prediction_record_from_dict(
-                                    player_id=selected_player_id,
-                                    player_name=player_data['player_info_name'],
-                                    opponent_abbr=opponent_abbr,
-                                    game_date=game_date_str,
-                                    stat=stat,
-                                    prediction_dict=predictions[stat],
-                                    features_dict=player_features,
-                                    vegas_line=line_val if line_val and line_val > 0 else None
-                                )
-                                pt.log_prediction(record)
-                        
-                        st.success("✅ Predictions logged! You can update with actual results after the game.")
-                    except Exception as e:
-                        st.error(f"Error logging prediction: {e}")
-                
-                # Show accuracy history
-                with st.expander("📈 Prediction Accuracy History"):
-                    accuracy_metrics = pt.calculate_accuracy_metrics()
-                    
-                    if accuracy_metrics:
-                        st.markdown("**Overall Accuracy by Stat**")
-                        
-                        acc_data = []
-                        for stat, metrics in accuracy_metrics.items():
-                            acc_data.append({
-                                'Stat': stat,
-                                'Predictions': metrics['count'],
-                                'MAE': metrics['mae'],
-                                'Within 10%': f"{metrics['within_10_pct']}%",
-                                'Within 20%': f"{metrics['within_20_pct']}%",
-                                'vs Line': f"{metrics['vs_line_accuracy']}%" if metrics['vs_line_accuracy'] else "N/A"
-                            })
-                        
-                        if acc_data:
-                            st.dataframe(pd.DataFrame(acc_data), width='stretch', hide_index=True)
-                        
-                        # By confidence
-                        by_conf = pt.calculate_accuracy_by_confidence()
-                        if by_conf:
-                            st.markdown("**Accuracy by Confidence Level**")
-                            conf_data = []
-                            for conf, metrics in by_conf.items():
-                                conf_data.append({
-                                    'Confidence': conf.capitalize(),
-                                    'Count': metrics['count'],
-                                    'MAE': metrics['mae'],
-                                    'Within 10%': f"{metrics['within_10_pct']}%"
-                                })
-                            st.dataframe(pd.DataFrame(conf_data), width='stretch', hide_index=True)
-                    else:
-                        st.info("No prediction history yet. Log predictions and update with actual results to track accuracy.")
-                
                 # Model Backtest Section
                 # Initialize backtest session state
                 if 'backtest_results' not in st.session_state:
@@ -2725,17 +2929,157 @@ Estimated Cost: {preview['estimated_cost']}
                                 - **Accuracy**: {pts_summary.within_10_pct}% of predictions within 10% of actual
                                 """)
             else:
-                st.warning("Could not generate predictions. Please try again.")
+                st.info("ℹ️ Select a matchup above to generate predictions for this player.")
+                st.markdown("""
+                **How predictions work:**
+                1. We analyze the player's recent performance (L3, L5, L10, Season)
+                2. We adjust for opponent defensive strength and pace
+                3. We factor in home/away splits and rest days
+                4. We consider historical performance against this opponent
+                
+                Select a date and matchup above to see predictions!
+                """)
         else:
-            st.warning("⚠️ Could not determine opponent. Please select a valid matchup.")
-    else:
-        st.info("ℹ️ Select a matchup above to generate predictions for this player.")
-        st.markdown("""
-        **How predictions work:**
-        1. We analyze the player's recent performance (L3, L5, L10, Season)
-        2. We adjust for opponent defensive strength and pace
-        3. We factor in home/away splits and rest days
-        4. We consider historical performance against this opponent
+            st.info("ℹ️ Select a matchup above to generate predictions for this player.")
+            st.markdown("""
+            **How predictions work:**
+            1. We analyze the player's recent performance (L3, L5, L10, Season)
+            2. We adjust for opponent defensive strength and pace
+            3. We factor in home/away splits and rest days
+            4. We consider historical performance against this opponent
+            
+            Select a date and matchup above to see predictions!
+            """)
+
+with tab3:
+    # YoY Data tab
+    st.subheader("Historical Season Stats")
+    
+    # Get YoY data for all seasons
+    @st.cache_data
+    def get_cached_yoy_data(player_id, players_df):
+        """Cache YoY player data to avoid repeated API calls"""
+        return pf.get_player_yoy_data(player_id, players_df)
+    
+    yoy_data = get_cached_yoy_data(selected_player_id, players_df)
+    
+    if yoy_data and yoy_data.get('averages_df') is not None and len(yoy_data['averages_df']) > 0:
+        show_yoy_comparison = st.toggle("Show +/- vs Current Season", value=False, key="show_yoy_comparison")
         
-        Select a date and matchup above to see predictions!
-        """)
+        # Create heatmap styling for YoY data
+        yoy_averages_df = yoy_data['averages_df'].copy()
+        
+        # Ensure all numeric columns are formatted to 1 decimal place
+        numeric_cols_to_format = ['MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', '2PM', '2PA', '3PM', '3PA', 'FTM', 'FTA']
+        for col in numeric_cols_to_format:
+            if col in yoy_averages_df.columns:
+                yoy_averages_df[col] = yoy_averages_df[col].apply(lambda x: f"{float(x):.1f}" if pd.notna(x) and str(x) != '' else x)
+        
+        # Heatmap comparing each season to current season
+        def style_yoy_heatmap(row):
+            styles = [''] * len(row)
+            
+            if not show_yoy_comparison or player_data.get('averages_df') is None:
+                return styles
+            
+            current_season_avg = player_data['averages_df'].iloc[-1]  # Last row is current season
+            numeric_cols = ['MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', '2PM', '2PA', '3PM', '3PA', 'FTM', 'FTA']
+            pct_cols = ['2P%', '3P%', 'FT%']
+            
+            for i, col in enumerate(yoy_averages_df.columns):
+                if col == 'Period' or '+/-' in col:
+                    continue
+                
+                if col in numeric_cols:
+                    try:
+                        current_val_str = str(row[col]).replace(',', '')
+                        current_season_val_str = str(current_season_avg[col]).replace(',', '')
+                        current_val = float(current_val_str)
+                        current_season_val = float(current_season_val_str)
+                        
+                        if current_val > current_season_val:
+                            diff_pct = ((current_val - current_season_val) / current_season_val * 100) if current_season_val > 0 else 0
+                            intensity = min(diff_pct / 20, 1.0)
+                            green_intensity = int(200 + (55 * intensity))
+                            styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
+                        elif current_val < current_season_val:
+                            diff_pct = ((current_season_val - current_val) / current_season_val * 100) if current_season_val > 0 else 0
+                            intensity = min(diff_pct / 20, 1.0)
+                            red_intensity = int(200 + (55 * intensity))
+                            styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
+                        else:
+                            styles[i] = 'background-color: rgb(240, 240, 240);'
+                    except (ValueError, TypeError, KeyError):
+                        pass
+                elif col in pct_cols:
+                    try:
+                        current_str = str(row[col]).replace('%', '')
+                        current_season_str = str(current_season_avg[col]).replace('%', '')
+                        current_val = float(current_str)
+                        current_season_val = float(current_season_str)
+                        
+                        if current_val > current_season_val:
+                            diff_pct = ((current_val - current_season_val) / current_season_val * 100) if current_season_val > 0 else 0
+                            intensity = min(diff_pct / 20, 1.0)
+                            green_intensity = int(200 + (55 * intensity))
+                            styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
+                        elif current_val < current_season_val:
+                            diff_pct = ((current_season_val - current_val) / current_season_val * 100) if current_season_val > 0 else 0
+                            intensity = min(diff_pct / 20, 1.0)
+                            red_intensity = int(200 + (55 * intensity))
+                            styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
+                        else:
+                            styles[i] = 'background-color: rgb(240, 240, 240);'
+                    except (ValueError, TypeError, KeyError):
+                        pass
+            
+            return styles
+        
+        # Add comparison columns if toggle is on
+        if show_yoy_comparison:
+            # Get current season averages for comparison
+            if player_data.get('averages_df') is not None:
+                current_season_avg = player_data['averages_df'].iloc[-1]  # Last row is current season
+                
+                # Create comparison dataframe
+                yoy_comparison_df = yoy_averages_df.copy()
+                
+                numeric_cols = ['MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', '2PM', '2PA', '3PM', '3PA', 'FTM', 'FTA']
+                pct_cols = ['2P%', '3P%', 'FT%']
+                
+                # Insert comparison columns after each stat
+                new_cols = ['Period']
+                for col in yoy_averages_df.columns[1:]:  # Skip Period column
+                    new_cols.append(col)
+                    if col in numeric_cols:
+                        # Add +/- column comparing to current season
+                        try:
+                            yoy_comparison_df[f'{col} +/-'] = yoy_comparison_df.apply(
+                                lambda row: f"{round(float(str(row[col]).replace(',', '')) - float(str(current_season_avg[col]).replace(',', '')), 1):+.1f}" if pd.notna(row[col]) and str(row[col]) != '' else '—',
+                                axis=1
+                            )
+                            new_cols.append(f'{col} +/-')
+                        except (KeyError, ValueError):
+                            pass
+                    elif col in pct_cols:
+                        # Add +/- column for percentages
+                        try:
+                            yoy_comparison_df[f'{col} +/-'] = yoy_comparison_df.apply(
+                                lambda row: f"{round(float(str(row[col]).replace('%', '')) - float(str(current_season_avg[col]).replace('%', '')), 1):+.1f}%" if pd.notna(row[col]) and str(row[col]) != '' else '—',
+                                axis=1
+                            )
+                            new_cols.append(f'{col} +/-')
+                        except (KeyError, ValueError):
+                            pass
+                
+                # Reorder columns
+                yoy_comparison_df = yoy_comparison_df[new_cols]
+                styled_yoy_df = yoy_comparison_df.style.apply(style_yoy_heatmap, axis=1)
+            else:
+                styled_yoy_df = yoy_averages_df.style.apply(style_yoy_heatmap, axis=1)
+        else:
+            styled_yoy_df = yoy_averages_df.style.apply(style_yoy_heatmap, axis=1)
+        
+        st.dataframe(styled_yoy_df, width='stretch', hide_index=True)
+    else:
+        st.info("No historical season stats available for this player.")

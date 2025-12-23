@@ -135,25 +135,50 @@ class PlayerStatPredictor:
         matchup_data = player_features.get('matchup', {})
         matchup_adjustments = matchup_data.get('matchup_adjustments', {})
         
+        # Check if player is a 3-point specialist (for stronger matchup adjustments)
+        season_fg3m_check = rolling_avgs.get('Season', {}).get('FG3M', 0.0)
+        season_ppg_check = rolling_avgs.get('Season', {}).get('PTS', 0.0)
+        pts_from_3s_check = season_fg3m_check * 3.0
+        pct_pts_from_3s_check = (pts_from_3s_check / season_ppg_check * 100) if season_ppg_check > 0 else 0.0
+        is_3pt_specialist_check = pct_pts_from_3s_check >= 50.0
+        
         if stat == 'PTS':
             # Apply overall matchup factor for points
             overall_factor = matchup_adjustments.get('overall_pts_factor', 1.0)
             if overall_factor != 1.0:
-                # Apply a moderate portion of the matchup adjustment (50%)
-                matchup_adjustment = 1.0 + 0.5 * (overall_factor - 1.0)
+                # 3-point specialists get stronger matchup adjustments (40% vs 30%)
+                # They're more matchup-dependent - weak 3PT defense = huge games
+                matchup_weight = 0.40 if is_3pt_specialist_check else 0.30
+                raw_matchup_adjustment = 1.0 + matchup_weight * (overall_factor - 1.0)
+                
+                # Cap matchup adjustment - higher for 3-point specialists
+                if is_3pt_specialist_check:
+                    max_matchup_adj = 1.20  # Allow up to 20% boost for 3PT specialists
+                    min_matchup_adj = 0.80  # Allow down to 20% reduction
+                else:
+                    max_matchup_adj = 1.15  # Standard 15% cap
+                    min_matchup_adj = 0.85
+                
+                if raw_matchup_adjustment > max_matchup_adj:
+                    matchup_adjustment = max_matchup_adj
+                elif raw_matchup_adjustment < min_matchup_adj:
+                    matchup_adjustment = min_matchup_adj
+                else:
+                    matchup_adjustment = raw_matchup_adjustment
+                
                 adjusted_prediction *= matchup_adjustment
                 
                 player_breakdown = matchup_data.get('player_scoring_breakdown', {})
                 opp_vuln = matchup_data.get('opponent_vulnerabilities', {})
                 
-                if overall_factor > 1.0:
+                if matchup_adjustment > 1.0:
                     factors['matchup'] = (
-                        f"Favorable matchup (+{round((overall_factor-1)*100, 1)}%): "
+                        f"Favorable matchup (+{round((matchup_adjustment-1)*100, 1)}%): "
                         f"Paint {player_breakdown.get('pts_paint', 0)} vs opp allows {opp_vuln.get('opp_pts_paint_allowed', 0)}"
                     )
                 else:
                     factors['matchup'] = (
-                        f"Tough matchup ({round((overall_factor-1)*100, 1)}%): "
+                        f"Tough matchup ({round((matchup_adjustment-1)*100, 1)}%): "
                         f"Paint {player_breakdown.get('pts_paint', 0)} vs opp allows {opp_vuln.get('opp_pts_paint_allowed', 0)}"
                     )
         
@@ -248,18 +273,17 @@ class PlayerStatPredictor:
         vs_opp_games = vs_opp.get('games_played', 0)
         
         if similar_players_data.get('confidence') != 'low' and similar_players_data.get('sample_size', 0) > 0:
-            # Determine weight based on player's own sample size vs opponent
-            # Also reduce weight if confidence is medium (likely due to low-minute similar players)
+            # REDUCED base weights for more conservative similar players adjustments
             base_weight = 0.0
             if vs_opp_games == 0:
-                # No games vs opponent - use similar players more heavily (20%)
-                base_weight = 0.20
-            elif vs_opp_games == 1:
-                # Only 1 game - use similar players moderately (15%)
+                # No games vs opponent - use similar players moderately (15% instead of 20%)
                 base_weight = 0.15
-            else:
-                # 2+ games - use similar players lightly (10%)
+            elif vs_opp_games == 1:
+                # Only 1 game - use similar players lightly (10% instead of 15%)
                 base_weight = 0.10
+            else:
+                # 2+ games - use similar players very lightly (5% instead of 10%)
+                base_weight = 0.05
             
             # Reduce weight further if confidence is medium (indicates low-minute similar players)
             confidence = similar_players_data.get('confidence', 'low')
@@ -270,44 +294,73 @@ class PlayerStatPredictor:
             else:
                 similar_weight = base_weight
             
-            # Apply adjustment based on stat
+            # Apply adjustment based on stat with CAPS
             if stat == 'PTS':
                 sim_adjustment_factor = similar_players_data.get('pts_adjustment_factor', 1.0)
                 if sim_adjustment_factor != 1.0:
+                    # Cap the raw adjustment factor at ±20% before applying weight
+                    capped_sim_factor = max(0.80, min(1.20, sim_adjustment_factor))
+                    
                     # Blend: (1 - weight) * current + weight * similar_players_adjustment
-                    similar_adjustment = 1.0 + similar_weight * (sim_adjustment_factor - 1.0)
+                    similar_adjustment = 1.0 + similar_weight * (capped_sim_factor - 1.0)
                     adjusted_prediction *= similar_adjustment
                     
                     sample_size = similar_players_data.get('sample_size', 0)
                     confidence = similar_players_data.get('confidence', 'low')
                     factors['similar_players'] = (
-                        f"Similar players vs opponent: {round((sim_adjustment_factor-1)*100, 1)}% "
+                        f"Similar players vs opponent: {round((capped_sim_factor-1)*100, 1)}% "
                         f"({sample_size} players, {confidence} confidence)"
                     )
             elif stat == 'REB':
                 sim_adjustment_factor = similar_players_data.get('reb_adjustment_factor', 1.0)
                 if sim_adjustment_factor != 1.0:
-                    similar_adjustment = 1.0 + similar_weight * (sim_adjustment_factor - 1.0)
+                    # Cap at ±20%
+                    capped_sim_factor = max(0.80, min(1.20, sim_adjustment_factor))
+                    similar_adjustment = 1.0 + similar_weight * (capped_sim_factor - 1.0)
                     adjusted_prediction *= similar_adjustment
                     
                     sample_size = similar_players_data.get('sample_size', 0)
                     confidence = similar_players_data.get('confidence', 'low')
                     factors['similar_players'] = (
-                        f"Similar players vs opponent: {round((sim_adjustment_factor-1)*100, 1)}% "
+                        f"Similar players vs opponent: {round((capped_sim_factor-1)*100, 1)}% "
                         f"({sample_size} players, {confidence} confidence)"
                     )
             elif stat == 'AST':
                 sim_adjustment_factor = similar_players_data.get('ast_adjustment_factor', 1.0)
                 if sim_adjustment_factor != 1.0:
-                    similar_adjustment = 1.0 + similar_weight * (sim_adjustment_factor - 1.0)
+                    # Cap at ±20%
+                    capped_sim_factor = max(0.80, min(1.20, sim_adjustment_factor))
+                    similar_adjustment = 1.0 + similar_weight * (capped_sim_factor - 1.0)
                     adjusted_prediction *= similar_adjustment
                     
                     sample_size = similar_players_data.get('sample_size', 0)
                     confidence = similar_players_data.get('confidence', 'low')
                     factors['similar_players'] = (
-                        f"Similar players vs opponent: {round((sim_adjustment_factor-1)*100, 1)}% "
+                        f"Similar players vs opponent: {round((capped_sim_factor-1)*100, 1)}% "
                         f"({sample_size} players, {confidence} confidence)"
                     )
+            
+            # Defensive game-planning adjustment (based on similar players)
+            # If similar players consistently struggle vs this opponent, opponent may game-plan
+            if stat == 'PTS' and similar_players_data.get('confidence') in ['high', 'medium']:
+                sim_sample_size = similar_players_data.get('sample_size', 0)
+                if sim_sample_size >= 3:  # Need meaningful sample
+                    pts_adjustment = similar_players_data.get('pts_adjustment_factor', 1.0)
+                    
+                    # If similar players perform significantly worse vs opponent (< 0.85x), 
+                    # opponent may be game-planning against this player type
+                    if pts_adjustment < 0.85:
+                        # Apply defensive game-planning penalty
+                        # More penalty if sample is larger and adjustment is more negative
+                        gameplan_penalty = min(0.08, (0.85 - pts_adjustment) * 0.3)  # Max 8% penalty
+                        gameplan_factor = 1.0 - gameplan_penalty
+                        adjusted_prediction *= gameplan_factor
+                        
+                        factors['defensive_gameplan'] = (
+                            f"Opponent game-planning vs similar players: "
+                            f"-{round(gameplan_penalty*100, 1)}% "
+                            f"(similar players avg {round((pts_adjustment-1)*100, 1)}% vs opponent)"
+                        )
         
         # Home/Away adjustment
         is_home = player_features.get('is_home', True)
@@ -328,6 +381,26 @@ class PlayerStatPredictor:
         # Minutes scaling adjustment (if projected_minutes provided)
         projected_minutes = player_features.get('projected_minutes')
         avg_minutes = rolling_avgs.get('Season', {}).get('MIN', 0.0)
+        
+        # Fatigue factor - reduce predictions for players with high recent minutes
+        # This accounts for cumulative fatigue, not just rest days
+        # Calculate this BEFORE minutes scaling so we use season average
+        # Ultra-elite players are exempt - they can handle high minutes without fatigue penalty
+        recent_minutes = rolling_avgs.get('L5', {}).get('MIN', avg_minutes if avg_minutes > 0 else 25.0)
+        season_ppg_for_fatigue = player_features.get('season_ppg', rolling_avgs.get('Season', {}).get('PTS', 0.0))
+        if season_ppg_for_fatigue == 0:
+            season_ppg_for_fatigue = rolling_avgs.get('Season', {}).get('PTS', 0.0)
+        
+        # Only apply fatigue penalty to non-ultra-elite players
+        if season_ppg_for_fatigue < 27 and avg_minutes > 0 and recent_minutes > avg_minutes * 1.15:  # Playing 15%+ more than season avg
+            # High recent minutes = fatigue penalty
+            minutes_over_avg = recent_minutes - avg_minutes
+            fatigue_penalty = min(0.05, minutes_over_avg / 100.0)  # Max 5% penalty
+            fatigue_factor = 1.0 - fatigue_penalty
+            adjusted_prediction *= fatigue_factor
+            
+            if fatigue_factor < 1.0:
+                factors['fatigue'] = f"High recent minutes ({recent_minutes:.1f} vs {avg_minutes:.1f} avg): -{round(fatigue_penalty*100, 1)}%"
         
         if projected_minutes is not None and avg_minutes > 0 and projected_minutes != avg_minutes:
             minutes_ratio = projected_minutes / avg_minutes
@@ -425,6 +498,49 @@ class PlayerStatPredictor:
                     factors['regression_tier'] = f"{tier_label} (Guard)"
                 else:
                     factors['regression_tier'] = tier_label
+        
+        # Cap total combined adjustments to prevent extreme predictions
+        # Ultra-elite players (27+ PPG) and 3-point specialists get higher cap to allow for variance/ceiling games
+        # Other players get standard cap to prevent over-prediction
+        season_ppg = player_features.get('season_ppg', rolling_avgs.get('Season', {}).get('PTS', 0.0))
+        if season_ppg == 0:
+            season_ppg = rolling_avgs.get('Season', {}).get('PTS', 0.0)
+        
+        # Identify 3-point specialists (players who get 50%+ of points from 3s)
+        # 3-point specialists have inherently high variance - their production depends heavily on shot-making
+        season_fg3m = rolling_avgs.get('Season', {}).get('FG3M', 0.0)
+        pts_from_3s = season_fg3m * 3.0  # Each 3-pointer = 3 points
+        pct_pts_from_3s = (pts_from_3s / season_ppg * 100) if season_ppg > 0 else 0.0
+        is_3pt_specialist = pct_pts_from_3s >= 50.0  # 50%+ of points from 3s
+        
+        if season_ppg >= 27:  # Ultra-elite players
+            # Higher cap for ultra-elite players who can have huge variance games
+            max_total_multiplier = 1.40  # Allow up to 40% boost
+            min_total_multiplier = 0.70  # Allow down to 30% reduction
+        elif is_3pt_specialist:  # 3-point specialists (high variance)
+            # Higher cap for 3-point specialists who can have huge variance games
+            # They can go 0-10 from 3 (2 points) or 7-10 from 3 (23 points) - need variance allowance
+            max_total_multiplier = 1.35  # Allow up to 35% boost
+            min_total_multiplier = 0.70  # Allow down to 30% reduction
+        else:
+            # Standard cap for other players
+            max_total_multiplier = 1.25  # Max 25% boost
+            min_total_multiplier = 0.75  # Max 25% reduction
+        
+        if adjusted_prediction > base_prediction * max_total_multiplier:
+            adjusted_prediction = base_prediction * max_total_multiplier
+            cap_pct = round((max_total_multiplier - 1) * 100)
+            if is_3pt_specialist:
+                factors['capped'] = f"Total adjustments capped at +{cap_pct}% (3PT specialist - high variance)"
+            else:
+                factors['capped'] = f"Total adjustments capped at +{cap_pct}%"
+        elif adjusted_prediction < base_prediction * min_total_multiplier:
+            adjusted_prediction = base_prediction * min_total_multiplier
+            cap_pct = round((1 - min_total_multiplier) * 100)
+            if is_3pt_specialist:
+                factors['capped'] = f"Total adjustments capped at -{cap_pct}% (3PT specialist - high variance)"
+            else:
+                factors['capped'] = f"Total adjustments capped at -{cap_pct}%"
         
         breakdown['adjusted_prediction'] = round(adjusted_prediction, 1)
         
@@ -821,7 +937,8 @@ def find_best_value_plays(
     all_props: Dict[str, Dict],
     min_edge_pct: float = 0.0,
     confidence_filter: List[str] = None,
-    stat_filter: List[str] = None
+    stat_filter: List[str] = None,
+    injury_adjustments_map: Dict[str, Dict] = None
 ) -> List[Dict]:
     """
     Find best value plays by comparing predictions to props.
@@ -876,7 +993,17 @@ def find_best_value_plays(
             if pred.confidence not in confidence_filter:
                 continue
             
-            edge, edge_pct, lean = calculate_edge(pred.value, prop.line)
+            # Apply injury adjustments if available
+            prediction_value = pred.value
+            if injury_adjustments_map and player_id in injury_adjustments_map:
+                import injury_adjustments as inj
+                injury_adj = injury_adjustments_map[player_id]
+                if stat in injury_adj:
+                    prediction_value = inj.apply_injury_adjustments(
+                        pred.value, stat, injury_adj
+                    )
+            
+            edge, edge_pct, lean = calculate_edge(prediction_value, prop.line)
             
             # Apply minimum edge filter
             if abs(edge_pct) < min_edge_pct:
@@ -889,7 +1016,7 @@ def find_best_value_plays(
                 'opponent': opponent_abbr,
                 'location': 'Home' if is_home else 'Away',
                 'stat': stat,
-                'prediction': pred.value,
+                'prediction': prediction_value,  # Use injury-adjusted value
                 'line': prop.line,
                 'edge': edge,
                 'edge_pct': edge_pct,
@@ -901,6 +1028,16 @@ def find_best_value_plays(
     
     # Sort by absolute edge percentage (descending)
     plays.sort(key=lambda x: abs(x['edge_pct']), reverse=True)
+    
+    # Debug: Check for systematic bias
+    if len(plays) > 0:
+        over_count = sum(1 for p in plays if 'Over' in p['lean'])
+        under_count = sum(1 for p in plays if 'Under' in p['lean'])
+        avg_edge = sum(p['edge'] for p in plays) / len(plays)
+        
+        # Log bias info (can be checked in console)
+        if abs(avg_edge) > 1.0:
+            print(f"⚠️ Systematic bias detected: Average edge = {avg_edge:.2f} ({over_count} Over, {under_count} Under)")
     
     return plays
 

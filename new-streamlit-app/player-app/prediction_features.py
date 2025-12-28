@@ -23,6 +23,7 @@ LEAGUE_ID = "00"
 
 
 @st.cache_data(ttl=1800, show_spinner="Fetching all player game logs...")
+@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def get_bulk_player_game_logs(season: str = CURRENT_SEASON) -> pd.DataFrame:
     """
     Fetch ALL player game logs for the season in ONE API call.

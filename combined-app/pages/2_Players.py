@@ -16,9 +16,524 @@ import injury_report as ir
 import player_similarity as ps
 import pandas as pd
 import nba_api.stats.endpoints
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import math
 import requests
+
+def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=None, bulk_game_logs=None, game_date=None):
+    """
+    Normalize minutes for each team to sum to exactly target_minutes (default 240).
+    Scales all stats proportionally based on minutes changes.
+    Ensures minutes sum to exactly target_minutes even after capping at 48.
+    
+    Args:
+        statlines_list: List of statline dicts with 'MIN', 'is_away', and stat fields
+        target_minutes: Target total minutes per team (default 240)
+        out_player_ids: Set of player IDs marked OUT/DOUBTFUL (optional)
+        bulk_game_logs: DataFrame with all player game logs for recent activity check (optional)
+        game_date: Date of the game (YYYY-MM-DD) for recent activity check (optional)
+    
+    Returns:
+        Updated statlines_list with normalized minutes and scaled stats
+    """
+    # Separate by team
+    away_statlines = [s for s in statlines_list if s['is_away']]
+    home_statlines = [s for s in statlines_list if not s['is_away']]
+    
+    def normalize_team(team_statlines, is_away_team):
+        if not team_statlines:
+            return
+        
+        # Store original minutes for scaling
+        for statline in team_statlines:
+            statline['_original_min'] = statline['MIN']
+        
+        # Get original season minutes to determine player role
+        # Use _original_season_minutes if available, otherwise use _original_min
+        # IMPORTANT: Set this BEFORE filtering so we can use it in filter logic
+        for statline in team_statlines:
+            original_season_min = statline.get('_original_season_minutes')
+            if original_season_min is None:
+                original_season_min = statline.get('_original_min', statline['MIN'])
+            statline['_role_baseline_min'] = original_season_min
+        
+        # FILTER OUT PLAYERS WHO SHOULDN'T PLAY BEFORE SELECTING TOP 10
+        # IMPORTANT: Always modify the original list in place, never create new lists
+        # 1. Filter out players marked OUT/DOUBTFUL by setting their minutes to 0
+        if out_player_ids:
+            for statline in team_statlines:
+                if statline.get('player_id') in out_player_ids:
+                    statline['MIN'] = 0.0
+        
+        # 2. Filter out players who haven't played recently (if bulk_game_logs available)
+        # Set their minutes to 0 instead of removing them from the list
+        if bulk_game_logs is not None and len(bulk_game_logs) > 0 and game_date:
+            try:
+                game_date_dt = pd.to_datetime(game_date)
+                # Check if player has played in last 14 days
+                cutoff_date = game_date_dt - timedelta(days=14)
+                
+                active_player_ids = set()
+                players_with_any_games = set()  # Track players who have ANY game logs
+                
+                for statline in team_statlines:
+                    player_id_str = statline.get('player_id')
+                    if not player_id_str:
+                        continue
+                    
+                    try:
+                        player_id_int = int(player_id_str)
+                        # Get ALL player's games (not just recent)
+                        all_player_logs = bulk_game_logs[
+                            bulk_game_logs['PLAYER_ID'] == player_id_int
+                        ]
+                        
+                        # Track if player has ANY game logs at all
+                        if len(all_player_logs) > 0:
+                            players_with_any_games.add(player_id_str)
+                            
+                            # Get player's recent games (last 14 days)
+                            player_logs = all_player_logs[
+                                pd.to_datetime(all_player_logs['GAME_DATE']) >= cutoff_date
+                            ]
+                            
+                            # If player has played at least 1 game in last 14 days, include them
+                            if len(player_logs) > 0:
+                                active_player_ids.add(player_id_str)
+                    except (ValueError, TypeError):
+                        # If we can't parse player_id, skip this check for this player
+                        continue
+                
+                # Set minutes to 0 for inactive players (unless they're stars/starters)
+                # CRITICAL FIX: Exclude players who have NEVER played in NBA regardless of role
+                for statline in team_statlines:
+                    player_id_str = statline.get('player_id')
+                    role_baseline = statline.get('_role_baseline_min', statline.get('_original_season_minutes', 0))
+                    
+                    # If player has NO game logs at all, exclude them regardless of role
+                    if player_id_str not in players_with_any_games:
+                        statline['MIN'] = 0.0
+                    # Only set to 0 if not active AND not a star/starter (existing logic)
+                    elif player_id_str not in active_player_ids and role_baseline < 22:
+                        statline['MIN'] = 0.0
+            except Exception as e:
+                # If there's an error checking recent activity, skip this filter
+                pass
+        
+        # Limit to top 10 players per team, prioritizing by role (stars/starters first), then by projected minutes
+        # Sort by role priority first (higher role_baseline_min = higher priority), then by current MIN
+        def sort_key(statline):
+            baseline = statline.get('_role_baseline_min', 0)
+            current_min = statline.get('MIN', 0)
+            # Return tuple: (role_priority, current_min) where role_priority is inverted (higher = better)
+            # Stars (>=32) get priority 100, Starters (>=28) get 80, Rotation (>=22) get 60, Bench (>=15) get 40, Deep Bench get 20
+            if baseline >= 32:
+                role_priority = 100
+            elif baseline >= 28:
+                role_priority = 80
+            elif baseline >= 22:
+                role_priority = 60
+            elif baseline >= 15:
+                role_priority = 40
+            else:
+                role_priority = 20
+            return (role_priority, current_min)
+        
+        team_statlines.sort(key=sort_key, reverse=True)
+        
+        # Enforce strict 10-player limit
+        # Keep top 10 players by priority (stars/starters prioritized, but still max 10 total)
+        stars_and_starters = [s for s in team_statlines if s.get('_role_baseline_min', 0) >= 28]
+        other_players = [s for s in team_statlines if s.get('_role_baseline_min', 0) < 28]
+        
+        # If we have more than 10 stars/starters, keep only top 10 by priority
+        if len(stars_and_starters) > 10:
+            stars_and_starters = stars_and_starters[:10]
+            # No room for other players
+            players_to_keep = stars_and_starters
+        else:
+            # Keep all stars/starters, then fill remaining slots with other players
+            remaining_slots = 10 - len(stars_and_starters)
+            players_to_keep = stars_and_starters + other_players[:max(0, remaining_slots)]
+        
+        # Create set of player IDs to keep for reliable comparison
+        # Filter out None values to avoid comparison issues
+        players_to_keep_ids = {s.get('player_id') for s in players_to_keep if s.get('player_id') is not None}
+        
+        # Set minutes to 0 for players not in top 10
+        for statline in team_statlines:
+            player_id = statline.get('player_id')
+            # If player_id is None or not in keep list, set minutes to 0
+            if player_id is None or player_id not in players_to_keep_ids:
+                statline['MIN'] = 0.0
+        
+        # CRITICAL: Double-check we have exactly 10 or fewer players with MIN > 0
+        # Get all players with MIN > 0
+        active_players_check = [s for s in team_statlines if s.get('MIN', 0) > 0.01]
+        
+        # If we have more than 10, force it down to 10 by keeping only top 10 by minutes
+        if len(active_players_check) > 10:
+            # Sort by minutes descending
+            active_players_check.sort(key=lambda x: x.get('MIN', 0), reverse=True)
+            # Set minutes to 0 for players beyond the top 10
+            for statline in active_players_check[10:]:
+                statline['MIN'] = 0.0
+            # Keep only top 10
+            active_players_check = active_players_check[:10]
+        
+        # Filter out players with 0 minutes for normalization (but keep them in the list)
+        active_players = [s for s in team_statlines if s.get('MIN', 0) > 0.01]
+        
+        # Final safety check: ensure we have exactly 10 or fewer active players
+        if len(active_players) > 10:
+            # If somehow we still have more than 10, keep only top 10 by current minutes
+            active_players.sort(key=lambda x: x.get('MIN', 0), reverse=True)
+            excess_players = active_players[10:]
+            for statline in excess_players:
+                statline['MIN'] = 0.0
+            active_players = active_players[:10]
+        
+        if not active_players:
+            return
+        
+        # Use only active players for normalization calculations
+        team_statlines_for_norm = active_players
+        
+        # Categorize players by role based on original season minutes (only active players)
+        # Stars: >= 32 MPG, Starters: >= 28 MPG, Rotation: >= 22 MPG, Bench: >= 15 MPG, Deep Bench: < 15 MPG
+        stars = [s for s in team_statlines_for_norm if s['_role_baseline_min'] >= 32]
+        starters = [s for s in team_statlines_for_norm if 28 <= s['_role_baseline_min'] < 32]
+        rotation = [s for s in team_statlines_for_norm if 22 <= s['_role_baseline_min'] < 28]
+        bench = [s for s in team_statlines_for_norm if 15 <= s['_role_baseline_min'] < 22]
+        deep_bench = [s for s in team_statlines_for_norm if s['_role_baseline_min'] < 15]
+        
+        # Distribute remaining minutes prioritizing higher-role players
+        # Priority order: Stars > Starters > Rotation > Bench > Deep Bench
+        priority_groups = [stars, starters, rotation, bench, deep_bench]
+        
+        # Calculate initial total (use only active players)
+        total_minutes = sum(s['MIN'] for s in team_statlines_for_norm)
+        
+        if total_minutes <= 0:
+            return
+        
+        # Step 1: Scale proportionally to target
+        scale_factor = target_minutes / total_minutes
+        for statline in team_statlines_for_norm:
+            statline['MIN'] *= scale_factor
+        
+        # Step 2: Apply role-based floors and targets
+        # Stars (>=32 MPG baseline) should get closer to their baseline (33-38 range)
+        # Starters (28-31 MPG baseline) should get closer to their baseline (28-35 range)
+        for statline in stars:
+            baseline = statline['_role_baseline_min']
+            # Stars: target their baseline, but ensure minimum 32 MPG
+            target_min = max(32.0, baseline * 0.85)  # At least 85% of baseline, minimum 32
+            if statline['MIN'] < target_min:
+                statline['MIN'] = target_min
+        
+        for statline in starters:
+            baseline = statline['_role_baseline_min']
+            # Starters: target their baseline, but ensure minimum 26 MPG
+            target_min = max(26.0, baseline * 0.85)  # At least 85% of baseline, minimum 26
+            if statline['MIN'] < target_min:
+                statline['MIN'] = target_min
+        
+        # Step 3: Check if floors pushed us over target
+        total_after_floors = sum(s['MIN'] for s in team_statlines_for_norm)
+        if total_after_floors > target_minutes:
+            # Scale down, but protect stars/starters more
+            # First, try to reduce lower-role players before scaling down stars/starters
+            excess = total_after_floors - target_minutes
+            
+            # Calculate how much we can reduce from lower-role players
+            reducible_from_lower = 0.0
+            for group in [deep_bench, bench, rotation]:
+                for statline in group:
+                    current = statline['MIN']
+                    # Can reduce up to 50% of their minutes
+                    reducible_from_lower += current * 0.5
+            
+            if reducible_from_lower >= excess:
+                # Can cover excess by reducing lower-role players only
+                scale_down_lower = 1.0 - (excess / reducible_from_lower)
+                for group in [deep_bench, bench, rotation]:
+                    for statline in group:
+                        statline['MIN'] *= scale_down_lower
+            else:
+                # Need to scale down everyone, but less aggressively for stars/starters
+                # Scale stars/starters by 95%, others by 100%
+                for statline in stars + starters:
+                    statline['MIN'] *= 0.95  # Only reduce by 5%
+                
+                # Recalculate and scale others more
+                remaining_excess = target_minutes - sum(s['MIN'] for s in team_statlines_for_norm)
+                if remaining_excess < 0:
+                    scale_down = target_minutes / sum(s['MIN'] for s in team_statlines_for_norm)
+                    for statline in rotation + bench + deep_bench:
+                        statline['MIN'] *= scale_down
+        
+        # Step 4: Apply role-based caps
+        for statline in stars:
+            if statline['MIN'] > 40.0:
+                statline['MIN'] = 40.0
+        for statline in starters:
+            if statline['MIN'] > 38.0:
+                statline['MIN'] = 38.0
+        for statline in rotation:
+            if statline['MIN'] > 32.0:
+                statline['MIN'] = 32.0
+        for statline in bench:
+            if statline['MIN'] > 25.0:
+                statline['MIN'] = 25.0
+        for statline in deep_bench:
+            if statline['MIN'] > 12.0:
+                statline['MIN'] = 12.0
+        
+        # Step 5: Distribute remaining minutes if under target
+        capped_total = sum(s['MIN'] for s in team_statlines_for_norm)
+        remaining_minutes = target_minutes - capped_total
+        
+        if remaining_minutes > 0.01:
+            # Distribute remaining minutes prioritizing higher-role players
+            distributed = 0.0
+            for group in priority_groups:
+                if abs(remaining_minutes - distributed) < 0.01:
+                    break
+                
+                # Get players in this group who aren't at their cap
+                available_players = []
+                for statline in group:
+                    baseline = statline['_role_baseline_min']
+                    cap = 40.0 if baseline >= 32 else (38.0 if baseline >= 28 else (32.0 if baseline >= 22 else (25.0 if baseline >= 15 else 12.0)))
+                    if statline['MIN'] < cap - 0.01:
+                        available_players.append(statline)
+                
+                if not available_players:
+                    continue
+                
+                # Distribute proportionally based on current minutes
+                group_total = sum(s['MIN'] for s in available_players)
+                if group_total > 0:
+                    group_remaining = remaining_minutes - distributed
+                    for statline in available_players:
+                        baseline = statline['_role_baseline_min']
+                        cap = 40.0 if baseline >= 32 else (38.0 if baseline >= 28 else (32.0 if baseline >= 22 else (25.0 if baseline >= 15 else 12.0)))
+                        additional = group_remaining * (statline['MIN'] / group_total)
+                        old_min = statline['MIN']
+                        statline['MIN'] = min(statline['MIN'] + additional, cap)
+                        actual_added = statline['MIN'] - old_min
+                        distributed += actual_added
+        
+        # Step 6: Final safety check - ensure exact total
+        # Protect stars/starters from being scaled down too much
+        final_total = sum(s['MIN'] for s in team_statlines_for_norm)
+        if abs(final_total - target_minutes) > 0.01:
+            # Final proportional scaling, but protect stars/starters
+            if final_total > target_minutes:
+                # Over target - scale down, but protect stars/starters
+                excess = final_total - target_minutes
+                # Try to reduce from lower-role players first
+                lower_role_total = sum(s['MIN'] for s in rotation + bench + deep_bench)
+                if lower_role_total >= excess:
+                    scale_down = (lower_role_total - excess) / lower_role_total
+                    for statline in rotation + bench + deep_bench:
+                        statline['MIN'] *= scale_down
+                else:
+                    # Need to scale everyone, but less for stars/starters
+                    scale_factor = target_minutes / final_total
+                    for statline in stars + starters:
+                        # Only scale down stars/starters if they're still above their baseline
+                        baseline = statline['_role_baseline_min']
+                        new_min = statline['MIN'] * scale_factor
+                        # Don't go below 90% of baseline for stars/starters
+                        min_protected = baseline * 0.90
+                        statline['MIN'] = max(new_min, min_protected)
+                    
+                    # Recalculate and scale others to make up difference
+                    current_total = sum(s['MIN'] for s in team_statlines_for_norm)
+                    remaining = target_minutes - current_total
+                    if abs(remaining) > 0.01:
+                        other_total = sum(s['MIN'] for s in rotation + bench + deep_bench)
+                        if other_total > 0:
+                            scale_others = (other_total + remaining) / other_total
+                            for statline in rotation + bench + deep_bench:
+                                statline['MIN'] *= scale_others
+            else:
+                # Under target - scale up proportionally
+                final_scale = target_minutes / final_total
+                for statline in team_statlines_for_norm:
+                    statline['MIN'] *= final_scale
+                    # Reapply caps after scaling
+                    baseline = statline['_role_baseline_min']
+                    if baseline >= 32:
+                        statline['MIN'] = min(statline['MIN'], 40.0)
+                    elif baseline >= 28:
+                        statline['MIN'] = min(statline['MIN'], 38.0)
+                    elif baseline >= 22:
+                        statline['MIN'] = min(statline['MIN'], 32.0)
+                    elif baseline >= 15:
+                        statline['MIN'] = min(statline['MIN'], 25.0)
+                    else:
+                        statline['MIN'] = min(statline['MIN'], 12.0)
+        
+        # Step 7: Final validation - ensure we have exactly 10 or fewer active players
+        # and total equals exactly 240
+        # Check ALL statlines in team_statlines to catch any that might have been missed
+        final_active = [s for s in team_statlines if s.get('MIN', 0) > 0.01]
+        
+        if len(final_active) > 10:
+            # If somehow we have more than 10, keep only top 10 by minutes
+            final_active.sort(key=lambda x: x.get('MIN', 0), reverse=True)
+            excess_players = final_active[10:]
+            for statline in excess_players:
+                statline['MIN'] = 0.0
+            # Recalculate total with only top 10
+            final_active = final_active[:10]
+            final_total = sum(s['MIN'] for s in final_active)
+            if abs(final_total - target_minutes) > 0.01 and final_total > 0:
+                # Scale to exactly 240
+                final_scale = target_minutes / final_total
+                for statline in final_active:
+                    statline['MIN'] *= final_scale
+        else:
+            # Ensure total is exactly 240
+            final_total = sum(s['MIN'] for s in final_active) if final_active else 0
+            if abs(final_total - target_minutes) > 0.01 and final_total > 0:
+                final_scale = target_minutes / final_total
+                for statline in final_active:
+                    statline['MIN'] *= final_scale
+        
+        # Step 8: Absolute final check - guarantee exactly 10 players and exactly 240 minutes
+        # This is a safety net to catch any edge cases
+        final_check_active = [s for s in team_statlines if s.get('MIN', 0) > 0.01]
+        final_check_total = sum(s['MIN'] for s in final_check_active)
+        
+        # Force exactly 10 players maximum
+        if len(final_check_active) > 10:
+            final_check_active.sort(key=lambda x: x.get('MIN', 0), reverse=True)
+            for statline in final_check_active[10:]:
+                statline['MIN'] = 0.0
+            final_check_active = final_check_active[:10]
+            final_check_total = sum(s['MIN'] for s in final_check_active)
+        
+        # Force exactly 240 minutes
+        if abs(final_check_total - target_minutes) > 0.01 and final_check_total > 0:
+            emergency_scale = target_minutes / final_check_total
+            for statline in final_check_active:
+                statline['MIN'] *= emergency_scale
+        
+        # Scale all stats proportionally based on minutes change
+        # CRITICAL: Scale BASE stats first (before injury adjustments), then re-apply injury multipliers
+        # This prevents double-boosting: normalize → then adjust for injuries (not adjust → normalize)
+        # Only scale stats for active players (those with MIN > 0)
+        for statline in team_statlines:
+            # If player has 0 minutes, set all stats to 0
+            if statline['MIN'] == 0 or statline['MIN'] < 0.01:
+                statline['PTS'] = 0.0
+                statline['REB'] = 0.0
+                statline['AST'] = 0.0
+                statline['STL'] = 0.0
+                statline['BLK'] = 0.0
+                statline['TOV'] = 0.0
+                statline['FG3M'] = 0.0
+                statline['FTM'] = 0.0
+                statline['PRA'] = 0.0
+                statline['RA'] = 0.0
+                statline['FPTS'] = 0.0
+                continue
+            
+            # Get base stats (before injury adjustments) or fall back to current stats
+            base_stats = statline.get('_base_stats')
+            if base_stats is None:
+                # Fallback: use current stats as base (for backwards compatibility)
+                base_stats = {
+                    'PTS': statline.get('PTS', 0.0),
+                    'REB': statline.get('REB', 0.0),
+                    'AST': statline.get('AST', 0.0),
+                    'STL': statline.get('STL', 0.0),
+                    'BLK': statline.get('BLK', 0.0),
+                    'TOV': statline.get('TOV', 0.0),
+                    'FG3M': statline.get('FG3M', 0.0),
+                    'FTM': statline.get('FTM', 0.0)
+                }
+            
+            # Get scaling baseline: use injury-adjusted minutes if available, otherwise original season minutes
+            # This prevents over-scaling when injuries boost minutes
+            scaling_baseline = statline.get('_injury_adjusted_minutes')
+            if scaling_baseline is None or scaling_baseline <= 0:
+                scaling_baseline = statline.get('_original_season_minutes')
+            if scaling_baseline is None or scaling_baseline <= 0:
+                scaling_baseline = statline.get('_original_min', statline['MIN'])
+            
+            # Step 1: Scale BASE stats based on normalized minutes ratio
+            # Use injury-adjusted minutes as baseline to prevent over-scaling
+            if scaling_baseline > 0:
+                minutes_ratio = statline['MIN'] / scaling_baseline
+                # Scale stats at 80% of direct proportion (reduced from 90% to be more conservative)
+                # This accounts for diminishing returns when minutes increase
+                stat_scaling_factor = 1.0 + (minutes_ratio - 1.0) * 0.8
+                
+                # Scale base stats
+                scaled_pts = base_stats['PTS'] * stat_scaling_factor
+                scaled_reb = base_stats['REB'] * stat_scaling_factor
+                scaled_ast = base_stats['AST'] * stat_scaling_factor
+                scaled_stl = base_stats['STL'] * stat_scaling_factor
+                scaled_blk = base_stats['BLK'] * stat_scaling_factor
+                scaled_tov = base_stats['TOV'] * stat_scaling_factor
+                scaled_fg3m = base_stats['FG3M'] * stat_scaling_factor
+                scaled_ftm = base_stats['FTM'] * stat_scaling_factor
+            else:
+                # No scaling if original minutes are 0 or invalid
+                scaled_pts = base_stats['PTS']
+                scaled_reb = base_stats['REB']
+                scaled_ast = base_stats['AST']
+                scaled_stl = base_stats['STL']
+                scaled_blk = base_stats['BLK']
+                scaled_tov = base_stats['TOV']
+                scaled_fg3m = base_stats['FG3M']
+                scaled_ftm = base_stats['FTM']
+            
+            # Step 2: Re-apply injury multipliers to scaled base stats
+            injury_multipliers = statline.get('_injury_multipliers')
+            if injury_multipliers:
+                statline['PTS'] = scaled_pts * injury_multipliers.get('PTS', 1.0)
+                statline['REB'] = scaled_reb * injury_multipliers.get('REB', 1.0)
+                statline['AST'] = scaled_ast * injury_multipliers.get('AST', 1.0)
+                statline['STL'] = scaled_stl * injury_multipliers.get('STL', 1.0)
+                statline['BLK'] = scaled_blk * injury_multipliers.get('BLK', 1.0)
+                statline['TOV'] = scaled_tov * injury_multipliers.get('TOV', 1.0)
+                statline['FG3M'] = scaled_fg3m * injury_multipliers.get('FG3M', 1.0)
+                statline['FTM'] = scaled_ftm * injury_multipliers.get('FTM', 1.0)
+            else:
+                # No injury adjustments, use scaled base stats directly
+                statline['PTS'] = scaled_pts
+                statline['REB'] = scaled_reb
+                statline['AST'] = scaled_ast
+                statline['STL'] = scaled_stl
+                statline['BLK'] = scaled_blk
+                statline['TOV'] = scaled_tov
+                statline['FG3M'] = scaled_fg3m
+                statline['FTM'] = scaled_ftm
+            
+            # Recalculate derived stats after scaling and injury adjustments
+            statline['PRA'] = statline.get('PTS', 0.0) + statline.get('REB', 0.0) + statline.get('AST', 0.0)
+            statline['RA'] = statline.get('REB', 0.0) + statline.get('AST', 0.0)
+            # FPTS using Underdog formula: PTS*1 + REB*1.2 + AST*1.5 + STL*3 + BLK*3 - TOV*1
+            statline['FPTS'] = (
+                statline.get('PTS', 0.0) * 1.0 + 
+                statline.get('REB', 0.0) * 1.2 + 
+                statline.get('AST', 0.0) * 1.5 + 
+                statline.get('STL', 0.0) * 3.0 + 
+                statline.get('BLK', 0.0) * 3.0 - 
+                statline.get('TOV', 0.0) * 1.0
+            )
+    
+    # Normalize both teams
+    normalize_team(away_statlines, True)
+    normalize_team(home_statlines, False)
+    
+    return statlines_list
 
 st.set_page_config(layout="wide")
 st.title("NBA Player Data")
@@ -148,7 +663,13 @@ def get_cached_player_stats():
             per_mode_detailed='PerGame',
             season_type_all_star='Regular Season'
         ).get_data_frames()[0]
-        return player_stats[['PLAYER_ID', 'MIN']].set_index('PLAYER_ID')['MIN'].to_dict()
+        # Convert PLAYER_ID to int for consistent key type
+        minutes_dict = {}
+        for _, row in player_stats.iterrows():
+            player_id = int(row['PLAYER_ID'])
+            minutes = float(row['MIN']) if pd.notna(row['MIN']) else 0.0
+            minutes_dict[player_id] = minutes
+        return minutes_dict
     except Exception as e:
         print(f"Error fetching player stats: {e}")
         return {}
@@ -289,9 +810,109 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                 # Check if we have cached predictions for this game
                 cached_game_predictions = st.session_state.predictions_game_cache.get(game_cache_key_bvp)
                 
-                # Check if we have cached odds for this game
+                # Initialize session state for API data (GAME-LEVEL CACHE)
                 if 'odds_game_cache' not in st.session_state:
                     st.session_state.odds_game_cache = {}
+                if 'odds_api_credits' not in st.session_state:
+                    st.session_state.odds_api_credits = None
+                
+                # Check if we have cached odds for this game
+                cached_game_props = st.session_state.odds_game_cache.get(game_cache_key_bvp)
+                
+                # === FETCH UNDERDOG LINES SECTION ===
+                with st.expander("🎰 **Fetch Underdog Lines** (The Odds API)", expanded=True):
+                    st.caption("Fetch live player props from Underdog Fantasy via The Odds API")
+                    
+                    # Get player count for display
+                    if cached_game_props is not None:
+                        players_with_props = len(cached_game_props)
+                    else:
+                        players_with_props = 0
+                    
+                    # Dry-run preview section
+                    col_preview, col_fetch = st.columns([2, 1])
+                    
+                    with col_preview:
+                        if st.button("🔍 Preview Request (Free)", key="preview_odds_request_bvp"):
+                            with st.spinner("Checking for available events..."):
+                                preview = vl.preview_odds_request(
+                                    matchup_home_team_abbr,
+                                    matchup_away_team_abbr,
+                                    game_date_str_bvp
+                                )
+                                
+                                if preview.get('error'):
+                                    st.error(f"❌ {preview['error']}")
+                                    if preview.get('events_on_date'):
+                                        st.info(f"Events found on {game_date_str_bvp}: {', '.join(preview['events_on_date'])}")
+                                else:
+                                    st.success(f"✅ Event found: {preview['event_details']['away_team']} @ {preview['event_details']['home_team']}")
+                                    
+                                    with st.container():
+                                        st.markdown("**Request Details (Dry Run)**")
+                                        st.code(f"""
+Event ID: {preview['event_id']}
+Region: {preview['request_info']['region']}
+Bookmaker: {preview['request_info']['bookmaker']}
+Markets: {', '.join(preview['request_info']['markets_requested'])}
+Estimated Cost: {preview['estimated_cost']}
+""", language=None)
+                    
+                    with col_fetch:
+                        fetch_disabled = cached_game_props is not None
+                        if fetch_disabled:
+                            fetch_label = f"✅ Game Cached ({players_with_props} players)"
+                        else:
+                            fetch_label = "📥 Fetch Lines (1 Credit)"
+                        
+                        if st.button(fetch_label, key="fetch_odds_bvp", disabled=fetch_disabled):
+                            with st.spinner("Fetching ALL player props for this game..."):
+                                # Fetch ALL props for the game (costs 1 credit)
+                                all_props, api_response = vl.fetch_all_props_for_game(
+                                    matchup_home_team_abbr,
+                                    matchup_away_team_abbr,
+                                    game_date_str_bvp
+                                )
+                                
+                                if api_response.success:
+                                    # Cache at GAME level
+                                    st.session_state.odds_game_cache[game_cache_key_bvp] = all_props
+                                    st.session_state.odds_api_credits = api_response.credits_remaining
+                                    
+                                    if all_props:
+                                        st.success(f"✅ Cached props for {len(all_props)} players! Switch players freely - no additional credits needed.")
+                                    else:
+                                        st.warning("⚠️ No props found for this game on Underdog")
+                                    
+                                    st.rerun()
+                                else:
+                                    # Show detailed error message
+                                    error_msg = api_response.error or "Unknown API error"
+                                    st.error(f"❌ API Error: {error_msg}")
+                                    
+                                    # Provide helpful guidance for common errors
+                                    if "Invalid API key" in error_msg:
+                                        st.info("💡 **Troubleshooting:**\n"
+                                               "- Verify your API key in The Odds API dashboard\n"
+                                               "- If you just upgraded, try regenerating your API key\n"
+                                               "- Wait a few minutes for activation after upgrading\n"
+                                               "- Ensure there are no extra spaces in the API key")
+                                    
+                                    if api_response.credits_remaining is not None:
+                                        st.session_state.odds_api_credits = api_response.credits_remaining
+                    
+                    # Clear cache button
+                    if cached_game_props is not None:
+                        if st.button("🔄 Refresh Game Lines", key="refresh_odds_bvp"):
+                            del st.session_state.odds_game_cache[game_cache_key_bvp]
+                            st.session_state.odds_api_credits = None
+                            st.rerun()
+                    
+                    # Show API credits if available
+                    if st.session_state.odds_api_credits is not None:
+                        st.caption(f"💳 API Credits Remaining: {st.session_state.odds_api_credits}")
+                
+                # Update cached_game_props after potential fetch
                 cached_game_props = st.session_state.odds_game_cache.get(game_cache_key_bvp)
                 
                 col_gen, col_status = st.columns([1, 2])
@@ -299,7 +920,7 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                 with col_gen:
                     # Only enable generation if we have odds
                     if cached_game_props is None:
-                        st.warning("⚠️ Fetch Underdog lines first (scroll down to Predictions tab)")
+                        st.warning("⚠️ Fetch Underdog lines above to enable predictions")
                         gen_disabled = True
                     elif cached_game_predictions is not None:
                         st.success(f"✅ {len(cached_game_predictions)} players predicted")
@@ -308,26 +929,38 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                         gen_disabled = False
                     
                     if st.button("🔮 Generate All Predictions", disabled=gen_disabled, key="gen_all_predictions"):
+                        # Cache injury data in session state to avoid duplicate calls
+                        if 'matchup_injuries_cache' not in st.session_state:
+                            st.session_state.matchup_injuries_cache = {}
+                        
+                        matchup_inj_key = f"{game_cache_key_bvp}_injuries"
+                        if matchup_inj_key not in st.session_state.matchup_injuries_cache:
+                            if injury_report_df is not None and len(injury_report_df) > 0:
+                                matchup_inj = ir.get_injuries_for_matchup(
+                                    injury_report_df,
+                                    matchup_away_team_abbr,
+                                    matchup_home_team_abbr,
+                                    players_df
+                                )
+                                st.session_state.matchup_injuries_cache[matchup_inj_key] = matchup_inj
+                            else:
+                                st.session_state.matchup_injuries_cache[matchup_inj_key] = {'away': [], 'home': []}
+                        else:
+                            matchup_inj = st.session_state.matchup_injuries_cache[matchup_inj_key]
+                        
                         # Get list of players who are OUT or DOUBTFUL from injury report
                         out_player_ids = set()
-                        if injury_report_df is not None and len(injury_report_df) > 0:
-                            matchup_inj = ir.get_injuries_for_matchup(
-                                injury_report_df,
-                                matchup_away_team_abbr,
-                                matchup_home_team_abbr,
-                                players_df
-                            )
-                            for injury_item in matchup_inj.get('away', []) + matchup_inj.get('home', []):
-                                status_lower = injury_item.get('status', '').lower()
-                                if 'out' in status_lower or 'doubtful' in status_lower:
-                                    if injury_item.get('player_id'):
-                                        out_player_ids.add(str(injury_item['player_id']))
+                        for injury_item in matchup_inj.get('away', []) + matchup_inj.get('home', []):
+                            status_lower = injury_item.get('status', '').lower()
+                            if 'out' in status_lower or 'doubtful' in status_lower:
+                                if injury_item.get('player_id'):
+                                    out_player_ids.add(str(injury_item['player_id']))
                         
-                        # Filter to players with at least some minutes AND not injured
+                        # Filter to players who are not injured (include all players, even low-minute ones)
+                        # This allows the model to predict for deep bench players who might enter rotation due to injuries
                         players_to_predict = [
                             pid for pid in filtered_player_ids_list 
-                            if player_minutes_map.get(int(pid), 0) >= 10  # At least 10 min/game
-                            and pid not in out_player_ids  # Skip players who are OUT or DOUBTFUL
+                            if pid not in out_player_ids  # Skip players who are OUT or DOUBTFUL
                         ]
                         
                         if out_player_ids:
@@ -410,65 +1043,72 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                         stat_options = st.multiselect(
                             "Stats",
                             options=['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS'],
-                            default=['PTS', 'REB', 'AST', 'PRA', 'RA', 'FPTS'],
+                            default=['PTS', 'REB', 'AST', 'PRA', 'RA', 'FG3M', 'FTM', 'FPTS'],
                             key="bvp_stats"
                         )
                     
-                    # Calculate injury adjustments for all players in batch predictions
+                    # Calculate injury adjustments for all players in batch predictions (optimized)
                     injury_adjustments_map = {}
                     
-                    # Get player_team_ids_map from session state or reconstruct it
+                    # Get player_team_ids_map from session state or reconstruct it efficiently
                     cached_team_ids_map = st.session_state.get('player_team_ids_map_cache', {}).get(game_cache_key_bvp)
                     if cached_team_ids_map is None:
-                        # Reconstruct from players_df
+                        # Reconstruct from players_df efficiently using a lookup dictionary
+                        # Create a fast lookup map: player_id -> team_id
+                        players_df_id_str = players_df['PERSON_ID'].astype(str)
+                        players_df_team_id = players_df['TEAM_ID'].astype(int)
+                        player_team_lookup = dict(zip(players_df_id_str, players_df_team_id))
+                        
                         cached_team_ids_map = {}
                         for player_id in cached_game_predictions.keys():
-                            player_row = players_df[players_df['PERSON_ID'].astype(str) == str(player_id)]
-                            if len(player_row) > 0:
-                                cached_team_ids_map[str(player_id)] = int(player_row['TEAM_ID'].iloc[0])
-                    
-                    if injury_report_df is not None and len(injury_report_df) > 0:
-                        matchup_inj = ir.get_injuries_for_matchup(
-                            injury_report_df,
-                            matchup_away_team_abbr,
-                            matchup_home_team_abbr,
-                            players_df
-                        )
+                            player_id_str = str(player_id)
+                            if player_id_str in player_team_lookup:
+                                cached_team_ids_map[player_id_str] = player_team_lookup[player_id_str]
                         
-                        # Build lists of out players by team
-                        away_out = []
-                        home_out = []
+                        # Cache it for future use
+                        if 'player_team_ids_map_cache' not in st.session_state:
+                            st.session_state.player_team_ids_map_cache = {}
+                        st.session_state.player_team_ids_map_cache[game_cache_key_bvp] = cached_team_ids_map
+                    
+                    # Get injury data from cache (already fetched earlier)
+                    matchup_inj_key = f"{game_cache_key_bvp}_injuries"
+                    matchup_inj = st.session_state.get('matchup_injuries_cache', {}).get(matchup_inj_key, {'away': [], 'home': []})
+                    
+                    # Build lists of out players by team ONCE
+                    away_out = []
+                    home_out = []
+                    out_player_ids = set()
+                    if injury_report_df is not None and len(injury_report_df) > 0:
                         for injury_item in matchup_inj.get('away', []):
                             status_lower = injury_item.get('status', '').lower()
                             if 'out' in status_lower or 'doubtful' in status_lower:
                                 if injury_item.get('player_id'):
-                                    away_out.append(str(injury_item['player_id']))
+                                    player_id_str = str(injury_item['player_id'])
+                                    away_out.append(player_id_str)
+                                    out_player_ids.add(player_id_str)
                         for injury_item in matchup_inj.get('home', []):
                             status_lower = injury_item.get('status', '').lower()
                             if 'out' in status_lower or 'doubtful' in status_lower:
                                 if injury_item.get('player_id'):
-                                    home_out.append(str(injury_item['player_id']))
+                                    player_id_str = str(injury_item['player_id'])
+                                    home_out.append(player_id_str)
+                                    out_player_ids.add(player_id_str)
                         
-                        # Calculate injury adjustments for each player
+                        # Calculate injury adjustments for each player (now with efficient lookup)
                         for player_id, player_data in cached_game_predictions.items():
-                            # Get player's team ID from cached map or players_df
-                            player_team_id = cached_team_ids_map.get(str(player_id))
+                            player_id_str = str(player_id)
+                            player_team_id = cached_team_ids_map.get(player_id_str)
                             
                             if not player_team_id:
-                                # Fallback: try to get from players_df
-                                player_row = players_df[players_df['PERSON_ID'].astype(str) == str(player_id)]
-                                if len(player_row) > 0:
-                                    player_team_id = int(player_row['TEAM_ID'].iloc[0])
-                                else:
-                                    continue
+                                continue
                             
                             # Determine teammates_out and opponents_out
                             if int(player_team_id) == matchup_away_team_id:
-                                teammates_out = [p for p in away_out if p != str(player_id)]
+                                teammates_out = [p for p in away_out if p != player_id_str]
                                 opponents_out = home_out
                                 opp_team_id = matchup_home_team_id
                             elif int(player_team_id) == matchup_home_team_id:
-                                teammates_out = [p for p in home_out if p != str(player_id)]
+                                teammates_out = [p for p in home_out if p != player_id_str]
                                 opponents_out = away_out
                                 opp_team_id = matchup_away_team_id
                             else:
@@ -477,7 +1117,7 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                             # Only calculate if there are injuries
                             if teammates_out or opponents_out:
                                 injury_adj = inj.calculate_injury_adjustments(
-                                    player_id=str(player_id),
+                                    player_id=player_id_str,
                                     player_team_id=int(player_team_id),
                                     opponent_team_id=opp_team_id,
                                     teammates_out=teammates_out,
@@ -486,17 +1126,272 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                                     players_df=players_df
                                 )
                                 if injury_adj.get('factors'):
-                                    injury_adjustments_map[str(player_id)] = injury_adj
+                                    injury_adjustments_map[player_id_str] = injury_adj
                     
-                    # Find best value plays (with injury adjustments)
-                    best_plays = pm.find_best_value_plays(
-                        all_predictions=cached_game_predictions,
-                        all_props=cached_game_props,
-                        min_edge_pct=float(min_edge),
-                        confidence_filter=confidence_options if confidence_options else ['high', 'medium', 'low'],
-                        stat_filter=stat_options if stat_options else ['PTS', 'REB', 'AST', 'PRA'],
-                        injury_adjustments_map=injury_adjustments_map if injury_adjustments_map else None
-                    )
+                    # Build normalized statlines FIRST (before Value Plays)
+                    # This ensures Value Plays use the same normalized/scaled values as Predicted Statlines
+                    normalized_statlines_key = f"{game_cache_key_bvp}_normalized_statlines"
+                    
+                    # Check if we have manually adjusted statlines in session state
+                    if normalized_statlines_key in st.session_state:
+                        statlines_list = st.session_state[normalized_statlines_key]
+                        
+                        # Validate cached statlines: check if they sum to 240 per team
+                        # If not, re-normalize them (they might be from before the fix)
+                        away_total = sum(s['MIN'] for s in statlines_list if s.get('is_away'))
+                        home_total = sum(s['MIN'] for s in statlines_list if not s.get('is_away'))
+                        away_active = len([s for s in statlines_list if s.get('is_away') and s.get('MIN', 0) > 0.01])
+                        home_active = len([s for s in statlines_list if not s.get('is_away') and s.get('MIN', 0) > 0.01])
+                        
+                        # If totals are wrong or too many players, re-normalize
+                        if (abs(away_total - 240.0) > 0.1 or abs(home_total - 240.0) > 0.1 or 
+                            away_active > 10 or home_active > 10):
+                            # Re-normalize the cached statlines
+                            bulk_game_logs = pf_features.get_bulk_player_game_logs()
+                            matchup_inj_key = f"{game_cache_key_bvp}_injuries"
+                            matchup_inj = st.session_state.get('matchup_injuries_cache', {}).get(matchup_inj_key, {'away': [], 'home': []})
+                            out_player_ids_revalidate = set()
+                            for injury_item in matchup_inj.get('away', []) + matchup_inj.get('home', []):
+                                status_lower = injury_item.get('status', '').lower()
+                                if 'out' in status_lower or 'doubtful' in status_lower:
+                                    if injury_item.get('player_id'):
+                                        out_player_ids_revalidate.add(str(injury_item['player_id']))
+                            
+                            normalize_team_minutes(
+                                statlines_list,
+                                target_minutes=240.0,
+                                out_player_ids=out_player_ids_revalidate,
+                                bulk_game_logs=bulk_game_logs,
+                                game_date=game_date_str_bvp
+                            )
+                            # Update cache with re-normalized statlines
+                            st.session_state[normalized_statlines_key] = statlines_list
+                    else:
+                        # Build statlines list with injury-adjusted predictions
+                        statlines_list = []
+                        for player_id, player_data_dict in cached_game_predictions.items():
+                            player_id_str = str(player_id)
+                            
+                            # Get actual predictions dict (nested under 'predictions' key)
+                            predictions_dict = player_data_dict.get('predictions', {})
+                            
+                            # Get player info - use cached name if available, otherwise look up
+                            player_name = player_data_dict.get('player_name')
+                            if not player_name:
+                                player_row = players_df[players_df['PERSON_ID'].astype(str) == player_id_str]
+                                if len(player_row) == 0:
+                                    continue
+                                player_name = f"{player_row['PLAYER_FIRST_NAME'].iloc[0]} {player_row['PLAYER_LAST_NAME'].iloc[0]}"
+                            
+                            # Get team info from cached data or lookup
+                            team_abbr = player_data_dict.get('team_abbr')
+                            if not team_abbr:
+                                player_row = players_df[players_df['PERSON_ID'].astype(str) == player_id_str]
+                                if len(player_row) == 0:
+                                    continue
+                                player_team_id = int(player_row['TEAM_ID'].iloc[0])
+                                is_away = (player_team_id == matchup_away_team_id)
+                                team_abbr = matchup_away_team_abbr if is_away else matchup_home_team_abbr
+                            else:
+                                # Determine is_away from team_abbr
+                                is_away = (team_abbr == matchup_away_team_abbr)
+                            
+                            # Extract base stat predictions
+                            def get_pred_value(stat_key):
+                                pred_obj = predictions_dict.get(stat_key)
+                                if pred_obj and hasattr(pred_obj, 'value'):
+                                    return pred_obj.value
+                                return 0.0
+                            
+                            # Get base predictions (before any injury adjustments)
+                            base_pts = get_pred_value('PTS')
+                            base_reb = get_pred_value('REB')
+                            base_ast = get_pred_value('AST')
+                            base_stl = get_pred_value('STL')
+                            base_blk = get_pred_value('BLK')
+                            base_tov = get_pred_value('TOV')
+                            base_fg3m = get_pred_value('FG3M')
+                            base_ftm = get_pred_value('FTM')
+                            
+                            minutes = player_minutes_map.get(int(player_id), 25.0)
+                            original_season_minutes = minutes  # Store BEFORE injury adjustments
+                            
+                            # Store base stats and injury adjustments for proper scaling order
+                            # We'll apply injury adjustments AFTER normalization scaling
+                            injury_adj_multipliers = None
+                            injury_adjusted_minutes = minutes  # Track minutes after injury boost
+                            if player_id_str in injury_adjustments_map:
+                                injury_adj = injury_adjustments_map[player_id_str]
+                                # Store injury multipliers for later application
+                                injury_adj_multipliers = {
+                                    'PTS': injury_adj.get('PTS', 1.0),
+                                    'REB': injury_adj.get('REB', 1.0),
+                                    'AST': injury_adj.get('AST', 1.0),
+                                    'STL': injury_adj.get('STL', 1.0),
+                                    'BLK': injury_adj.get('BLK', 1.0),
+                                    'TOV': injury_adj.get('TOV', 1.0) if 'TOV' in injury_adj else 1.0,
+                                    'FG3M': injury_adj.get('FG3M', 1.0),
+                                    'FTM': injury_adj.get('FTM', 1.0),
+                                    'minutes_boost': injury_adj.get('minutes_boost', 0.0)
+                                }
+                                # Add minutes boost for initial normalization
+                                minutes += injury_adj.get('minutes_boost', 0.0)
+                                injury_adjusted_minutes = minutes  # Store injury-adjusted minutes
+                            
+                            # For now, use base stats (injury adjustments will be applied after normalization)
+                            pts = base_pts
+                            reb = base_reb
+                            ast = base_ast
+                            stl = base_stl
+                            blk = base_blk
+                            tov = base_tov
+                            fg3m = base_fg3m
+                            ftm = base_ftm
+                            
+                            # Calculate derived stats from base stats
+                            pra = pts + reb + ast
+                            ra = reb + ast
+                            # FPTS using Underdog formula: PTS*1 + REB*1.2 + AST*1.5 + STL*3 + BLK*3 - TOV*1
+                            fpts = pts * 1.0 + reb * 1.2 + ast * 1.5 + stl * 3.0 + blk * 3.0 - tov * 1.0
+                            
+                            statline = {
+                                'Player': player_name,
+                                'Team': team_abbr,
+                                'player_id': player_id_str,
+                                'MIN': minutes,
+                                '_original_season_minutes': original_season_minutes,  # Store for proper scaling
+                                '_injury_adjusted_minutes': injury_adjusted_minutes,  # Store injury-adjusted minutes for scaling baseline
+                                '_base_stats': {  # Store base stats before injury adjustments
+                                    'PTS': base_pts,
+                                    'REB': base_reb,
+                                    'AST': base_ast,
+                                    'STL': base_stl,
+                                    'BLK': base_blk,
+                                    'TOV': base_tov,
+                                    'FG3M': base_fg3m,
+                                    'FTM': base_ftm
+                                },
+                                '_injury_multipliers': injury_adj_multipliers,  # Store for re-application after normalization
+                                'PTS': pts,  # Will be updated during normalization
+                                'REB': reb,
+                                'AST': ast,
+                                'STL': stl,
+                                'BLK': blk,
+                                'TOV': tov,
+                                'FG3M': fg3m,
+                                'FTM': ftm,
+                                'PRA': pra,
+                                'RA': ra,
+                                'FPTS': fpts,
+                                'is_away': is_away
+                            }
+                            statlines_list.append(statline)
+                        
+                        # Get bulk game logs for recent activity check
+                        bulk_game_logs = pf_features.get_bulk_player_game_logs()
+                        
+                        # Normalize minutes and scale stats using helper function
+                        normalize_team_minutes(
+                            statlines_list, 
+                            target_minutes=240.0,
+                            out_player_ids=out_player_ids,  # Pass the set of OUT/DOUBTFUL players
+                            bulk_game_logs=bulk_game_logs,  # Pass bulk game logs
+                            game_date=game_date_str_bvp  # Pass game date for recent activity check
+                        )
+                        
+                        # Ensure players with 0 minutes have all stats set to 0
+                        for statline in statlines_list:
+                            if statline.get('MIN', 0) == 0 or statline.get('MIN', 0) < 0.01:
+                                statline['PTS'] = 0.0
+                                statline['REB'] = 0.0
+                                statline['AST'] = 0.0
+                                statline['STL'] = 0.0
+                                statline['BLK'] = 0.0
+                                statline['TOV'] = 0.0
+                                statline['FG3M'] = 0.0
+                                statline['FTM'] = 0.0
+                                statline['PRA'] = 0.0
+                                statline['RA'] = 0.0
+                                statline['FPTS'] = 0.0
+                        
+                        # Store in session state
+                        st.session_state[normalized_statlines_key] = statlines_list
+                    
+                    # Create normalized predictions dict for Value Plays
+                    # This ensures Value Plays use the same normalized/scaled values
+                    normalized_predictions = {}
+                    for statline in statlines_list:
+                        player_id_str = statline['player_id']
+                        if player_id_str not in normalized_predictions:
+                            normalized_predictions[player_id_str] = {
+                                'predictions': {},
+                                'player_name': statline['Player'],
+                                'team_abbr': statline['Team']
+                            }
+                        
+                        # Create Prediction objects with normalized values
+                        from prediction_model import Prediction
+                        normalized_predictions[player_id_str]['predictions']['PTS'] = Prediction(
+                            stat='PTS', value=statline['PTS'], confidence='high',
+                            breakdown={'normalized': statline['PTS']}, factors={'source': 'normalized_statline'}
+                        )
+                        normalized_predictions[player_id_str]['predictions']['REB'] = Prediction(
+                            stat='REB', value=statline['REB'], confidence='high',
+                            breakdown={'normalized': statline['REB']}, factors={'source': 'normalized_statline'}
+                        )
+                        normalized_predictions[player_id_str]['predictions']['AST'] = Prediction(
+                            stat='AST', value=statline['AST'], confidence='high',
+                            breakdown={'normalized': statline['AST']}, factors={'source': 'normalized_statline'}
+                        )
+                        normalized_predictions[player_id_str]['predictions']['STL'] = Prediction(
+                            stat='STL', value=statline['STL'], confidence='high',
+                            breakdown={'normalized': statline['STL']}, factors={'source': 'normalized_statline'}
+                        )
+                        normalized_predictions[player_id_str]['predictions']['BLK'] = Prediction(
+                            stat='BLK', value=statline['BLK'], confidence='high',
+                            breakdown={'normalized': statline['BLK']}, factors={'source': 'normalized_statline'}
+                        )
+                        normalized_predictions[player_id_str]['predictions']['TOV'] = Prediction(
+                            stat='TOV', value=statline['TOV'], confidence='high',
+                            breakdown={'normalized': statline['TOV']}, factors={'source': 'normalized_statline'}
+                        )
+                        normalized_predictions[player_id_str]['predictions']['FG3M'] = Prediction(
+                            stat='FG3M', value=statline['FG3M'], confidence='high',
+                            breakdown={'normalized': statline['FG3M']}, factors={'source': 'normalized_statline'}
+                        )
+                        normalized_predictions[player_id_str]['predictions']['FTM'] = Prediction(
+                            stat='FTM', value=statline['FTM'], confidence='high',
+                            breakdown={'normalized': statline['FTM']}, factors={'source': 'normalized_statline'}
+                        )
+                        normalized_predictions[player_id_str]['predictions']['PRA'] = Prediction(
+                            stat='PRA', value=statline['PRA'], confidence='high',
+                            breakdown={'normalized': statline['PRA']}, factors={'source': 'normalized_statline'}
+                        )
+                        normalized_predictions[player_id_str]['predictions']['RA'] = Prediction(
+                            stat='RA', value=statline['RA'], confidence='high',
+                            breakdown={'normalized': statline['RA']}, factors={'source': 'normalized_statline'}
+                        )
+                        normalized_predictions[player_id_str]['predictions']['FPTS'] = Prediction(
+                            stat='FPTS', value=statline['FPTS'], confidence='high',
+                            breakdown={'normalized': statline['FPTS']}, factors={'source': 'normalized_statline'}
+                        )
+                    
+                    # Check if we have cached best_plays from manual recalculation
+                    cached_best_plays_key = f"{game_cache_key_bvp}_best_plays"
+                    if cached_best_plays_key in st.session_state:
+                        best_plays = st.session_state[cached_best_plays_key]
+                    else:
+                        # Find best value plays using NORMALIZED predictions (no additional injury adjustments needed)
+                        best_plays = pm.find_best_value_plays(
+                            all_predictions=normalized_predictions,
+                            all_props=cached_game_props,
+                            min_edge_pct=float(min_edge),
+                            confidence_filter=confidence_options if confidence_options else ['high', 'medium', 'low'],
+                            stat_filter=stat_options if stat_options else ['PTS', 'REB', 'AST', 'PRA'],
+                            injury_adjustments_map=None  # Already normalized, no additional adjustments
+                        )
+                        # Cache for future use
+                        st.session_state[cached_best_plays_key] = best_plays
                     
                     # Check for systematic bias
                     if best_plays:
@@ -537,6 +1432,23 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                             'Edge', 'Edge %', 'Lean', 'Conf'
                         ]
                         
+                        # Map stat codes to display names (for Underdog clarity)
+                        stat_display_names = {
+                            'PTS': 'Points',
+                            'REB': 'Rebounds',
+                            'AST': 'Assists',
+                            'PRA': 'Points + Rebounds + Assists',
+                            'RA': 'Rebounds + Assists',
+                            'STL': 'Steals',
+                            'BLK': 'Blocks',
+                            'FG3M': '3-Pointers Made',
+                            'FTM': 'Free Throws Made',
+                            'FPTS': 'Fantasy Points'
+                        }
+                        
+                        # Apply stat name mapping
+                        display_df['Stat'] = display_df['Stat'].map(stat_display_names).fillna(display_df['Stat'])
+                        
                         # Format columns - all numbers formatted to consistent decimal places
                         display_df['Pred'] = display_df['Pred'].apply(lambda x: f"{x:.1f}")
                         display_df['Line'] = display_df['Line'].apply(lambda x: f"{x:.1f}")
@@ -573,6 +1485,24 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                         styled_plays = display_df.style.apply(style_lean_bvp, axis=1)
                         st.dataframe(styled_plays, width='stretch', hide_index=True)
                         
+                        # Download button for Value Plays
+                        value_plays_csv = plays_df[[
+                            'player_name', 'team', 'stat', 'prediction', 'line', 
+                            'edge', 'edge_pct', 'lean', 'confidence'
+                        ]].copy()
+                        value_plays_csv.columns = [
+                            'Player', 'Team', 'Stat', 'Pred', 'Line', 
+                            'Edge', 'Edge %', 'Lean', 'Conf'
+                        ]
+                        csv_value_plays = value_plays_csv.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Download Value Plays CSV",
+                            data=csv_value_plays,
+                            file_name=f"value_plays_{matchup_away_team_abbr}_vs_{matchup_home_team_abbr}_{game_date_str_bvp}.csv",
+                            mime="text/csv",
+                            key="download_value_plays"
+                        )
+                        
                         # Summary stats
                         overs = len([p for p in best_plays if 'Over' in p['lean']])
                         unders = len([p for p in best_plays if 'Under' in p['lean']])
@@ -582,97 +1512,380 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                         st.markdown("---")
                         st.markdown("### 📊 All Predicted Statlines")
                         
-                        # Build statlines list
-                        statlines_list = []
-                        for player_id, player_data_dict in cached_game_predictions.items():
-                            # Get actual predictions dict (nested under 'predictions' key)
-                            predictions_dict = player_data_dict.get('predictions', {})
-                            
-                            # Get player info - use cached name if available, otherwise look up
-                            player_name = player_data_dict.get('player_name')
-                            if not player_name:
-                                player_row = players_df[players_df['PERSON_ID'].astype(str) == str(player_id)]
-                                if len(player_row) == 0:
-                                    continue
-                                player_name = f"{player_row['PLAYER_FIRST_NAME'].iloc[0]} {player_row['PLAYER_LAST_NAME'].iloc[0]}"
-                            
-                            # Get team info from cached data or lookup
-                            team_abbr = player_data_dict.get('team_abbr')
-                            if not team_abbr:
-                                player_row = players_df[players_df['PERSON_ID'].astype(str) == str(player_id)]
-                                if len(player_row) == 0:
-                                    continue
-                                player_team_id = int(player_row['TEAM_ID'].iloc[0])
-                                is_away = (player_team_id == matchup_away_team_id)
-                                team_abbr = matchup_away_team_abbr if is_away else matchup_home_team_abbr
-                            else:
-                                # Determine is_away from team_abbr
-                                is_away = (team_abbr == matchup_away_team_abbr)
-                            
-                            # Get predicted minutes from player_minutes_map
-                            minutes = player_minutes_map.get(int(player_id), 25.0)
-                            
-                            # Extract all stat predictions - predictions_dict contains Prediction objects
-                            def get_pred_value(stat_key):
-                                pred_obj = predictions_dict.get(stat_key)
-                                if pred_obj and hasattr(pred_obj, 'value'):
-                                    return pred_obj.value
-                                return 0.0
-                            
-                            statline = {
-                                'Player': player_name,
-                                'Team': team_abbr,
-                                'MIN': minutes,
-                                'PTS': get_pred_value('PTS'),
-                                'REB': get_pred_value('REB'),
-                                'AST': get_pred_value('AST'),
-                                'STL': get_pred_value('STL'),
-                                'BLK': get_pred_value('BLK'),
-                                'TOV': get_pred_value('TOV'),
-                                'FG3M': get_pred_value('FG3M'),
-                                'FTM': get_pred_value('FTM'),
-                                'PRA': get_pred_value('PRA'),
-                                'FPTS': get_pred_value('FPTS'),
-                                'is_away': is_away
-                            }
-                            statlines_list.append(statline)
+                        # Use normalized statlines from session state (already calculated above)
+                        statlines_list = st.session_state.get(normalized_statlines_key, [])
                         
-                        # Store original minutes for scaling
-                        for statline in statlines_list:
-                            statline['_original_min'] = statline['MIN']
-                        
-                        # Normalize minutes so each team sums to 240 (5 players × 48 minutes)
-                        away_minutes_total = sum(s['MIN'] for s in statlines_list if s['is_away'])
-                        home_minutes_total = sum(s['MIN'] for s in statlines_list if not s['is_away'])
-                        
-                        if away_minutes_total > 0 and away_minutes_total != 240:
-                            away_scale = 240.0 / away_minutes_total
-                            for statline in statlines_list:
-                                if statline['is_away']:
-                                    statline['MIN'] *= away_scale
-                        
-                        if home_minutes_total > 0 and home_minutes_total != 240:
-                            home_scale = 240.0 / home_minutes_total
-                            for statline in statlines_list:
-                                if not statline['is_away']:
-                                    statline['MIN'] *= home_scale
-                        
-                        # Recalculate stats based on normalized minutes (scale proportionally)
-                        for statline in statlines_list:
-                            original_min = statline.get('_original_min', statline['MIN'])
-                            if original_min > 0:
-                                minutes_ratio = statline['MIN'] / original_min
-                                # Scale all stats proportionally with minutes
-                                statline['PTS'] *= minutes_ratio
-                                statline['REB'] *= minutes_ratio
-                                statline['AST'] *= minutes_ratio
-                                statline['STL'] *= minutes_ratio
-                                statline['BLK'] *= minutes_ratio
-                                statline['TOV'] *= minutes_ratio
-                                statline['FG3M'] *= minutes_ratio
-                                statline['FTM'] *= minutes_ratio
-                                statline['PRA'] *= minutes_ratio
-                                statline['FPTS'] *= minutes_ratio
+                        # Manual Minutes Adjustment Interface
+                        with st.expander("⚙️ **Manual Minutes Adjustment**", expanded=False):
+                            st.caption("Adjust individual player minutes. Stats will be scaled proportionally, and team totals will be normalized to 240 minutes.")
+                            
+                            # Initialize manual adjustments in session state
+                            manual_adjustments_key = f"{game_cache_key_bvp}_manual_minutes"
+                            if manual_adjustments_key not in st.session_state:
+                                st.session_state[manual_adjustments_key] = {}
+                            
+                            # Sort statlines for display
+                            statlines_list_sorted = sorted(statlines_list, key=lambda x: (not x['is_away'], -x['MIN']))
+                            
+                            # Create columns for away and home teams
+                            adj_col1, adj_col2 = st.columns(2)
+                            
+                            with adj_col1:
+                                st.markdown(f"**{matchup_away_team_abbr}** (Away)")
+                                # Calculate total including manual adjustments
+                                away_total = 0.0
+                                for statline in statlines_list:
+                                    if statline['is_away']:
+                                        player_id_str = statline['player_id']
+                                        # Use manual adjustment if exists, otherwise use original
+                                        if player_id_str in st.session_state[manual_adjustments_key]:
+                                            away_total += st.session_state[manual_adjustments_key][player_id_str]
+                                        else:
+                                            away_total += statline['MIN']
+                                st.metric("Total Minutes", f"{away_total:.1f}", delta=f"{away_total - 240:.1f}" if abs(away_total - 240) > 0.1 else None)
+                                
+                                away_statlines = [s for s in statlines_list_sorted if s['is_away']]
+                                for statline in away_statlines:
+                                    player_id_str = statline['player_id']
+                                    player_key = f"min_adj_{player_id_str}"
+                                    
+                                    # Get current value (manual adjustment stored in session state, or original)
+                                    # Only use manual adjustment if it exists in session state
+                                    if player_id_str in st.session_state[manual_adjustments_key]:
+                                        current_min = st.session_state[manual_adjustments_key][player_id_str]
+                                    else:
+                                        current_min = statline['MIN']
+                                    
+                                    new_min = st.number_input(
+                                        f"{statline['Player']}",
+                                        min_value=0.0,
+                                        max_value=40.0,
+                                        value=float(current_min),
+                                        step=0.5,
+                                        key=player_key,
+                                        format="%.1f"
+                                    )
+                                    
+                                    # Store manual adjustment in session state (but don't apply until button click)
+                                    # Only store if different from original value
+                                    if abs(new_min - statline['MIN']) > 0.01:
+                                        st.session_state[manual_adjustments_key][player_id_str] = new_min
+                                    elif player_id_str in st.session_state[manual_adjustments_key] and abs(new_min - statline['MIN']) <= 0.01:
+                                        # If user resets to original value, remove from manual adjustments
+                                        del st.session_state[manual_adjustments_key][player_id_str]
+                            
+                            with adj_col2:
+                                st.markdown(f"**{matchup_home_team_abbr}** (Home)")
+                                # Calculate total including manual adjustments
+                                home_total = 0.0
+                                for statline in statlines_list:
+                                    if not statline['is_away']:
+                                        player_id_str = statline['player_id']
+                                        # Use manual adjustment if exists, otherwise use original
+                                        if player_id_str in st.session_state[manual_adjustments_key]:
+                                            home_total += st.session_state[manual_adjustments_key][player_id_str]
+                                        else:
+                                            home_total += statline['MIN']
+                                st.metric("Total Minutes", f"{home_total:.1f}", delta=f"{home_total - 240:.1f}" if abs(home_total - 240) > 0.1 else None)
+                                
+                                home_statlines = [s for s in statlines_list_sorted if not s['is_away']]
+                                for statline in home_statlines:
+                                    player_id_str = statline['player_id']
+                                    player_key = f"min_adj_{player_id_str}"
+                                    
+                                    # Get current value (manual adjustment stored in session state, or original)
+                                    # Only use manual adjustment if it exists in session state
+                                    if player_id_str in st.session_state[manual_adjustments_key]:
+                                        current_min = st.session_state[manual_adjustments_key][player_id_str]
+                                    else:
+                                        current_min = statline['MIN']
+                                    
+                                    new_min = st.number_input(
+                                        f"{statline['Player']}",
+                                        min_value=0.0,
+                                        max_value=40.0,
+                                        value=float(current_min),
+                                        step=0.5,
+                                        key=player_key,
+                                        format="%.1f"
+                                    )
+                                    
+                                    # Store manual adjustment in session state (but don't apply until button click)
+                                    # Only store if different from original value
+                                    if abs(new_min - statline['MIN']) > 0.01:
+                                        st.session_state[manual_adjustments_key][player_id_str] = new_min
+                                    elif player_id_str in st.session_state[manual_adjustments_key] and abs(new_min - statline['MIN']) <= 0.01:
+                                        # If user resets to original value, remove from manual adjustments
+                                        del st.session_state[manual_adjustments_key][player_id_str]
+                            
+                            # Show preview of manual adjustments if any exist
+                            if st.session_state[manual_adjustments_key]:
+                                st.info(f"ℹ️ {len(st.session_state[manual_adjustments_key])} player(s) have manual minute adjustments. Click 'Recalculate' to apply.")
+                            
+                            # Apply manual adjustments and recalculate button
+                            if st.button("🔄 Recalculate Stats & Value Plays", key="recalc_stats"):
+                                # Get cached predictions for regenerating base stats
+                                cached_game_predictions_recalc = st.session_state.predictions_game_cache.get(game_cache_key_bvp)
+                                
+                                # Create a copy of statlines_list to avoid modifying the cached version
+                                statlines_list_copy = []
+                                for statline in statlines_list:
+                                    statline_copy = statline.copy()
+                                    player_id_str = statline_copy['player_id']
+                                    # Apply manual adjustments if they exist
+                                    if player_id_str in st.session_state[manual_adjustments_key]:
+                                        # Store the pre-manual-adjustment minutes for scaling
+                                        statline_copy['_original_min'] = statline_copy['MIN']
+                                        statline_copy['MIN'] = st.session_state[manual_adjustments_key][player_id_str]
+                                    
+                                    # Get new minutes (after manual adjustment)
+                                    new_minutes = statline_copy['MIN']
+                                    
+                                    # Check if player needs base stats regenerated (has > 0 minutes but missing/invalid base_stats)
+                                    base_stats = statline_copy.get('_base_stats')
+                                    needs_base_stats = False
+                                    if new_minutes > 0.01:
+                                        if not base_stats:
+                                            needs_base_stats = True
+                                        elif all(v == 0.0 for v in base_stats.values()):
+                                            # Base stats exist but are all zeros (player was initially at 0 minutes)
+                                            needs_base_stats = True
+                                    
+                                    # Regenerate base stats from cached predictions if needed
+                                    if needs_base_stats and cached_game_predictions_recalc:
+                                        try:
+                                            player_id_int = int(player_id_str)
+                                            if player_id_int in cached_game_predictions_recalc:
+                                                player_data = cached_game_predictions_recalc[player_id_int]
+                                                predictions_dict = player_data.get('predictions', {})
+                                                
+                                                # Extract base predictions using same pattern as initial statline building
+                                                def get_pred_value(stat_key):
+                                                    pred_obj = predictions_dict.get(stat_key)
+                                                    if pred_obj and hasattr(pred_obj, 'value'):
+                                                        return pred_obj.value
+                                                    return 0.0
+                                                
+                                                # Regenerate base stats from cached predictions
+                                                statline_copy['_base_stats'] = {
+                                                    'PTS': get_pred_value('PTS'),
+                                                    'REB': get_pred_value('REB'),
+                                                    'AST': get_pred_value('AST'),
+                                                    'STL': get_pred_value('STL'),
+                                                    'BLK': get_pred_value('BLK'),
+                                                    'TOV': get_pred_value('TOV'),
+                                                    'FG3M': get_pred_value('FG3M'),
+                                                    'FTM': get_pred_value('FTM')
+                                                }
+                                                
+                                                # Also set original season minutes if missing
+                                                if '_original_season_minutes' not in statline_copy or statline_copy.get('_original_season_minutes', 0) == 0:
+                                                    # Get from player_minutes_map or use new_minutes as fallback
+                                                    statline_copy['_original_season_minutes'] = player_minutes_map.get(player_id_int, new_minutes)
+                                                
+                                                # Set injury-adjusted minutes to new_minutes if missing
+                                                if '_injury_adjusted_minutes' not in statline_copy:
+                                                    statline_copy['_injury_adjusted_minutes'] = new_minutes
+                                        except (ValueError, KeyError, AttributeError) as e:
+                                            # If regeneration fails, fall back to current stats
+                                            if not base_stats:
+                                                statline_copy['_base_stats'] = {
+                                                    'PTS': statline_copy.get('PTS', 0.0),
+                                                    'REB': statline_copy.get('REB', 0.0),
+                                                    'AST': statline_copy.get('AST', 0.0),
+                                                    'STL': statline_copy.get('STL', 0.0),
+                                                    'BLK': statline_copy.get('BLK', 0.0),
+                                                    'TOV': statline_copy.get('TOV', 0.0),
+                                                    'FG3M': statline_copy.get('FG3M', 0.0),
+                                                    'FTM': statline_copy.get('FTM', 0.0)
+                                                }
+                                    
+                                    # Ensure _original_season_minutes is preserved
+                                    if '_original_season_minutes' not in statline_copy or statline_copy.get('_original_season_minutes', 0) == 0:
+                                        # Fallback: use _original_min if available, otherwise current MIN
+                                        statline_copy['_original_season_minutes'] = statline_copy.get('_original_min', statline_copy['MIN'])
+                                    
+                                    # Ensure base stats exist (fallback if regeneration didn't happen)
+                                    if '_base_stats' not in statline_copy:
+                                        # If base stats don't exist, create them from current stats (fallback)
+                                        statline_copy['_base_stats'] = {
+                                            'PTS': statline_copy.get('PTS', 0.0),
+                                            'REB': statline_copy.get('REB', 0.0),
+                                            'AST': statline_copy.get('AST', 0.0),
+                                            'STL': statline_copy.get('STL', 0.0),
+                                            'BLK': statline_copy.get('BLK', 0.0),
+                                            'TOV': statline_copy.get('TOV', 0.0),
+                                            'FG3M': statline_copy.get('FG3M', 0.0),
+                                            'FTM': statline_copy.get('FTM', 0.0)
+                                        }
+                                    # _injury_multipliers should already be preserved from the copy
+                                    
+                                    # Ensure all required stat fields exist with default values
+                                    required_stats = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'FG3M', 'FTM']
+                                    for stat in required_stats:
+                                        if stat not in statline_copy:
+                                            statline_copy[stat] = 0.0
+                                    
+                                    statlines_list_copy.append(statline_copy)
+                                
+                                # Use the copy for recalculation
+                                statlines_list = statlines_list_copy
+                                
+                                # Get bulk game logs for recent activity check
+                                bulk_game_logs = pf_features.get_bulk_player_game_logs()
+                                
+                                # Get out_player_ids from session state or reconstruct
+                                matchup_inj_key = f"{game_cache_key_bvp}_injuries"
+                                matchup_inj = st.session_state.get('matchup_injuries_cache', {}).get(matchup_inj_key, {'away': [], 'home': []})
+                                out_player_ids_recalc = set()
+                                for injury_item in matchup_inj.get('away', []) + matchup_inj.get('home', []):
+                                    status_lower = injury_item.get('status', '').lower()
+                                    if 'out' in status_lower or 'doubtful' in status_lower:
+                                        if injury_item.get('player_id'):
+                                            out_player_ids_recalc.add(str(injury_item['player_id']))
+                                
+                                # Re-normalize minutes to 240 per team
+                                normalize_team_minutes(
+                                    statlines_list, 
+                                    target_minutes=240.0,
+                                    out_player_ids=out_player_ids_recalc,
+                                    bulk_game_logs=bulk_game_logs,
+                                    game_date=game_date_str_bvp
+                                )
+                                
+                                # Ensure players with 0 minutes have all stats set to 0
+                                for statline in statlines_list:
+                                    if statline.get('MIN', 0) == 0 or statline.get('MIN', 0) < 0.01:
+                                        statline['PTS'] = 0.0
+                                        statline['REB'] = 0.0
+                                        statline['AST'] = 0.0
+                                        statline['STL'] = 0.0
+                                        statline['BLK'] = 0.0
+                                        statline['TOV'] = 0.0
+                                        statline['FG3M'] = 0.0
+                                        statline['FTM'] = 0.0
+                                        statline['PRA'] = 0.0
+                                        statline['RA'] = 0.0
+                                        statline['FPTS'] = 0.0
+                                
+                                # Display normalized minutes summary
+                                st.success("✅ Minutes normalized to 240 per team. See normalized minutes below:")
+                                
+                                # Show normalized minutes breakdown
+                                norm_col1, norm_col2 = st.columns(2)
+                                
+                                with norm_col1:
+                                    st.markdown(f"**{matchup_away_team_abbr} Normalized Minutes:**")
+                                    away_norm_total = 0.0
+                                    away_norm_list = []
+                                    for statline in statlines_list:
+                                        if statline['is_away']:
+                                            away_norm_total += statline['MIN']
+                                            away_norm_list.append({
+                                                'Player': statline['Player'],
+                                                'MIN': statline['MIN']
+                                            })
+                                    # Sort by minutes descending
+                                    away_norm_list.sort(key=lambda x: x['MIN'], reverse=True)
+                                    for item in away_norm_list:
+                                        st.write(f"{item['Player']}: {item['MIN']:.1f}")
+                                    st.metric("Total", f"{away_norm_total:.1f}", delta=f"{away_norm_total - 240:.1f}" if abs(away_norm_total - 240) > 0.01 else None)
+                                
+                                with norm_col2:
+                                    st.markdown(f"**{matchup_home_team_abbr} Normalized Minutes:**")
+                                    home_norm_total = 0.0
+                                    home_norm_list = []
+                                    for statline in statlines_list:
+                                        if not statline['is_away']:
+                                            home_norm_total += statline['MIN']
+                                            home_norm_list.append({
+                                                'Player': statline['Player'],
+                                                'MIN': statline['MIN']
+                                            })
+                                    # Sort by minutes descending
+                                    home_norm_list.sort(key=lambda x: x['MIN'], reverse=True)
+                                    for item in home_norm_list:
+                                        st.write(f"{item['Player']}: {item['MIN']:.1f}")
+                                    st.metric("Total", f"{home_norm_total:.1f}", delta=f"{home_norm_total - 240:.1f}" if abs(home_norm_total - 240) > 0.01 else None)
+                                
+                                # Update normalized predictions for Value Plays
+                                normalized_predictions = {}
+                                for statline in statlines_list:
+                                    player_id_str = statline['player_id']
+                                    if player_id_str not in normalized_predictions:
+                                        normalized_predictions[player_id_str] = {
+                                            'predictions': {},
+                                            'player_name': statline['Player'],
+                                            'team_abbr': statline['Team']
+                                        }
+                                    
+                                    from prediction_model import Prediction
+                                    normalized_predictions[player_id_str]['predictions']['PTS'] = Prediction(
+                                        stat='PTS', value=statline['PTS'], confidence='high',
+                                        breakdown={'normalized': statline['PTS']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['REB'] = Prediction(
+                                        stat='REB', value=statline['REB'], confidence='high',
+                                        breakdown={'normalized': statline['REB']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['AST'] = Prediction(
+                                        stat='AST', value=statline['AST'], confidence='high',
+                                        breakdown={'normalized': statline['AST']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['STL'] = Prediction(
+                                        stat='STL', value=statline['STL'], confidence='high',
+                                        breakdown={'normalized': statline['STL']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['BLK'] = Prediction(
+                                        stat='BLK', value=statline['BLK'], confidence='high',
+                                        breakdown={'normalized': statline['BLK']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['TOV'] = Prediction(
+                                        stat='TOV', value=statline['TOV'], confidence='high',
+                                        breakdown={'normalized': statline['TOV']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['FG3M'] = Prediction(
+                                        stat='FG3M', value=statline['FG3M'], confidence='high',
+                                        breakdown={'normalized': statline['FG3M']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['FTM'] = Prediction(
+                                        stat='FTM', value=statline['FTM'], confidence='high',
+                                        breakdown={'normalized': statline['FTM']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['PRA'] = Prediction(
+                                        stat='PRA', value=statline['PRA'], confidence='high',
+                                        breakdown={'normalized': statline['PRA']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['RA'] = Prediction(
+                                        stat='RA', value=statline['RA'], confidence='high',
+                                        breakdown={'normalized': statline['RA']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['FPTS'] = Prediction(
+                                        stat='FPTS', value=statline['FPTS'], confidence='high',
+                                        breakdown={'normalized': statline['FPTS']}, factors={'source': 'normalized_statline'}
+                                    )
+                                
+                                # Recalculate Value Plays
+                                best_plays = pm.find_best_value_plays(
+                                    all_predictions=normalized_predictions,
+                                    all_props=cached_game_props,
+                                    min_edge_pct=float(min_edge),
+                                    confidence_filter=confidence_options if confidence_options else ['high', 'medium', 'low'],
+                                    stat_filter=stat_options if stat_options else ['PTS', 'REB', 'AST', 'PRA'],
+                                    injury_adjustments_map=None
+                                )
+                                
+                                # Update session state
+                                st.session_state[normalized_statlines_key] = statlines_list
+                                st.session_state[f"{game_cache_key_bvp}_normalized_predictions"] = normalized_predictions
+                                st.session_state[f"{game_cache_key_bvp}_best_plays"] = best_plays
+                                
+                                st.rerun()
+                            
+                            # Reset button
+                            if st.button("🔄 Reset to Original", key="reset_minutes"):
+                                st.session_state[manual_adjustments_key] = {}
+                                st.rerun()
                         
                         # Sort: away team first (minutes descending), then home team (minutes descending)
                         statlines_list.sort(key=lambda x: (not x['is_away'], -x['MIN']))
@@ -686,6 +1899,17 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                             display_statlines_df[col] = display_statlines_df[col].apply(lambda x: f"{x:.1f}")
                         
                         st.dataframe(display_statlines_df, width='stretch', hide_index=True)
+                        
+                        # Download button for Predicted Statlines
+                        csv_statlines = statlines_df[['Player', 'Team', 'MIN', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'FG3M', 'FTM', 'PRA', 'FPTS']].copy()
+                        csv_statlines_str = csv_statlines.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Download Predicted Statlines CSV",
+                            data=csv_statlines_str,
+                            file_name=f"predicted_statlines_{matchup_away_team_abbr}_vs_{matchup_home_team_abbr}_{game_date_str_bvp}.csv",
+                            mime="text/csv",
+                            key="download_statlines"
+                        )
                         
                         # Calculate team totals
                         st.markdown("---")
@@ -791,15 +2015,46 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
                                 comparison_lines.append(f"**Total**: Predicted {total_score:.1f} vs Line {game_lines_total:.1f} ({total_diff:+.1f}, **{total_lean}**)")
                             
                             if game_lines_spread is not None:
-                                # Spread is from home team perspective (positive = home favored)
+                                # Spread is from home team perspective
+                                # If line is -7.5, that means home team is favored by 7.5 (home needs to win by 7.5+)
+                                # If line is +7.5, that means away team is favored by 7.5 (home can lose by up to 7.5)
                                 predicted_spread = home_total_pts - away_total_pts
-                                spread_diff = predicted_spread - game_lines_spread
-                                # Show which team covers based on spread
-                                if spread_diff > 0:
-                                    covering_team = matchup_home_team_abbr
+                                
+                                # Determine which team covers and by how much
+                                # If home is favored (negative line):
+                                #   - Home covers if predicted_spread >= line (e.g., -5.0 >= -7.5 means home wins by 5, which beats -7.5)
+                                #   - Away covers if predicted_spread < line (e.g., -12.5 < -7.5 means home loses by 12.5, away beats spread)
+                                # If away is favored (positive line):
+                                #   - Away covers if predicted_spread <= line (e.g., 5.0 <= 7.5 means home loses by 5, away beats spread)
+                                #   - Home covers if predicted_spread > line (e.g., 10.0 > 7.5 means home wins by 10, home beats spread)
+                                
+                                if game_lines_spread < 0:
+                                    # Home is favored (negative line, e.g., -7.5)
+                                    if predicted_spread >= game_lines_spread:
+                                        # Home covers: predicted margin >= line (e.g., -5.0 >= -7.5)
+                                        covering_team = matchup_home_team_abbr
+                                        covering_margin = predicted_spread - game_lines_spread
+                                    else:
+                                        # Away covers: predicted margin < line (e.g., -12.5 < -7.5)
+                                        # Away beats spread by: |predicted_spread| + |line| = how much home underperformed
+                                        # Example: MIN favored by 7.5, loses by 12.5 -> NYK beats spread by 12.5 + 7.5 = 20.0
+                                        covering_team = matchup_away_team_abbr
+                                        covering_margin = abs(predicted_spread) + abs(game_lines_spread)
                                 else:
-                                    covering_team = matchup_away_team_abbr
-                                comparison_lines.append(f"**Spread**: Predicted {matchup_home_team_abbr} {predicted_spread:+.1f} vs Line {game_lines_spread:+.1f} ({spread_diff:+.1f}, **{covering_team} covers**)")
+                                    # Away is favored (positive line, e.g., +7.5)
+                                    if predicted_spread <= game_lines_spread:
+                                        # Away covers: predicted margin <= line (e.g., 5.0 <= 7.5)
+                                        # Away beats spread by: line - predicted_spread
+                                        covering_team = matchup_away_team_abbr
+                                        covering_margin = game_lines_spread - predicted_spread
+                                    else:
+                                        # Home covers: predicted margin > line (e.g., 10.0 > 7.5)
+                                        # Home beats spread by: predicted_spread - line
+                                        covering_team = matchup_home_team_abbr
+                                        covering_margin = predicted_spread - game_lines_spread
+                                
+                                # Format: Show predicted spread from home perspective, then which team covers
+                                comparison_lines.append(f"**Spread**: Predicted {matchup_home_team_abbr} {predicted_spread:+.1f} vs Line {game_lines_spread:+.1f} ({covering_team} +{covering_margin:.1f}, **{covering_team} covers**)")
                             
                             if comparison_lines:
                                 for line in comparison_lines:
@@ -2194,7 +3449,7 @@ with tab2:
                     projected_minutes = st.number_input(
                         "Projected Minutes",
                         min_value=0.0,
-                        max_value=48.0,
+                        max_value=40.0,
                         value=float(season_minutes),
                         step=0.5,
                         key="projected_minutes_tab2",
@@ -2204,7 +3459,7 @@ with tab2:
                     projected_minutes = st.number_input(
                         "Projected Minutes",
                         min_value=0.0,
-                        max_value=48.0,
+                        max_value=40.0,
                         value=32.0,
                         step=0.5,
                         key="projected_minutes_tab2",
@@ -2270,13 +3525,30 @@ with tab2:
                     else:
                         adjusted_predictions[stat] = pred.value
                 
-                # Recalculate PRA if individual stats were adjusted
-                if injury_adjustments:
-                    adjusted_predictions['PRA'] = round(
-                        adjusted_predictions.get('PTS', predictions['PTS'].value) +
-                        adjusted_predictions.get('REB', predictions['REB'].value) +
-                        adjusted_predictions.get('AST', predictions['AST'].value), 1
-                    )
+                # Always recalculate PRA, RA, and FPTS from adjusted values
+                adjusted_pts = adjusted_predictions.get('PTS', predictions['PTS'].value)
+                adjusted_reb = adjusted_predictions.get('REB', predictions['REB'].value)
+                adjusted_ast = adjusted_predictions.get('AST', predictions['AST'].value)
+                adjusted_stl = adjusted_predictions.get('STL', predictions['STL'].value)
+                adjusted_blk = adjusted_predictions.get('BLK', predictions['BLK'].value)
+                adjusted_tov = adjusted_predictions.get('TOV', predictions['TOV'].value)
+                
+                # Recalculate PRA (Points + Rebounds + Assists)
+                adjusted_predictions['PRA'] = round(adjusted_pts + adjusted_reb + adjusted_ast, 1)
+                
+                # Recalculate RA (Rebounds + Assists)
+                adjusted_predictions['RA'] = round(adjusted_reb + adjusted_ast, 1)
+                
+                # Recalculate FPTS using Underdog formula: PTS*1 + REB*1.2 + AST*1.5 + STL*3 + BLK*3 - TOV*1
+                adjusted_predictions['FPTS'] = round(
+                    adjusted_pts * 1.0 + 
+                    adjusted_reb * 1.2 + 
+                    adjusted_ast * 1.5 + 
+                    adjusted_stl * 3.0 + 
+                    adjusted_blk * 3.0 - 
+                    adjusted_tov * 1.0, 
+                    1
+                )
                 
                 # Display main predictions in columns
                 has_injury_adj = injury_adjustments and injury_adjustments.get('factors')
@@ -2543,7 +3815,7 @@ with tab2:
                             )
                             computed_season_avgs['FPTS'] = game_logs_copy['FPTS'].mean()
                     
-                    for stat in ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'FG3M', 'FTM', 'FPTS']:
+                    for stat in ['PTS', 'REB', 'AST', 'PRA', 'RA', 'STL', 'BLK', 'TOV', 'FG3M', 'FTM', 'FPTS']:
                         if stat in predictions:
                             pred = predictions[stat]
                             col_name = stat_to_col.get(stat, stat)  # Use mapped name if exists
@@ -2669,7 +3941,18 @@ Estimated Cost: {preview['estimated_cost']}
                                     
                                     st.rerun()
                                 else:
-                                    st.error(f"❌ API Error: {api_response.error}")
+                                    # Show detailed error message
+                                    error_msg = api_response.error or "Unknown API error"
+                                    st.error(f"❌ API Error: {error_msg}")
+                                    
+                                    # Provide helpful guidance for common errors
+                                    if "Invalid API key" in error_msg:
+                                        st.info("💡 **Troubleshooting:**\n"
+                                               "- Verify your API key in The Odds API dashboard\n"
+                                               "- If you just upgraded, try regenerating your API key\n"
+                                               "- Wait a few minutes for activation after upgrading\n"
+                                               "- Ensure there are no extra spaces in the API key")
+                                    
                                     if api_response.credits_remaining is not None:
                                         st.session_state.odds_api_credits = api_response.credits_remaining
                     
@@ -2681,7 +3964,8 @@ Estimated Cost: {preview['estimated_cost']}
                     
                     # Show credit info and cache status
                     if st.session_state.odds_api_credits is not None:
-                        st.info(f"💳 API Credits Remaining: **{st.session_state.odds_api_credits}** / 500 (monthly)")
+                        # Display credits without hardcoded limit (limit varies by subscription tier)
+                        st.info(f"💳 API Credits Remaining: **{st.session_state.odds_api_credits}**")
                     
                     if cached_game_props is not None and cached_props:
                         st.success(f"📊 Found {len(cached_props)} props for **{player_data['player_info_name']}** from cached game data")

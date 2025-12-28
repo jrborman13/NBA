@@ -19,7 +19,7 @@ LINES_FILE = "player_lines.json"
 # ============================================================
 # THE ODDS API CONFIGURATION
 # ============================================================
-ODDS_API_KEY = "32cd8305aaed24b2110264bd2c70b402"  # Move to env later
+ODDS_API_KEY = "b1e07a3930c492ee79199a526b2d1c2b"  # Move to env later
 ODDS_API_BASE = "https://api.the-odds-api.com/v4"
 SPORT = "basketball_nba"
 REGION = "us_dfs"
@@ -443,10 +443,15 @@ def fetch_player_props(event_id: str, markets: Optional[List[str]] = None) -> Od
                 credits_remaining=credits_remaining
             )
         elif response.status_code == 401:
+            # Try to get more details from response body
+            try:
+                error_detail = response.json().get('message', 'Invalid API key')
+            except:
+                error_detail = "Invalid API key"
             return OddsAPIResponse(
                 success=False,
                 data=None,
-                error="Invalid API key",
+                error=f"Invalid API key: {error_detail}. Please verify your API key in The Odds API dashboard.",
                 credits_used=credits_used,
                 credits_remaining=credits_remaining
             )
@@ -686,8 +691,20 @@ def get_remaining_credits() -> Tuple[int, Optional[str]]:
     
     try:
         response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code == 401:
+            try:
+                error_detail = response.json().get('message', 'Invalid API key')
+            except:
+                error_detail = 'Invalid API key'
+            return 0, f"Invalid API key: {error_detail}. Please verify your API key in The Odds API dashboard."
+        elif response.status_code != 200:
+            return 0, f"API error: {response.status_code}"
+        
         remaining = int(response.headers.get('x-requests-remaining', 0))
         return remaining, None
+    except requests.exceptions.RequestException as e:
+        return 0, f"Request error: {str(e)}"
     except Exception as e:
         return 0, str(e)
 

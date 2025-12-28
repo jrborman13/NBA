@@ -254,7 +254,7 @@ def get_todays_matchups():
         games = scoreboard.ScoreBoard()
         games_json = json.loads(games.get_json())
         todays_games = games_json['scoreboard']['games']
-        
+
         matchups = []
         for game in todays_games:
             away_team_id = game['awayTeam']['teamId']
@@ -401,7 +401,7 @@ if away_id is not None and home_id is not None:
     home_team_record = safe_get_value(standings, home_id, 'Record', id_column='TeamID')
     home_team_seed = safe_get_value(standings, home_id, 'PlayoffRank', id_column='TeamID')
     home_team_division_seed = safe_get_value(standings, home_id, 'DivisionRank', id_column='TeamID')
-    
+
     #Offensive Ratings
     ## Away Team
     away_team_ortg = safe_get_value(data_adv_season, away_id, 'OFF_RATING', 0)
@@ -416,7 +416,7 @@ if away_id is not None and home_id is not None:
     home_team_ortg_rank = safe_get_value(data_adv_season, home_id, 'OFF_RATING_RANK', 0)
     l5_home_team_ortg = safe_get_value(data_adv_L5, home_id, 'OFF_RATING', 0)
     l5_home_team_ortg_rank = safe_get_value(data_adv_L5, home_id, 'OFF_RATING_RANK', 0)
-    
+
     #Defensive Ratings
     ## Away Team
     away_team_drtg = safe_get_value(data_adv_season, away_id, 'DEF_RATING', 0)
@@ -431,7 +431,7 @@ if away_id is not None and home_id is not None:
     home_team_drtg_rank = safe_get_value(data_adv_season, home_id, 'DEF_RATING_RANK', 0)
     l5_home_team_drtg = safe_get_value(data_adv_L5, home_id, 'DEF_RATING', 0)
     l5_home_team_drtg_rank = safe_get_value(data_adv_L5, home_id, 'DEF_RATING_RANK', 0)
-    
+
     #Net Ratings
     ## Away Team
     away_team_net = safe_get_value(data_adv_season, away_id, 'NET_RATING', 0)
@@ -446,9 +446,9 @@ if away_id is not None and home_id is not None:
     home_team_net_rank = safe_get_value(data_adv_season, home_id, 'NET_RATING_RANK', 0)
     l5_home_team_net = safe_get_value(data_adv_L5, home_id, 'NET_RATING', 0)
     l5_home_team_net_rank = safe_get_value(data_adv_L5, home_id, 'NET_RATING_RANK', 0)
-    
+
     #REBOUND PERCENTAGES
-    
+
     #DREB%
     ## Away Team
     away_team_dreb = safe_get_value(data_adv_season, away_id, 'DREB_PCT', 0)
@@ -463,7 +463,7 @@ if away_id is not None and home_id is not None:
     home_team_dreb_rank = safe_get_value(data_adv_season, home_id, 'DREB_PCT_RANK', 0)
     l5_home_team_dreb = safe_get_value(data_adv_L5, home_id, 'DREB_PCT', 0)
     l5_home_team_dreb_rank = safe_get_value(data_adv_L5, home_id, 'DREB_PCT_RANK', 0)
-    
+
     #OREB%
     ## Away Team
     away_team_oreb = safe_get_value(data_adv_season, away_id, 'OREB_PCT', 0)
@@ -478,7 +478,7 @@ if away_id is not None and home_id is not None:
     home_team_oreb_rank = safe_get_value(data_adv_season, home_id, 'OREB_PCT_RANK', 0)
     l5_home_team_oreb = safe_get_value(data_adv_L5, home_id, 'OREB_PCT', 0)
     l5_home_team_oreb_rank = safe_get_value(data_adv_L5, home_id, 'OREB_PCT_RANK', 0)
-    
+
     #REB%
     ## Away Team
     away_team_reb = safe_get_value(data_adv_season, away_id, 'REB_PCT', 0)
@@ -686,50 +686,82 @@ else:
 #POINTS IN THE PAINT
 # Only calculate if we have valid team IDs
 if away_id is not None and home_id is not None:
-    #OFFENSE
-    ## Away Team
-    away_team_pitp_off = safe_get_value(data_misc_season, away_id, 'PTS_PAINT', 0)
-    away_team_pitp_off_rank = safe_get_value(data_misc_season, away_id, 'PTS_PAINT_RANK', 0)
-    l5_away_team_pitp_off = safe_get_value(data_misc_L5, away_id, 'PTS_PAINT', 0)
-    l5_away_team_pitp_off_rank = safe_get_value(data_misc_L5, away_id, 'PTS_PAINT_RANK', 0)
-    ## League Average
-    la_pitp_off = round(data_misc_season['PTS_PAINT'].mean(), 1)
-    l5_la_pitp_off = round(data_misc_L5['PTS_PAINT'].mean(), 1)
-    ## Home Team
-    home_team_pitp_off = safe_get_value(data_misc_season, home_id, 'PTS_PAINT', 0)
-    home_team_pitp_off_rank = safe_get_value(data_misc_season, home_id, 'PTS_PAINT_RANK', 0)
-    l5_home_team_pitp_off = safe_get_value(data_misc_L5, home_id, 'PTS_PAINT', 0)
-    l5_home_team_pitp_off_rank = safe_get_value(data_misc_L5, home_id, 'PTS_PAINT_RANK', 0)
-    
-    #DEFENSE
-    ## Away Team
-    away_team_pitp_def = safe_get_value(data_misc_season, away_id, 'OPP_PTS_PAINT', 0)
-    away_team_pitp_def_rank = safe_get_value(data_misc_season, away_id, 'OPP_PTS_PAINT_RANK', 0)
-    l5_away_team_pitp_def = safe_get_value(data_misc_L5, away_id, 'OPP_PTS_PAINT', 0)
-    l5_away_team_pitp_def_rank = safe_get_value(data_misc_L5, away_id, 'OPP_PTS_PAINT_RANK', 0)
-    ## League Average
-    la_pitp_def = round(data_misc_season['OPP_PTS_PAINT'].mean(), 1)
-    l5_la_pitp_def = round(data_misc_L5['OPP_PTS_PAINT'].mean(), 1)
-    ## Home Team
-    home_team_pitp_def = safe_get_value(data_misc_season, home_id, 'OPP_PTS_PAINT', 0)
-    home_team_pitp_def_rank = safe_get_value(data_misc_season, home_id, 'OPP_PTS_PAINT_RANK', 0)
-    l5_home_team_pitp_def = safe_get_value(data_misc_L5, home_id, 'OPP_PTS_PAINT', 0)
-    l5_home_team_pitp_def_rank = safe_get_value(data_misc_L5, home_id, 'OPP_PTS_PAINT_RANK', 0)
-    
-    #DIFFERENCE
-    ## Away Team
-    away_team_pitp_diff = round(safe_get_value(data_misc_season, away_id, 'PTS_PAINT_DIFF', 0), 1)
-away_team_pitp_diff_rank = int(data_misc_season.loc[data_misc_season['TEAM_ID'] == away_id, 'PTS_PAINT_DIFF_RANK'].values[0])
-l5_away_team_pitp_diff = round(data_misc_L5.loc[data_misc_L5['TEAM_ID'] == away_id, 'PTS_PAINT_DIFF'].values[0], 1)
-l5_away_team_pitp_diff_rank = int(data_misc_L5.loc[data_misc_L5['TEAM_ID'] == away_id, 'PTS_PAINT_DIFF_RANK'].values[0])
-## League Average
-la_pitp_diff = round(data_misc_season['PTS_PAINT_DIFF'].mean(), 1)
-l5_la_pitp_diff = round(data_misc_L5['PTS_PAINT_DIFF'].mean(), 1)
-## Home Team
-home_team_pitp_diff = round(data_misc_season.loc[data_misc_season['TEAM_ID'] == home_id, 'PTS_PAINT_DIFF'].values[0], 1)
-home_team_pitp_diff_rank = int(data_misc_season.loc[data_misc_season['TEAM_ID'] == home_id, 'PTS_PAINT_DIFF_RANK'].values[0])
-l5_home_team_pitp_diff = round(data_misc_L5.loc[data_misc_L5['TEAM_ID'] == home_id, 'PTS_PAINT_DIFF'].values[0], 1)
-l5_home_team_pitp_diff_rank = int(data_misc_L5.loc[data_misc_L5['TEAM_ID'] == home_id, 'PTS_PAINT_DIFF_RANK'].values[0])
+        #OFFENSE
+        ## Away Team
+        away_team_pitp_off = safe_get_value(data_misc_season, away_id, 'PTS_PAINT', 0)
+        away_team_pitp_off_rank = safe_get_value(data_misc_season, away_id, 'PTS_PAINT_RANK', 0)
+        l5_away_team_pitp_off = safe_get_value(data_misc_L5, away_id, 'PTS_PAINT', 0)
+        l5_away_team_pitp_off_rank = safe_get_value(data_misc_L5, away_id, 'PTS_PAINT_RANK', 0)
+        ## League Average
+        la_pitp_off = round(data_misc_season['PTS_PAINT'].mean(), 1)
+        l5_la_pitp_off = round(data_misc_L5['PTS_PAINT'].mean(), 1)
+        ## Home Team
+        home_team_pitp_off = safe_get_value(data_misc_season, home_id, 'PTS_PAINT', 0)
+        home_team_pitp_off_rank = safe_get_value(data_misc_season, home_id, 'PTS_PAINT_RANK', 0)
+        l5_home_team_pitp_off = safe_get_value(data_misc_L5, home_id, 'PTS_PAINT', 0)
+        l5_home_team_pitp_off_rank = safe_get_value(data_misc_L5, home_id, 'PTS_PAINT_RANK', 0)
+
+        #DEFENSE
+        ## Away Team
+        away_team_pitp_def = safe_get_value(data_misc_season, away_id, 'OPP_PTS_PAINT', 0)
+        away_team_pitp_def_rank = safe_get_value(data_misc_season, away_id, 'OPP_PTS_PAINT_RANK', 0)
+        l5_away_team_pitp_def = safe_get_value(data_misc_L5, away_id, 'OPP_PTS_PAINT', 0)
+        l5_away_team_pitp_def_rank = safe_get_value(data_misc_L5, away_id, 'OPP_PTS_PAINT_RANK', 0)
+        ## League Average
+        la_pitp_def = round(data_misc_season['OPP_PTS_PAINT'].mean(), 1)
+        l5_la_pitp_def = round(data_misc_L5['OPP_PTS_PAINT'].mean(), 1)
+        ## Home Team
+        home_team_pitp_def = safe_get_value(data_misc_season, home_id, 'OPP_PTS_PAINT', 0)
+        home_team_pitp_def_rank = safe_get_value(data_misc_season, home_id, 'OPP_PTS_PAINT_RANK', 0)
+        l5_home_team_pitp_def = safe_get_value(data_misc_L5, home_id, 'OPP_PTS_PAINT', 0)
+        l5_home_team_pitp_def_rank = safe_get_value(data_misc_L5, home_id, 'OPP_PTS_PAINT_RANK', 0)
+
+        #DIFFERENCE
+        ## Away Team
+        away_team_pitp_diff = round(safe_get_value(data_misc_season, away_id, 'PTS_PAINT_DIFF', 0), 1)
+        away_team_pitp_diff_rank = int(data_misc_season.loc[data_misc_season['TEAM_ID'] == away_id, 'PTS_PAINT_DIFF_RANK'].values[0])
+        l5_away_team_pitp_diff = round(data_misc_L5.loc[data_misc_L5['TEAM_ID'] == away_id, 'PTS_PAINT_DIFF'].values[0], 1)
+        l5_away_team_pitp_diff_rank = int(data_misc_L5.loc[data_misc_L5['TEAM_ID'] == away_id, 'PTS_PAINT_DIFF_RANK'].values[0])
+        ## League Average
+        la_pitp_diff = round(data_misc_season['PTS_PAINT_DIFF'].mean(), 1)
+        l5_la_pitp_diff = round(data_misc_L5['PTS_PAINT_DIFF'].mean(), 1)
+        ## Home Team
+        home_team_pitp_diff = round(data_misc_season.loc[data_misc_season['TEAM_ID'] == home_id, 'PTS_PAINT_DIFF'].values[0], 1)
+        home_team_pitp_diff_rank = int(data_misc_season.loc[data_misc_season['TEAM_ID'] == home_id, 'PTS_PAINT_DIFF_RANK'].values[0])
+        l5_home_team_pitp_diff = round(data_misc_L5.loc[data_misc_L5['TEAM_ID'] == home_id, 'PTS_PAINT_DIFF'].values[0], 1)
+        l5_home_team_pitp_diff_rank = int(data_misc_L5.loc[data_misc_L5['TEAM_ID'] == home_id, 'PTS_PAINT_DIFF_RANK'].values[0])
+else:
+    # Set default values when team IDs are not available
+    away_team_pitp_off = 0
+    away_team_pitp_off_rank = 0
+    l5_away_team_pitp_off = 0
+    l5_away_team_pitp_off_rank = 0
+    home_team_pitp_off = 0
+    home_team_pitp_off_rank = 0
+    l5_home_team_pitp_off = 0
+    l5_home_team_pitp_off_rank = 0
+    away_team_pitp_def = 0
+    away_team_pitp_def_rank = 0
+    l5_away_team_pitp_def = 0
+    l5_away_team_pitp_def_rank = 0
+    home_team_pitp_def = 0
+    home_team_pitp_def_rank = 0
+    l5_home_team_pitp_def = 0
+    l5_home_team_pitp_def_rank = 0
+    away_team_pitp_diff = 0
+    away_team_pitp_diff_rank = 0
+    l5_away_team_pitp_diff = 0
+    l5_away_team_pitp_diff_rank = 0
+    home_team_pitp_diff = 0
+    home_team_pitp_diff_rank = 0
+    l5_home_team_pitp_diff = 0
+    l5_home_team_pitp_diff_rank = 0
+    la_pitp_off = 0
+    l5_la_pitp_off = 0
+    la_pitp_def = 0
+    l5_la_pitp_def = 0
+    la_pitp_diff = 0
+    l5_la_pitp_diff = 0
 
 #2ND CHANCE POINTS
 
@@ -1706,7 +1738,7 @@ def get_team_roster_stats(team_id: int, players_df: pd.DataFrame, game_logs_df: 
         team_id: NBA team ID
         players_df: DataFrame from PlayerIndex
         game_logs_df: DataFrame from PlayerGameLogs
-        num_games: Number of recent games to average (None = all games / season)
+        num_games: Number of recent TEAM games to average (None = all games / season)
     
     Returns:
         DataFrame with player stats
@@ -1716,6 +1748,24 @@ def get_team_roster_stats(team_id: int, players_df: pd.DataFrame, game_logs_df: 
     
     if len(team_players) == 0:
         return pd.DataFrame()
+    
+    # Get team's game logs to identify team's last N games
+    team_logs = game_logs_df[game_logs_df['TEAM_ID'].astype(int) == team_id].copy()
+    
+    if len(team_logs) == 0:
+        return pd.DataFrame()
+    
+    # Get unique team games, sorted by date descending (most recent first)
+    team_logs['GAME_DATE'] = pd.to_datetime(team_logs['GAME_DATE'])
+    team_logs = team_logs.sort_values(by='GAME_DATE', ascending=False)
+    
+    # Get unique game IDs for the team's last N games
+    if num_games is not None and num_games > 0:
+        # Get unique game IDs from the most recent N games
+        team_game_ids = team_logs['GAME_ID'].unique()[:num_games]
+    else:
+        # All team games
+        team_game_ids = team_logs['GAME_ID'].unique()
     
     roster_stats = []
     
@@ -1730,12 +1780,15 @@ def get_team_roster_stats(team_id: int, players_df: pd.DataFrame, game_logs_df: 
         if len(player_logs) == 0:
             continue
         
-        # Sort by date descending (most recent first)
-        player_logs = player_logs.sort_values(by='GAME_DATE', ascending=False)
+        # Filter to only include games from the team's last N games
+        player_logs = player_logs[player_logs['GAME_ID'].isin(team_game_ids)].copy()
         
-        # Limit to num_games if specified
-        if num_games is not None and num_games > 0:
-            player_logs = player_logs.head(num_games)
+        if len(player_logs) == 0:
+            continue
+        
+        # Sort by date descending (most recent first) for consistency
+        player_logs['GAME_DATE'] = pd.to_datetime(player_logs['GAME_DATE'])
+        player_logs = player_logs.sort_values(by='GAME_DATE', ascending=False)
         
         if len(player_logs) == 0:
             continue
@@ -2074,7 +2127,7 @@ def find_new_players(team_id: int, players_df: pd.DataFrame, game_logs_df: pd.Da
 
 
 def calculate_stat_mismatches(away_id: int, home_id: int, away_abbr: str = 'Away', 
-                               home_abbr: str = 'Home', top_n: int = 10) -> list:
+                               home_abbr: str = 'Home', top_n: int = 20) -> list:
     """
     Calculate the biggest stat mismatches between teams.
     
@@ -2090,53 +2143,83 @@ def calculate_stat_mismatches(away_id: int, home_id: int, away_abbr: str = 'Away
     """
     mismatches = []
     
-    # Define stat matchups: (name, off_stat, off_rank_col, def_stat, def_rank_col, df, off_higher_is_better, def_lower_is_better)
+    # Define stat matchups: (name, off_stat, off_rank_col, def_stat, def_rank_col, off_df, def_df, off_higher_is_better, def_lower_is_better)
+    # For single DataFrame stats, pass the same df for both off_df and def_df
     stat_matchups = [
         # Core ratings
         ('Offensive Rating', 'OFF_RATING', 'OFF_RATING_RANK', 'DEF_RATING', 'DEF_RATING_RANK', 
-         data_adv_season, True, True),
+         data_adv_season, data_adv_season, True, True),
         
         # Shooting percentages - from Four Factors
-        ('Effective FG%', 'EFG_PCT', None, 'OPP_EFG_PCT', None, data_4F_season, True, True),
+        ('Effective FG%', 'EFG_PCT', None, 'OPP_EFG_PCT', None, data_4F_season, data_4F_season, True, True),
         
         # Rebounding
         ('Offensive Reb %', 'OREB_PCT', 'OREB_PCT_RANK', 'DREB_PCT', 'DREB_PCT_RANK', 
-         data_adv_season, True, True),
+         data_adv_season, data_adv_season, True, True),
         
         # Playmaking
         ('Assist %', 'AST_PCT', 'AST_PCT_RANK', 'AST_PCT', 'AST_PCT_RANK', 
-         data_adv_season, True, True),
+         data_adv_season, data_adv_season, True, True),
         
         # Turnovers
         ('Turnover %', 'TM_TOV_PCT', 'TM_TOV_PCT_RANK', 'OPP_TOV_PCT', 'OPP_TOV_PCT_RANK', 
-         data_4F_season, False, False),
+         data_4F_season, data_4F_season, False, False),
         
         # Pace
-        ('Pace', 'PACE', 'PACE_RANK', 'PACE', 'PACE_RANK', data_adv_season, True, True),
+        ('Pace', 'PACE', 'PACE_RANK', 'PACE', 'PACE_RANK', data_adv_season, data_adv_season, True, True),
         
         # Paint scoring
         ('Points in Paint', 'PTS_PAINT', 'PTS_PAINT_RANK', 'OPP_PTS_PAINT', 'OPP_PTS_PAINT_RANK',
-         data_misc_season, True, True),
+         data_misc_season, data_misc_season, True, True),
         
         # Second chance
         ('2nd Chance Points', 'PTS_2ND_CHANCE', 'PTS_2ND_CHANCE_RANK', 'OPP_PTS_2ND_CHANCE', 'OPP_PTS_2ND_CHANCE_RANK',
-         data_misc_season, True, True),
+         data_misc_season, data_misc_season, True, True),
         
         # Fast break
         ('Fast Break Points', 'PTS_FB', 'PTS_FB_RANK', 'OPP_PTS_FB', 'OPP_PTS_FB_RANK',
-         data_misc_season, True, True),
+         data_misc_season, data_misc_season, True, True),
         
         # Points off turnovers
         ('Points Off Turnovers', 'PTS_OFF_TOV', 'PTS_OFF_TOV_RANK', 'OPP_PTS_OFF_TOV', 'OPP_PTS_OFF_TOV_RANK',
-         data_misc_season, True, True),
+         data_misc_season, data_misc_season, True, True),
         
         # Free throw rate
-        ('Free Throw Rate', 'FTA_RATE', None, 'OPP_FTA_RATE', None, data_4F_season, True, True),
+        ('Free Throw Rate', 'FTA_RATE', None, 'OPP_FTA_RATE', None, data_4F_season, data_4F_season, True, True),
+        
+        # Shooting stats - using team_stats for offense and opp_team_stats for defense
+        ('Field Goals Made', 'FGM_PG', 'FGM_RANK', 'FGM_PG', 'FGM_RANK',
+         team_stats, opp_team_stats, True, True),
+        ('Field Goals Attempted', 'FGA_PG', 'FGA_RANK', 'FGA_PG', 'FGA_RANK',
+         team_stats, opp_team_stats, True, True),
+        ('Field Goal %', 'FG%', 'FG%_RANK', 'FG%', 'FG%_RANK',
+         team_stats, opp_team_stats, True, True),
+        ('3-Pointers Made', 'FG3M_PG', 'FG3M_RANK', 'FG3M_PG', 'FG3M_RANK',
+         team_stats, opp_team_stats, True, True),
+        ('3-Pointers Attempted', 'FG3A_PG', 'FG3A_RANK', 'FG3A_PG', 'FG3A_RANK',
+         team_stats, opp_team_stats, True, True),
+        ('3-Point %', '3PT%', '3PT%_RANK', '3PT%', '3PT%_RANK',
+         team_stats, opp_team_stats, True, True),
+        ('Free Throws Made', 'FTM_PG', 'FTM_RANK', 'FTM_PG', 'FTM_RANK',
+         team_stats, opp_team_stats, True, True),
+        ('Free Throws Attempted', 'FTA_PG', 'FTA_RANK', 'FTA_PG', 'FTA_RANK',
+         team_stats, opp_team_stats, True, True),
+        ('Free Throw %', 'FT%', 'FT%_RANK', 'FT%', 'FT%_RANK',
+         team_stats, opp_team_stats, True, True),
     ]
     
-    def get_rank_and_value(df, team_id, stat_col, rank_col):
-        """Helper to get stat value and rank"""
-        team_row = df[df['TEAM_ID'] == team_id]
+    def get_rank_and_value(df, team_id, stat_col, rank_col, use_team_id_col=False):
+        """Helper to get stat value and rank
+        
+        Args:
+            df: DataFrame to search
+            team_id: Team ID to look up
+            stat_col: Column name for the stat value
+            rank_col: Column name for the rank (or None to calculate)
+            use_team_id_col: If True, use 'TeamId' column instead of 'TEAM_ID'
+        """
+        id_col = 'TeamId' if use_team_id_col else 'TEAM_ID'
+        team_row = df[df[id_col] == team_id]
         if len(team_row) == 0:
             return None, None
         
@@ -2152,9 +2235,12 @@ def calculate_stat_mismatches(away_id: int, home_id: int, away_abbr: str = 'Away
         return value, rank
     
     # Process Away Offense vs Home Defense
-    for name, off_stat, off_rank, def_stat, def_rank, df, off_higher_better, def_lower_better in stat_matchups:
-        away_off_val, away_off_rank = get_rank_and_value(df, away_id, off_stat, off_rank)
-        home_def_val, home_def_rank = get_rank_and_value(df, home_id, def_stat, def_rank)
+    for name, off_stat, off_rank, def_stat, def_rank, off_df, def_df, off_higher_better, def_lower_better in stat_matchups:
+        # Determine if we're using TeamId column (for shooting stats) or TEAM_ID (for other stats)
+        use_team_id_col = (off_df is team_stats) or (def_df is opp_team_stats)
+        
+        away_off_val, away_off_rank = get_rank_and_value(off_df, away_id, off_stat, off_rank, use_team_id_col=use_team_id_col)
+        home_def_val, home_def_rank = get_rank_and_value(def_df, home_id, def_stat, def_rank, use_team_id_col=use_team_id_col)
         
         if away_off_rank is not None and home_def_rank is not None:
             if def_lower_better:
@@ -2177,9 +2263,12 @@ def calculate_stat_mismatches(away_id: int, home_id: int, away_abbr: str = 'Away
             })
     
     # Process Home Offense vs Away Defense  
-    for name, off_stat, off_rank, def_stat, def_rank, df, off_higher_better, def_lower_better in stat_matchups:
-        home_off_val, home_off_rank = get_rank_and_value(df, home_id, off_stat, off_rank)
-        away_def_val, away_def_rank = get_rank_and_value(df, away_id, def_stat, def_rank)
+    for name, off_stat, off_rank, def_stat, def_rank, off_df, def_df, off_higher_better, def_lower_better in stat_matchups:
+        # Determine if we're using TeamId column (for shooting stats) or TEAM_ID (for other stats)
+        use_team_id_col = (off_df is team_stats) or (def_df is opp_team_stats)
+        
+        home_off_val, home_off_rank = get_rank_and_value(off_df, home_id, off_stat, off_rank, use_team_id_col=use_team_id_col)
+        away_def_val, away_def_rank = get_rank_and_value(def_df, away_id, def_stat, def_rank, use_team_id_col=use_team_id_col)
         
         if home_off_rank is not None and away_def_rank is not None:
             if def_lower_better:

@@ -982,6 +982,28 @@ def find_best_value_plays(
         if not player_props:
             continue
         
+        # OPTIMIZATION: Pre-calculate all injury-adjusted component values once per player
+        # This eliminates redundant calculations in the stat loop
+        import injury_adjustments as inj
+        adjusted_components = {}
+        
+        if injury_adjustments_map and player_id in injury_adjustments_map:
+            injury_adj = injury_adjustments_map[player_id]
+            # Pre-calculate adjusted values for all component stats (including FG3M and FTM)
+            for component_stat in ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'FG3M', 'FTM']:
+                if component_stat in predictions:
+                    if component_stat in injury_adj:
+                        adjusted_components[component_stat] = inj.apply_injury_adjustments(
+                            predictions[component_stat].value, component_stat, injury_adj
+                        )
+                    else:
+                        adjusted_components[component_stat] = predictions[component_stat].value
+        else:
+            # No injury adjustments, use base prediction values
+            for component_stat in ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'FG3M', 'FTM']:
+                if component_stat in predictions:
+                    adjusted_components[component_stat] = predictions[component_stat].value
+        
         for stat in stat_filter:
             if stat not in predictions or stat not in player_props:
                 continue
@@ -993,10 +1015,35 @@ def find_best_value_plays(
             if pred.confidence not in confidence_filter:
                 continue
             
-            # Apply injury adjustments if available
+            # Apply injury adjustments using pre-calculated values
             prediction_value = pred.value
-            if injury_adjustments_map and player_id in injury_adjustments_map:
-                import injury_adjustments as inj
+            
+            # For composite stats, calculate from pre-calculated adjusted components
+            if stat == 'PRA':
+                # PRA = PTS + REB + AST
+                if all(s in adjusted_components for s in ['PTS', 'REB', 'AST']):
+                    prediction_value = adjusted_components['PTS'] + adjusted_components['REB'] + adjusted_components['AST']
+            elif stat == 'RA':
+                # RA = REB + AST
+                if all(s in adjusted_components for s in ['REB', 'AST']):
+                    prediction_value = adjusted_components['REB'] + adjusted_components['AST']
+            elif stat == 'FPTS':
+                # FPTS = PTS*1 + REB*1.2 + AST*1.5 + STL*3 + BLK*3 - TOV*1
+                if all(s in adjusted_components for s in ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV']):
+                    prediction_value = (
+                        adjusted_components['PTS'] * 1.0 +
+                        adjusted_components['REB'] * 1.2 +
+                        adjusted_components['AST'] * 1.5 +
+                        adjusted_components['STL'] * 3.0 +
+                        adjusted_components['BLK'] * 3.0 -
+                        adjusted_components['TOV'] * 1.0
+                    )
+            elif stat in adjusted_components:
+                # For individual component stats, use pre-calculated adjusted value
+                prediction_value = adjusted_components[stat]
+            elif injury_adjustments_map and player_id in injury_adjustments_map:
+                # For other stats that aren't in adjusted_components,
+                # apply injury adjustments if available
                 injury_adj = injury_adjustments_map[player_id]
                 if stat in injury_adj:
                     prediction_value = inj.apply_injury_adjustments(

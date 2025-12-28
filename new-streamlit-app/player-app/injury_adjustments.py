@@ -10,23 +10,47 @@ import pandas as pd
 def calculate_minutes_redistribution(
     teammates_out: List[str],
     player_minutes: float,
-    player_minutes_map: Dict[int, float]
+    player_minutes_map: Dict[int, float],
+    player_position: Optional[str] = None,
+    teammates_positions_map: Optional[Dict[int, str]] = None
 ) -> float:
     """
     Calculate how many extra minutes a player might get when teammates are out.
-    Redistribution is based on role matching: stars/starters get minutes from stars/starters,
-    role players get minutes from role players.
+    Redistribution is based on role matching AND position matching:
+    - Stars/starters get minutes from stars/starters
+    - Role players get minutes from role players
+    - Guards get more minutes when guards are out
+    - Forwards get more minutes when forwards are out
+    - Centers get more minutes when centers are out
     
     Args:
         teammates_out: List of teammate player IDs who are out
         player_minutes: Current player's average minutes
         player_minutes_map: Dict of player_id -> average minutes
+        player_position: Current player's position (e.g., 'PG', 'SG', 'SF', 'PF', 'C')
+        teammates_positions_map: Dict of player_id -> position for injured players
     
     Returns:
         Extra minutes the player might receive
     """
     if not teammates_out:
         return 0.0
+    
+    # Helper function to get position group
+    def get_position_group(pos: str) -> str:
+        """Map position to group: G, F, or C"""
+        if not pos:
+            return 'F'  # Default
+        pos_upper = pos.upper().strip()
+        if pos_upper in ['PG', 'SG', 'G', 'G-F']:
+            return 'G'
+        elif pos_upper in ['C', 'C-F']:
+            return 'C'
+        else:  # SF, PF, F, F-G, F-C
+            return 'F'
+    
+    # Get current player's position group
+    player_pos_group = get_position_group(player_position) if player_position else 'F'
     
     # Determine the role of the current player
     if player_minutes >= 32:
@@ -40,85 +64,107 @@ def calculate_minutes_redistribution(
     else:
         player_role = "deep_bench"
     
-    # Calculate total minutes from players who are out, grouped by role
-    star_minutes_out = 0
-    starter_minutes_out = 0
-    rotation_minutes_out = 0
-    bench_minutes_out = 0
-    deep_bench_minutes_out = 0
+    # Calculate total minutes from players who are out, grouped by role AND position
+    star_minutes_out = {'G': 0, 'F': 0, 'C': 0}
+    starter_minutes_out = {'G': 0, 'F': 0, 'C': 0}
+    rotation_minutes_out = {'G': 0, 'F': 0, 'C': 0}
+    bench_minutes_out = {'G': 0, 'F': 0, 'C': 0}
+    deep_bench_minutes_out = {'G': 0, 'F': 0, 'C': 0}
     
     for out_player in teammates_out:
         out_mins = player_minutes_map.get(int(out_player), 0)
         if out_mins == 0:
             continue
         
+        # Get injured player's position group
+        out_pos = teammates_positions_map.get(int(out_player), 'F') if teammates_positions_map else 'F'
+        out_pos_group = get_position_group(out_pos)
+        
+        # Categorize by role
         if out_mins >= 32:
-            star_minutes_out += out_mins
+            star_minutes_out[out_pos_group] += out_mins
         elif out_mins >= 28:
-            starter_minutes_out += out_mins
+            starter_minutes_out[out_pos_group] += out_mins
         elif out_mins >= 22:
-            rotation_minutes_out += out_mins
+            rotation_minutes_out[out_pos_group] += out_mins
         elif out_mins >= 15:
-            bench_minutes_out += out_mins
+            bench_minutes_out[out_pos_group] += out_mins
         else:
-            deep_bench_minutes_out += out_mins
+            deep_bench_minutes_out[out_pos_group] += out_mins
     
-    # Redistribute based on role matching
+    # Position-based multipliers
+    # Same position gets full value, adjacent positions get partial value
+    position_multipliers = {
+        'G': {'G': 1.0, 'F': 0.3, 'C': 0.1},  # Guards: full from guards, some from forwards, little from centers
+        'F': {'G': 0.3, 'F': 1.0, 'C': 0.4},  # Forwards: full from forwards, some from guards/centers
+        'C': {'G': 0.1, 'F': 0.4, 'C': 1.0}   # Centers: full from centers, some from forwards, little from guards
+    }
+    
+    pos_mult = position_multipliers[player_pos_group]
+    
+    # Redistribute based on role matching with position weighting
     extra_minutes = 0.0
     max_boost = 0
     
     if player_role == "star":
         # Stars get minutes from stars and starters
-        if star_minutes_out > 0:
-            extra_minutes += star_minutes_out * 0.16  # Higher % for star-to-star
-            max_boost = 6
-        if starter_minutes_out > 0:
-            extra_minutes += starter_minutes_out * 0.12
-            max_boost = max(max_boost, 5) if max_boost > 0 else 5
+        for pos_group in ['G', 'F', 'C']:
+            if star_minutes_out[pos_group] > 0:
+                extra_minutes += star_minutes_out[pos_group] * 0.16 * pos_mult[pos_group]
+                max_boost = 6
+            if starter_minutes_out[pos_group] > 0:
+                extra_minutes += starter_minutes_out[pos_group] * 0.12 * pos_mult[pos_group]
+                max_boost = max(max_boost, 5) if max_boost > 0 else 5
         
     elif player_role == "starter":
         # Starters get minutes from stars and starters
-        if star_minutes_out > 0:
-            extra_minutes += star_minutes_out * 0.12
-            max_boost = 5
-        if starter_minutes_out > 0:
-            extra_minutes += starter_minutes_out * 0.11
-            max_boost = max(max_boost, 4) if max_boost > 0 else 4
+        for pos_group in ['G', 'F', 'C']:
+            if star_minutes_out[pos_group] > 0:
+                extra_minutes += star_minutes_out[pos_group] * 0.12 * pos_mult[pos_group]
+                max_boost = 5
+            if starter_minutes_out[pos_group] > 0:
+                extra_minutes += starter_minutes_out[pos_group] * 0.11 * pos_mult[pos_group]
+                max_boost = max(max_boost, 4) if max_boost > 0 else 4
         
     elif player_role == "rotation":
         # Rotation players get minutes from rotation and bench players
-        if rotation_minutes_out > 0:
-            extra_minutes += rotation_minutes_out * 0.10
-            max_boost = 4
-        if bench_minutes_out > 0:
-            extra_minutes += bench_minutes_out * 0.08
-            max_boost = max(max_boost, 4) if max_boost > 0 else 4
+        for pos_group in ['G', 'F', 'C']:
+            if rotation_minutes_out[pos_group] > 0:
+                extra_minutes += rotation_minutes_out[pos_group] * 0.10 * pos_mult[pos_group]
+                max_boost = 4
+            if bench_minutes_out[pos_group] > 0:
+                extra_minutes += bench_minutes_out[pos_group] * 0.08 * pos_mult[pos_group]
+                max_boost = max(max_boost, 4) if max_boost > 0 else 4
         # Can also get some from starters if they're out (backup role)
-        if starter_minutes_out > 0:
-            extra_minutes += starter_minutes_out * 0.06
-            max_boost = max(max_boost, 4) if max_boost > 0 else 4
+        for pos_group in ['G', 'F', 'C']:
+            if starter_minutes_out[pos_group] > 0:
+                extra_minutes += starter_minutes_out[pos_group] * 0.06 * pos_mult[pos_group]
+                max_boost = max(max_boost, 4) if max_boost > 0 else 4
         
     elif player_role == "bench":
         # Bench players get minutes from bench and deep bench
-        if bench_minutes_out > 0:
-            extra_minutes += bench_minutes_out * 0.08
-            max_boost = 5
-        if deep_bench_minutes_out > 0:
-            extra_minutes += deep_bench_minutes_out * 0.06
-            max_boost = max(max_boost, 5) if max_boost > 0 else 5
+        for pos_group in ['G', 'F', 'C']:
+            if bench_minutes_out[pos_group] > 0:
+                extra_minutes += bench_minutes_out[pos_group] * 0.08 * pos_mult[pos_group]
+                max_boost = 5
+            if deep_bench_minutes_out[pos_group] > 0:
+                extra_minutes += deep_bench_minutes_out[pos_group] * 0.06 * pos_mult[pos_group]
+                max_boost = max(max_boost, 5) if max_boost > 0 else 5
         # Can also get some from rotation players
-        if rotation_minutes_out > 0:
-            extra_minutes += rotation_minutes_out * 0.05
-            max_boost = max(max_boost, 5) if max_boost > 0 else 5
+        for pos_group in ['G', 'F', 'C']:
+            if rotation_minutes_out[pos_group] > 0:
+                extra_minutes += rotation_minutes_out[pos_group] * 0.05 * pos_mult[pos_group]
+                max_boost = max(max_boost, 5) if max_boost > 0 else 5
         
     else:  # deep_bench
         # Deep bench gets minutes from deep bench and bench
-        if deep_bench_minutes_out > 0:
-            extra_minutes += deep_bench_minutes_out * 0.06
-            max_boost = 6
-        if bench_minutes_out > 0:
-            extra_minutes += bench_minutes_out * 0.05
-            max_boost = max(max_boost, 6) if max_boost > 0 else 6
+        for pos_group in ['G', 'F', 'C']:
+            if deep_bench_minutes_out[pos_group] > 0:
+                extra_minutes += deep_bench_minutes_out[pos_group] * 0.06 * pos_mult[pos_group]
+                max_boost = 6
+            if bench_minutes_out[pos_group] > 0:
+                extra_minutes += bench_minutes_out[pos_group] * 0.05 * pos_mult[pos_group]
+                max_boost = max(max_boost, 6) if max_boost > 0 else 6
     
     # Apply the cap if we have any minutes to redistribute
     if max_boost > 0:
@@ -203,11 +249,34 @@ def calculate_injury_adjustments(
     
     player_mins = player_minutes_map.get(int(player_id), 25)
     
+    # Get player position from players_df
+    player_position = None
+    try:
+        player_row = players_df[players_df['PERSON_ID'] == int(player_id)]
+        if len(player_row) > 0:
+            player_position = player_row['POSITION'].iloc[0]
+    except:
+        pass
+    
+    # Build positions map for injured teammates
+    teammates_positions_map = {}
+    for out_player_id in teammates_out:
+        try:
+            out_player_row = players_df[players_df['PERSON_ID'] == int(out_player_id)]
+            if len(out_player_row) > 0:
+                teammates_positions_map[int(out_player_id)] = out_player_row['POSITION'].iloc[0]
+        except:
+            pass
+    
     # === TEAMMATE INJURIES ===
     if teammates_out:
-        # Calculate minutes redistribution
+        # Calculate minutes redistribution (now with position awareness)
         extra_minutes = calculate_minutes_redistribution(
-            teammates_out, player_mins, player_minutes_map
+            teammates_out, 
+            player_mins, 
+            player_minutes_map,
+            player_position=player_position,
+            teammates_positions_map=teammates_positions_map
         )
         adjustments['minutes_boost'] = extra_minutes
         
@@ -228,17 +297,17 @@ def calculate_injury_adjustments(
         
         
         # Role-based caps for total injury boost (keeps role differences but prevents extremes)
-        # REDUCED caps to address over-prediction
+        # FURTHER REDUCED caps to address remaining over-prediction
         if player_mins >= 32:  # Star - can handle bigger boost
-            max_pts_mult = 1.28  # Max 28% boost (down from 35%)
-        elif player_mins >= 28:  # Starter
-            max_pts_mult = 1.24  # Max 24% boost (down from 30%)
-        elif player_mins >= 22:  # Rotation
-            max_pts_mult = 1.20  # Max 20% boost (down from 25%)
-        elif player_mins >= 15:  # Bench
-            max_pts_mult = 1.18  # Max 18% boost (down from 22%)
-        else:  # Deep bench
             max_pts_mult = 1.15  # Max 15% boost (down from 20%)
+        elif player_mins >= 28:  # Starter
+            max_pts_mult = 1.14  # Max 14% boost (down from 18%)
+        elif player_mins >= 22:  # Rotation
+            max_pts_mult = 1.12  # Max 12% boost (down from 16%)
+        elif player_mins >= 15:  # Bench
+            max_pts_mult = 1.11  # Max 11% boost (down from 14%)
+        else:  # Deep bench
+            max_pts_mult = 1.10  # Max 10% boost (down from 12%)
         
         adjustments['PTS'] = min(raw_pts_mult, max_pts_mult)
         adjustments['FG3M'] = min(raw_pts_mult, max_pts_mult)

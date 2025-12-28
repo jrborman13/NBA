@@ -227,7 +227,7 @@ if selected_matchup:
             with mismatch_cols[0]:
                 st.markdown(f"**{away_abbr} Advantages**")
                 if away_advantages:
-                    for m in away_advantages[:5]:  # Top 5 per team
+                    for m in away_advantages:  # Show all advantages (no limit)
                         arrow = "🟢" if m['rank_diff'] >= 15 else "🟡" if m['rank_diff'] >= 10 else "⚪"
                         st.markdown(f"{arrow} **{m['stat_name']}**: {m['off_team']} OFF #{m['off_rank']} vs {m['def_team']} DEF #{m['def_rank']} (+{m['rank_diff']})")
                 else:
@@ -236,7 +236,7 @@ if selected_matchup:
             with mismatch_cols[1]:
                 st.markdown(f"**{home_abbr} Advantages**")
                 if home_advantages:
-                    for m in home_advantages[:5]:  # Top 5 per team
+                    for m in home_advantages:  # Show all advantages (no limit)
                         arrow = "🟢" if m['rank_diff'] >= 15 else "🟡" if m['rank_diff'] >= 10 else "⚪"
                         st.markdown(f"{arrow} **{m['stat_name']}**: {m['off_team']} OFF #{m['off_rank']} vs {m['def_team']} DEF #{m['def_rank']} (+{m['rank_diff']})")
                 else:

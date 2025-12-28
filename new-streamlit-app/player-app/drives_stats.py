@@ -14,6 +14,7 @@ CURRENT_SEASON = "2025-26"
 
 
 @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def get_all_player_drives_stats(season: str = CURRENT_SEASON) -> pd.DataFrame:
     """
     Fetch drives tracking data for all players.

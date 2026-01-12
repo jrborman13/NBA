@@ -12,8 +12,13 @@ from datetime import datetime, date
 import json
 import os
 import csv
+import logging
 
-# File paths
+from supabase_config import get_supabase_client, is_supabase_configured
+
+logger = logging.getLogger(__name__)
+
+# File paths (for backward compatibility)
 PREDICTIONS_FILE = "predictions_log.csv"
 ACCURACY_SUMMARY_FILE = "accuracy_summary.json"
 
@@ -45,8 +50,26 @@ class PredictionRecord:
 
 def log_prediction(record: PredictionRecord):
     """
-    Log a prediction to the CSV file.
+    Log a prediction to Supabase (or CSV file as fallback).
     """
+    # Try Supabase first
+    if is_supabase_configured():
+        try:
+            supabase = get_supabase_client()
+            if supabase:
+                record_dict = asdict(record)
+                # Convert None values to None (not 'None' string)
+                for key, value in record_dict.items():
+                    if value == 'None' or value == '':
+                        record_dict[key] = None
+                
+                supabase.table('predictions').insert(record_dict).execute()
+                logger.debug(f"Logged prediction to Supabase: {record.player_name} - {record.stat}")
+                return
+        except Exception as e:
+            logger.warning(f"Failed to log prediction to Supabase: {e}. Falling back to CSV.")
+    
+    # Fallback to CSV
     file_exists = os.path.exists(PREDICTIONS_FILE)
     
     with open(PREDICTIONS_FILE, 'a', newline='') as f:
@@ -73,6 +96,24 @@ def update_actual_result(
     """
     Update a prediction record with the actual result.
     """
+    # Try Supabase first
+    if is_supabase_configured():
+        try:
+            supabase = get_supabase_client()
+            if supabase:
+                # Find matching prediction
+                result = supabase.table('predictions').select('id').eq('player_id', player_id).eq('game_date', game_date).eq('stat', stat).execute()
+                
+                if result.data and len(result.data) > 0:
+                    # Update the first matching record
+                    prediction_id = result.data[0]['id']
+                    supabase.table('predictions').update({'actual': actual_value}).eq('id', prediction_id).execute()
+                    logger.debug(f"Updated prediction in Supabase: {player_id} - {stat}")
+                    return True
+        except Exception as e:
+            logger.warning(f"Failed to update prediction in Supabase: {e}. Falling back to CSV.")
+    
+    # Fallback to CSV
     if not os.path.exists(PREDICTIONS_FILE):
         return False
     
@@ -94,8 +135,26 @@ def update_actual_result(
 
 def get_predictions_dataframe() -> pd.DataFrame:
     """
-    Load all predictions as a DataFrame.
+    Load all predictions as a DataFrame from Supabase (or CSV as fallback).
     """
+    # Try Supabase first
+    if is_supabase_configured():
+        try:
+            supabase = get_supabase_client()
+            if supabase:
+                result = supabase.table('predictions').select('*').order('timestamp', desc=True).execute()
+                
+                if result.data:
+                    df = pd.DataFrame(result.data)
+                    # Convert timestamp to datetime if present
+                    if 'timestamp' in df.columns:
+                        df['timestamp'] = pd.to_datetime(df['timestamp'])
+                    logger.debug(f"Loaded {len(df)} predictions from Supabase")
+                    return df
+        except Exception as e:
+            logger.warning(f"Failed to load predictions from Supabase: {e}. Falling back to CSV.")
+    
+    # Fallback to CSV
     if os.path.exists(PREDICTIONS_FILE):
         return pd.read_csv(PREDICTIONS_FILE)
     return pd.DataFrame()

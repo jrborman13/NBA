@@ -8,7 +8,16 @@ import streamlit_testing_functions as functions
 import injury_report as ir
 import datetime
 from datetime import date
+import time
 import nba_api.stats.endpoints
+import prediction_features as pf
+import team_onoff as toff
+try:
+    import supabase_cache as scache
+    import supabase_data_reader as db_reader
+except ImportError:
+    scache = None
+    db_reader = None
 
 import altair as alt
 import pandas as pd
@@ -20,15 +29,59 @@ import streamlit as st
 st.set_page_config(layout="wide")
 st.title("NBA Matchup Data App")
 
+# Add sidebar with cache clear button
+with st.sidebar:
+    st.markdown("### Cache Management")
+    if st.button("🗑️ Clear All Cache", width='stretch'):
+        st.cache_data.clear()
+        st.success("✅ Cache cleared successfully!")
+        st.rerun()
+    st.markdown("---")  # Separator
+
 # Function to fetch matchups for a given date (same as Players page)
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+# Removed @st.cache_data - using Supabase cache instead for persistent caching
 def get_matchups_for_date(selected_date):
-    """Fetch NBA matchups for a given date from the API"""
+    """Fetch NBA matchups for a given date from the API (uses Supabase cache)"""
+    season = '2025-26'
+    
+    # Try database first (populated by scheduled Edge Functions)
+    league_schedule = None
+    if db_reader is not None:
+        try:
+            db_schedule = db_reader.get_schedule_from_db(season)
+            if db_schedule is not None and len(db_schedule) > 0:
+                print(f"[DB READ] Schedule from database: {len(db_schedule)} games")
+                league_schedule = db_schedule
+        except Exception as e:
+            print(f"Error reading schedule from database: {e}, falling back to API")
+    
+    # Try Supabase cache as fallback
+    if league_schedule is None and scache is not None:
+        try:
+            cached_schedule = scache.get_cached_bulk_data('schedule', season, ttl_hours=6)
+            if cached_schedule is not None:
+                league_schedule = cached_schedule
+        except Exception as e:
+            print(f"Error fetching cached schedule: {e}, falling back to API call")
+    
+    # Database and cache miss - fetch from API (safety net)
+    if league_schedule is None:
+        try:
+            league_schedule = nba_api.stats.endpoints.ScheduleLeagueV2(
+                league_id='00',
+                season=season
+            ).get_data_frames()[0]
+            
+            # Store in Supabase cache
+            if scache is not None:
+                try:
+                    scache.set_cached_bulk_data('schedule', season, league_schedule, ttl_hours=6)
+                except Exception as e:
+                    print(f"Error storing schedule in cache: {e}")
+        except Exception as e:
+            return [], f"Error fetching schedule: {str(e)}"
+    
     try:
-        league_schedule = nba_api.stats.endpoints.ScheduleLeagueV2(
-            league_id='00',
-            season='2025-26'
-        ).get_data_frames()[0]
         
         # Convert game date column to datetime
         league_schedule['dateGame'] = pd.to_datetime(league_schedule['gameDate'])
@@ -376,8 +429,1199 @@ if selected_matchup:
     
     st.markdown("---")
     
-    # Tab selector (Core Stats, Shooting, and Rosters)
-    tab = st.radio("Select Tab", ('Core Stats', 'Shooting', 'Rosters'))
+    # ============================================================
+    # NBA STANDINGS SECTION
+    # ============================================================
+    st.markdown("### 🏀 NBA Standings")
+    
+    # Get standings data
+    try:
+        standings_df = functions.standings.copy()
+        
+        if standings_df is not None and len(standings_df) > 0 and 'Conference' in standings_df.columns:
+            # Split by conference
+            west_standings = standings_df[standings_df['Conference'] == 'West'].copy()
+            east_standings = standings_df[standings_df['Conference'] == 'East'].copy()
+            
+            # Sort by playoff rank
+            west_standings = west_standings.sort_values('PlayoffRank')
+            east_standings = east_standings.sort_values('PlayoffRank')
+            
+            # Prepare display columns (excluding WINS/LOSSES as they're in Record)
+            display_cols = ['PlayoffRank', 'TeamCity', 'TeamName', 'Record', 'WinPCT']
+            
+            # Add Clutch column if available
+            if 'Clutch' in standings_df.columns:
+                display_cols.append('Clutch')
+            
+            # Add additional columns if available
+            additional_cols = ['ConferenceGamesBack', 'L10', 'HOME', 'ROAD', 'vsWest', 'vsEast']
+            for col in additional_cols:
+                if col in standings_df.columns:
+                    display_cols.append(col)
+            
+            # Check for Last 5 games column (might be named differently)
+            last5_cols = ['L5', 'Last5', 'Last5Games']
+            last5_col = None
+            for col in last5_cols:
+                if col in standings_df.columns:
+                    last5_col = col
+                    display_cols.append(col)
+                    break
+            
+            # Create two columns
+            standings_cols = st.columns(2)
+            
+            with standings_cols[0]:
+                st.markdown("#### Western Conference")
+                # Create display DataFrame
+                west_display = west_standings[display_cols].copy()
+                west_display['Team'] = west_display['TeamCity'] + ' ' + west_display['TeamName']
+                
+                # Format WinPCT as percentage
+                if 'WinPCT' in west_display.columns:
+                    west_display['Win %'] = west_display['WinPCT'].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "N/A")
+                    west_display = west_display.drop(columns=['WinPCT'])
+                
+                # Format and rename Games Back
+                if 'ConferenceGamesBack' in west_display.columns:
+                    west_display['GB'] = west_display['ConferenceGamesBack'].apply(
+                        lambda x: f"{x:.1f}" if pd.notna(x) and x != 0 else ("—" if pd.notna(x) else "N/A")
+                    )
+                    west_display = west_display.drop(columns=['ConferenceGamesBack'])
+                
+                # Rename columns for better display
+                if 'PlayoffRank' in west_display.columns:
+                    west_display = west_display.rename(columns={'PlayoffRank': 'Seed'})
+                if 'L10' in west_display.columns:
+                    west_display = west_display.rename(columns={'L10': 'Last 10'})
+                if last5_col and last5_col in west_display.columns:
+                    west_display = west_display.rename(columns={last5_col: 'Last 5'})
+                if 'HOME' in west_display.columns:
+                    west_display = west_display.rename(columns={'HOME': 'Home'})
+                if 'ROAD' in west_display.columns:
+                    west_display = west_display.rename(columns={'ROAD': 'Road'})
+                if 'vsWest' in west_display.columns:
+                    west_display = west_display.rename(columns={'vsWest': 'vs West'})
+                if 'vsEast' in west_display.columns:
+                    west_display = west_display.rename(columns={'vsEast': 'vs East'})
+                
+                # Build column list for display
+                display_order = ['Seed', 'Team', 'Record', 'Win %']
+                if 'GB' in west_display.columns:
+                    display_order.append('GB')
+                if 'Last 5' in west_display.columns:
+                    display_order.append('Last 5')
+                if 'Last 10' in west_display.columns:
+                    display_order.append('Last 10')
+                if 'Clutch' in west_display.columns:
+                    display_order.append('Clutch')
+                if 'Home' in west_display.columns:
+                    display_order.append('Home')
+                if 'Road' in west_display.columns:
+                    display_order.append('Road')
+                if 'vs West' in west_display.columns:
+                    display_order.append('vs West')
+                if 'vs East' in west_display.columns:
+                    display_order.append('vs East')
+                
+                west_display = west_display[display_order]
+                
+                # Highlight function for away/home teams
+                def highlight_selected_teams_west(row):
+                    row_idx = row.name
+                    if row_idx in west_standings.index:
+                        team_id = west_standings.loc[row_idx, 'TeamID']
+                        if team_id == away_team_id or team_id == home_team_id:
+                            return ['background-color: #e8f4f8'] * len(west_display.columns)
+                    return [''] * len(west_display.columns)
+                
+                styled_west = west_display.style.apply(highlight_selected_teams_west, axis=1)
+                st.dataframe(styled_west, width='stretch', hide_index=True)
+            
+            with standings_cols[1]:
+                st.markdown("#### Eastern Conference")
+                # Create display DataFrame
+                east_display = east_standings[display_cols].copy()
+                east_display['Team'] = east_display['TeamCity'] + ' ' + east_display['TeamName']
+                
+                # Format WinPCT as percentage
+                if 'WinPCT' in east_display.columns:
+                    east_display['Win %'] = east_display['WinPCT'].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "N/A")
+                    east_display = east_display.drop(columns=['WinPCT'])
+                
+                # Format and rename Games Back
+                if 'ConferenceGamesBack' in east_display.columns:
+                    east_display['GB'] = east_display['ConferenceGamesBack'].apply(
+                        lambda x: f"{x:.1f}" if pd.notna(x) and x != 0 else ("—" if pd.notna(x) else "N/A")
+                    )
+                    east_display = east_display.drop(columns=['ConferenceGamesBack'])
+                
+                # Rename columns for better display
+                if 'PlayoffRank' in east_display.columns:
+                    east_display = east_display.rename(columns={'PlayoffRank': 'Seed'})
+                if 'L10' in east_display.columns:
+                    east_display = east_display.rename(columns={'L10': 'Last 10'})
+                if last5_col and last5_col in east_display.columns:
+                    east_display = east_display.rename(columns={last5_col: 'Last 5'})
+                if 'HOME' in east_display.columns:
+                    east_display = east_display.rename(columns={'HOME': 'Home'})
+                if 'ROAD' in east_display.columns:
+                    east_display = east_display.rename(columns={'ROAD': 'Road'})
+                if 'vsWest' in east_display.columns:
+                    east_display = east_display.rename(columns={'vsWest': 'vs West'})
+                if 'vsEast' in east_display.columns:
+                    east_display = east_display.rename(columns={'vsEast': 'vs East'})
+                
+                # Build column list for display
+                display_order = ['Seed', 'Team', 'Record', 'Win %']
+                if 'GB' in east_display.columns:
+                    display_order.append('GB')
+                if 'Last 5' in east_display.columns:
+                    display_order.append('Last 5')
+                if 'Last 10' in east_display.columns:
+                    display_order.append('Last 10')
+                if 'Clutch' in east_display.columns:
+                    display_order.append('Clutch')
+                if 'Home' in east_display.columns:
+                    display_order.append('Home')
+                if 'Road' in east_display.columns:
+                    display_order.append('Road')
+                if 'vs West' in east_display.columns:
+                    display_order.append('vs West')
+                if 'vs East' in east_display.columns:
+                    display_order.append('vs East')
+                
+                east_display = east_display[display_order]
+                
+                # Highlight function for away/home teams
+                def highlight_selected_teams_east(row):
+                    row_idx = row.name
+                    if row_idx in east_standings.index:
+                        team_id = east_standings.loc[row_idx, 'TeamID']
+                        if team_id == away_team_id or team_id == home_team_id:
+                            return ['background-color: #e8f4f8'] * len(east_display.columns)
+                    return [''] * len(east_display.columns)
+                
+                styled_east = east_display.style.apply(highlight_selected_teams_east, axis=1)
+                st.dataframe(styled_east, width='stretch', hide_index=True)
+        else:
+            st.warning("Standings data not available.")
+    except Exception as e:
+        st.warning(f"Unable to load standings: {str(e)}")
+    
+    # ============================================================
+    # LAST 10 GAMES SECTION
+    # ============================================================
+    st.markdown("### 📊 Last 10 Games")
+    
+    @st.cache_data(ttl=1800, show_spinner=False)
+    def get_game_scores(game_id, team_id):
+        """Get opponent score and team ID from box score"""
+        try:
+            from nba_api.stats.endpoints import BoxScoreSummaryV2
+            box_score = BoxScoreSummaryV2(game_id=game_id)
+            line_score = box_score.get_data_frames()[1]  # LineScore is the second dataframe
+            
+            if len(line_score) >= 2:
+                # Find the opponent's score and team ID (the team that's not the current team)
+                for _, row in line_score.iterrows():
+                    if row['TEAM_ID'] != team_id:
+                        return int(row['PTS']), int(row['TEAM_ID'])
+            return None, None
+        except Exception as e:
+            print(f"Error getting box score for game {game_id}: {e}")
+            return None, None
+    
+    @st.cache_data(ttl=1800, show_spinner=False)
+    def get_team_last_10_games(team_id, season=None):
+        """Get team's last 10 games formatted for display"""
+        try:
+            # Use current season from prediction_features if not specified
+            if season is None:
+                season = pf.CURRENT_SEASON
+            
+            team_logs = pf.get_team_game_logs(team_id, season)
+            
+            # If no logs found, try alternative seasons
+            if len(team_logs) == 0:
+                # Try 2024-25 season (current actual NBA season)
+                if season != "2024-25":
+                    team_logs = pf.get_team_game_logs(team_id, "2024-25")
+                    if len(team_logs) > 0:
+                        season = "2024-25"
+                
+                # If still empty, try 2023-24 as fallback
+                if len(team_logs) == 0 and season != "2023-24":
+                    team_logs = pf.get_team_game_logs(team_id, "2023-24")
+                    if len(team_logs) > 0:
+                        season = "2023-24"
+                
+                if len(team_logs) == 0:
+                    # Return empty DataFrame - error will be shown in UI
+                    return pd.DataFrame()
+            
+            # Get last 10 games
+            last_10 = team_logs.head(10).copy()
+            
+            # Team abbreviation to ID mapping
+            abbr_to_id = {
+                'ATL': 1610612737, 'BOS': 1610612738, 'BKN': 1610612751, 'CHA': 1610612766,
+                'CHI': 1610612741, 'CLE': 1610612739, 'DAL': 1610612742, 'DEN': 1610612743,
+                'DET': 1610612765, 'GSW': 1610612744, 'HOU': 1610612745, 'IND': 1610612754,
+                'LAC': 1610612746, 'LAL': 1610612747, 'MEM': 1610612763, 'MIA': 1610612748,
+                'MIL': 1610612749, 'MIN': 1610612750, 'NOP': 1610612740, 'NYK': 1610612752,
+                'OKC': 1610612760, 'ORL': 1610612753, 'PHI': 1610612755, 'PHX': 1610612756,
+                'POR': 1610612757, 'SAC': 1610612758, 'SAS': 1610612759, 'TOR': 1610612761,
+                'UTA': 1610612762, 'WAS': 1610612764
+            }
+            
+            # Format the data
+            display_data = []
+            for _, game in last_10.iterrows():
+                # Get outcome (W/L)
+                outcome = game.get('WL', 'N/A')
+                
+                # Get opponent from MATCHUP (format: "Team @ OPP" or "Team vs OPP")
+                matchup = game.get('MATCHUP', '')
+                opponent_abbr = matchup.split()[-1] if matchup else 'N/A'
+                
+                # Determine Home/Away from MATCHUP
+                if '@' in matchup:
+                    home_away = 'A'
+                elif 'vs' in matchup.lower():
+                    home_away = 'H'
+                else:
+                    home_away = 'N/A'
+                
+                # Get final score using PLUS_MINUS
+                team_score = int(game.get('PTS', 0))
+                plus_minus = game.get('PLUS_MINUS', 0)
+                
+                # Calculate opponent score: PTS - PLUS_MINUS = opponent score
+                if pd.notna(plus_minus):
+                    opp_score = int(team_score - plus_minus)
+                    final_score = f"{team_score}-{opp_score}"
+                else:
+                    final_score = f"{team_score}"
+                
+                # Get opponent team ID from abbreviation mapping for logo
+                opp_team_id = abbr_to_id.get(opponent_abbr) if opponent_abbr != 'N/A' else None
+                
+                # Get opponent logo URL
+                if opp_team_id:
+                    opp_logo_url = f"https://cdn.nba.com/logos/nba/{opp_team_id}/primary/L/logo.svg"
+                else:
+                    opp_logo_url = ""
+                
+                # Calculate shooting percentages
+                fgm = game.get('FGM', 0)
+                fga = game.get('FGA', 0)
+                fg_pct = (fgm / fga * 100) if fga > 0 else 0.0
+                
+                fg2m = fgm - game.get('FG3M', 0)
+                fg2a = fga - game.get('FG3A', 0)
+                fg2_pct = (fg2m / fg2a * 100) if fg2a > 0 else 0.0
+                
+                fg3m = game.get('FG3M', 0)
+                fg3a = game.get('FG3A', 0)
+                fg3_pct = (fg3m / fg3a * 100) if fg3a > 0 else 0.0
+                
+                # Get other stats
+                reb = game.get('REB', 0)
+                ast = game.get('AST', 0)
+                tov = game.get('TOV', 0)
+                stl = game.get('STL', 0)
+                blk = game.get('BLK', 0)
+                
+                # Format date
+                game_date = pd.to_datetime(game.get('GAME_DATE', ''))
+                date_str = game_date.strftime('%m/%d') if pd.notna(game_date) else 'N/A'
+                
+                display_data.append({
+                    'Opponent': opp_logo_url,  # Logo URL for display
+                    'H/A': home_away,
+                    'Date': date_str,
+                    'Outcome': outcome,
+                    'Final Score': final_score,
+                    'FG%': f"{fg_pct:.1f}",
+                    '2PT%': f"{fg2_pct:.1f}",
+                    '3PT%': f"{fg3_pct:.1f}",
+                    'REB': int(reb),
+                    'AST': int(ast),
+                    'TO': int(tov),
+                    'STL': int(stl),
+                    'BLK': int(blk)
+                })
+            
+            return pd.DataFrame(display_data)
+        except Exception as e:
+            st.error(f"Error getting team game logs for team {team_id}: {str(e)}")
+            print(f"Error getting team game logs: {e}")
+            return pd.DataFrame()
+    
+    # ============================================================
+    # SYNERGY DATA FETCHING FUNCTIONS
+    # ============================================================
+    
+    # Removed @st.cache_data - using Supabase cache instead
+    def get_team_synergy_data(team_id, playtype, type_grouping, season=None, max_retries=3, timeout=60):
+        """
+        Fetch synergy data for a specific team, playtype, and type_grouping.
+        Uses Supabase cache when available.
+        
+        Args:
+            team_id: Team ID
+            playtype: Play type (e.g., 'Cut', 'Handoff', 'Isolation', etc.)
+            type_grouping: 'offensive' or 'defensive'
+            season: Season string (defaults to CURRENT_SEASON)
+            max_retries: Number of retry attempts
+            timeout: Request timeout in seconds
+        
+        Returns:
+            DataFrame with synergy data for the team, or empty DataFrame on error
+        """
+        if season is None:
+            season = pf.CURRENT_SEASON
+        
+        # Try Supabase cache first (cache all teams, then filter)
+        cache_key = f"team_synergy_{playtype}_{type_grouping}"
+        synergy_data = None
+        cache_hit = False
+        
+        if scache is not None:
+            try:
+                cached_data = scache.get_cached_bulk_data(cache_key, season, ttl_hours=1)
+                if cached_data is not None:
+                    synergy_data = cached_data
+                    cache_hit = True
+                    print(f"[SYNERGY CACHE HIT] {cache_key} for team {team_id}")
+            except Exception as e:
+                print(f"Error fetching cached synergy data: {e}, falling back to API call")
+        
+        # Cache miss - fetch from API
+        if synergy_data is None:
+            for attempt in range(max_retries):
+                try:
+                    synergy_data = nba_api.stats.endpoints.SynergyPlayTypes(
+                        league_id='00',
+                        per_mode_simple='Totals',
+                        season=season,
+                        season_type_all_star='Regular Season',
+                        player_or_team_abbreviation='T',
+                        type_grouping_nullable=type_grouping,
+                        play_type_nullable=playtype,
+                        timeout=timeout
+                    ).get_data_frames()[0]
+                    
+                    # Store in Supabase cache (cache all teams)
+                    if scache is not None and len(synergy_data) > 0:
+                        try:
+                            scache.set_cached_bulk_data(cache_key, season, synergy_data, ttl_hours=1)
+                        except Exception as e:
+                            print(f"Error storing synergy data in cache: {e}")
+                    
+                    break
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        wait_time = (attempt + 1) * 2
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print(f"Error fetching synergy data for team {team_id}, playtype {playtype}, type {type_grouping}: {str(e)}")
+                        return pd.DataFrame(), False
+        
+        # Filter for the specific team
+        if synergy_data is not None and len(synergy_data) > 0 and 'TEAM_ID' in synergy_data.columns:
+            team_data = synergy_data[synergy_data['TEAM_ID'] == team_id]
+            return team_data, cache_hit  # Return cache status
+        else:
+            return pd.DataFrame(), cache_hit
+    
+    # Removed @st.cache_data - using Supabase cache instead
+    def get_bulk_all_team_synergy_data(season=None):
+        """
+        Fetch ALL teams' synergy data for ALL playtypes/type_groupings in bulk.
+        Makes only 22 API calls total (11 playtypes × 2 sides) instead of 22 per team.
+        Uses Supabase cache when available.
+        
+        Args:
+            season: Season string (defaults to CURRENT_SEASON)
+        
+        Returns:
+            Dictionary: {playtype: {type_grouping: df_with_all_teams}}
+        """
+        if season is None:
+            season = pf.CURRENT_SEASON
+        
+        synergy_playtypes = ['Cut', 'Handoff', 'Isolation', 'Misc', 'OffScreen', 'Postup', 
+                            'PRBallHandler', 'PRRollman', 'OffRebound', 'Spotup', 'Transition']
+        synergy_sides = ['offensive', 'defensive']
+        
+        # Try database first (populated by scheduled Edge Functions)
+        cache_key = "all_team_synergy"
+        bulk_data = None
+        
+        if db_reader is not None:
+            try:
+                db_data = db_reader.get_synergy_data_from_db(season, 'team')
+                if db_data is not None and len(db_data) > 0:
+                    print(f"[DB READ] Team synergy data from database: {len(db_data)} playtypes")
+                    return db_data
+            except Exception as e:
+                print(f"Error reading team synergy from database: {e}, falling back to API")
+        
+        # Try Supabase cache as fallback
+        if scache is not None:
+            try:
+                cached_data = scache.get_cached_bulk_data(cache_key, season, ttl_hours=1)
+                if cached_data is not None:
+                    print(f"[SYNERGY BULK CACHE HIT] All team synergy data for season {season}")
+                    return cached_data
+                else:
+                    print(f"[SYNERGY BULK CACHE MISS] Fetching all team synergy data for season {season}")
+            except Exception as e:
+                print(f"Error fetching cached bulk synergy data: {e}, falling back to API calls")
+        
+        # Database and cache miss - fetch from API (safety net)
+        result = {}
+        total_requests = len(synergy_playtypes) * len(synergy_sides)
+        current_request = 0
+        api_calls = 0
+        
+        for playtype in synergy_playtypes:
+            result[playtype] = {}
+            for side in synergy_sides:
+                current_request += 1
+                cache_key_single = f"team_synergy_{playtype}_{side}"
+                
+                # Check individual cache first
+                synergy_data = None
+                if scache is not None:
+                    try:
+                        cached_single = scache.get_cached_bulk_data(cache_key_single, season, ttl_hours=1)
+                        if cached_single is not None:
+                            synergy_data = cached_single
+                            print(f"[SYNERGY CACHE HIT] {cache_key_single}")
+                    except Exception as e:
+                        pass
+                
+                # API call if cache miss
+                if synergy_data is None:
+                    api_calls += 1
+                    for attempt in range(3):
+                        try:
+                            synergy_data = nba_api.stats.endpoints.SynergyPlayTypes(
+                                league_id='00',
+                                per_mode_simple='Totals',
+                                season=season,
+                                season_type_all_star='Regular Season',
+                                player_or_team_abbreviation='T',
+                                type_grouping_nullable=side,
+                                play_type_nullable=playtype,
+                                timeout=60
+                            ).get_data_frames()[0]
+                            
+                            # Store in Supabase cache
+                            if scache is not None and len(synergy_data) > 0:
+                                try:
+                                    scache.set_cached_bulk_data(cache_key_single, season, synergy_data, ttl_hours=1)
+                                except Exception as e:
+                                    print(f"Error storing synergy data in cache: {e}")
+                            
+                            break
+                        except Exception as e:
+                            if attempt < 2:
+                                wait_time = (attempt + 1) * 2
+                                time.sleep(wait_time)
+                                continue
+                            else:
+                                print(f"Error fetching synergy data for playtype {playtype}, type {side}: {str(e)}")
+                                synergy_data = pd.DataFrame()
+                                break
+                
+                result[playtype][side] = synergy_data if synergy_data is not None else pd.DataFrame()
+                
+                # Only add delay if we made an API call and might need to make another
+                if api_calls > 0 and current_request < total_requests:
+                    time.sleep(1.5)  # Delay only for API calls to avoid rate limiting
+        
+        # Store bulk data in cache
+        if scache is not None:
+            try:
+                scache.set_cached_bulk_data(cache_key, season, result, ttl_hours=1)
+                print(f"[SYNERGY BULK CACHE SET] Stored all team synergy data for season {season}")
+            except Exception as e:
+                print(f"Error storing bulk synergy data in cache: {e}")
+        
+        print(f"[SYNERGY BULK] Fetched all team synergy data: {api_calls} API calls, {total_requests - api_calls} cache hits")
+        return result
+    
+    # Removed @st.cache_data - using Supabase cache instead
+    def get_all_team_synergy_data(team_id, season=None):
+        """
+        Fetch all synergy data for a team (all playtypes × offensive/defensive).
+        Uses bulk fetch and filters for the specific team.
+        
+        Args:
+            team_id: Team ID
+            season: Season string (defaults to CURRENT_SEASON)
+        
+        Returns:
+            Dictionary: {playtype: {'offensive': df, 'defensive': df}}
+        """
+        import time
+        import json
+        from pathlib import Path
+        
+        start_time = time.time()
+        
+        if season is None:
+            season = pf.CURRENT_SEASON
+        
+        # Get bulk data (cached)
+        bulk_start = time.time()
+        bulk_data = get_bulk_all_team_synergy_data(season)
+        bulk_time = time.time() - bulk_start
+        
+        # Filter for specific team
+        filter_start = time.time()
+        result = {}
+        synergy_playtypes = ['Cut', 'Handoff', 'Isolation', 'Misc', 'OffScreen', 'Postup', 
+                            'PRBallHandler', 'PRRollman', 'OffRebound', 'Spotup', 'Transition']
+        synergy_sides = ['offensive', 'defensive']
+        
+        for playtype in synergy_playtypes:
+            result[playtype] = {}
+            for side in synergy_sides:
+                if playtype in bulk_data and side in bulk_data[playtype]:
+                    team_df = bulk_data[playtype][side]
+                    if len(team_df) > 0 and 'TEAM_ID' in team_df.columns:
+                        team_data = team_df[team_df['TEAM_ID'] == team_id].copy()
+                        result[playtype][side] = team_data
+                    else:
+                        result[playtype][side] = pd.DataFrame()
+                else:
+                    result[playtype][side] = pd.DataFrame()
+        
+        filter_time = time.time() - filter_start
+        total_time = time.time() - start_time
+        
+        # Log timing
+        log_path = Path("/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log")
+        try:
+            with open(log_path, 'a') as f:
+                log_entry = {
+                    "timestamp": time.time() * 1000,
+                    "location": "1_Teams.py:955",
+                    "message": "get_all_team_synergy_data timing",
+                    "data": {
+                        "team_id": team_id,
+                        "season": season,
+                        "bulk_time_ms": bulk_time * 1000,
+                        "filter_time_ms": filter_time * 1000,
+                        "total_time_ms": total_time * 1000
+                    },
+                    "sessionId": "debug-session",
+                    "runId": "timing",
+                    "hypothesisId": "A"
+                }
+                f.write(json.dumps(log_entry) + "\n")
+        except Exception:
+            pass
+        
+        print(f"[TIMING] get_all_team_synergy_data: bulk={bulk_time*1000:.1f}ms, filter={filter_time*1000:.1f}ms, total={total_time*1000:.1f}ms")
+        
+        return result
+    
+    def build_synergy_matchup_dataframes(away_team_id, home_team_id, season=None):
+        """
+        Build 4 separate dataframes showing synergy data for each team's offense and defense.
+        
+        Args:
+            away_team_id: Away team ID
+            home_team_id: Home team ID
+            season: Season string (defaults to CURRENT_SEASON)
+        
+        Returns:
+            Tuple of 4 DataFrames: (away_offense_df, away_defense_df, home_offense_df, home_defense_df)
+        """
+        import time
+        import json
+        from pathlib import Path
+        
+        build_start = time.time()
+        
+        if season is None:
+            season = pf.CURRENT_SEASON
+        
+        # Fetch synergy data for both teams
+        away_start = time.time()
+        away_synergy = get_all_team_synergy_data(away_team_id, season)
+        away_time = time.time() - away_start
+        
+        home_start = time.time()
+        home_synergy = get_all_team_synergy_data(home_team_id, season)
+        home_time = time.time() - home_start
+        
+        synergy_playtypes = ['Cut', 'Handoff', 'Isolation', 'Misc', 'OffScreen', 'Postup', 
+                            'PRBallHandler', 'PRRollman', 'OffRebound', 'Spotup', 'Transition']
+        
+        # Helper function to extract metrics from synergy dataframe
+        def extract_metrics(df, playtype):
+            if df is None or len(df) == 0:
+                return {
+                    'Playtype': playtype,
+                    'PPP': 0.0,
+                    'Percentile': 0.0,
+                    'Rank': 30,
+                    'eFG%': 0.0,
+                    'SCORE_POSS_PCT': 0.0
+                }
+            
+            row = df.iloc[0] if len(df) > 0 else None
+            if row is None:
+                return {
+                    'Playtype': playtype,
+                    'PPP': 0.0,
+                    'Percentile': 0.0,
+                    'Rank': 30,
+                    'eFG%': 0.0,
+                    'SCORE_POSS_PCT': 0.0
+                }
+            
+            # Extract metrics using actual API column names
+            ppp = row.get('PPP', 0.0)
+            
+            # PERCENTILE ranges from 0.0 to 1.0 (higher is better)
+            # For offense: higher PPP = better → higher percentile → rank 1
+            # For defense: lower PPP Allowed = better → higher percentile → rank 1
+            # The API's percentile calculation already accounts for context (offense vs defense)
+            percentile = row.get('PERCENTILE', 0.0)
+            
+            # Rank calculation: percentile 1.0 = rank 1 (best), percentile 0.0 = rank 30 (worst)
+            # Formula: (1.0 - percentile) * 30 + 1, rounded to nearest integer
+            # This works for both offense and defense because percentile reflects "better performance":
+            # - Offense: rank 1 = highest PPP = highest percentile
+            # - Defense: rank 1 = lowest PPP Allowed = highest percentile
+            rank = round((1.0 - float(percentile)) * 30 + 1) if percentile else 30
+            
+            # EFG_PCT (Effective Field Goal Percentage) - might be decimal (0-1) or percentage (0-100)
+            efg_pct_raw = row.get('EFG_PCT', 0.0)
+            efg_pct = float(efg_pct_raw) * 100 if efg_pct_raw < 1 else float(efg_pct_raw)
+            
+            # SCORE_POSS_PCT (Scoring Possession Percentage) - might be decimal (0-1) or percentage (0-100)
+            score_poss_pct_raw = row.get('SCORE_POSS_PCT', 0.0)
+            score_poss_pct = float(score_poss_pct_raw) * 100 if score_poss_pct_raw < 1 else float(score_poss_pct_raw)
+            
+            return {
+                'Playtype': playtype,
+                'PPP': float(ppp) if ppp else 0.0,
+                'Rank': int(rank),
+                'Percentile': float(percentile) if percentile else 0.0,
+                'eFG%': float(efg_pct) if efg_pct else 0.0,
+                'SCORE_POSS_PCT': float(score_poss_pct) if score_poss_pct else 0.0
+            }
+        
+        # Build away team offense dataframe
+        away_offense_data = []
+        for playtype in synergy_playtypes:
+            df = away_synergy.get(playtype, {}).get('offensive')
+            away_offense_data.append(extract_metrics(df, playtype))
+        away_offense_df = pd.DataFrame(away_offense_data)
+        # Ensure column order: Playtype, PPP, Rank, Percentile, eFG%, SCORE_POSS_PCT
+        if len(away_offense_df) > 0:
+            col_order = ['Playtype', 'PPP', 'Rank', 'Percentile', 'eFG%', 'SCORE_POSS_PCT']
+            away_offense_df = away_offense_df[[col for col in col_order if col in away_offense_df.columns]]
+        
+        # Build away team defense dataframe
+        away_defense_data = []
+        for playtype in synergy_playtypes:
+            df = away_synergy.get(playtype, {}).get('defensive')
+            metrics = extract_metrics(df, playtype)
+            # Rename columns for defense (allowed)
+            metrics['PPP Allowed'] = metrics.pop('PPP')
+            metrics['eFG% Allowed'] = metrics.pop('eFG%')
+            metrics['SCORE_POSS_PCT Allowed'] = metrics.pop('SCORE_POSS_PCT')
+            away_defense_data.append(metrics)
+        away_defense_df = pd.DataFrame(away_defense_data)
+        # Ensure column order: Playtype, PPP Allowed, Rank, Percentile, eFG% Allowed, SCORE_POSS_PCT Allowed
+        if len(away_defense_df) > 0:
+            col_order = ['Playtype', 'PPP Allowed', 'Rank', 'Percentile', 'eFG% Allowed', 'SCORE_POSS_PCT Allowed']
+            away_defense_df = away_defense_df[[col for col in col_order if col in away_defense_df.columns]]
+        
+        # Build home team offense dataframe
+        home_offense_data = []
+        for playtype in synergy_playtypes:
+            df = home_synergy.get(playtype, {}).get('offensive')
+            home_offense_data.append(extract_metrics(df, playtype))
+        home_offense_df = pd.DataFrame(home_offense_data)
+        # Ensure column order: Playtype, PPP, Rank, Percentile, eFG%, SCORE_POSS_PCT
+        if len(home_offense_df) > 0:
+            col_order = ['Playtype', 'PPP', 'Rank', 'Percentile', 'eFG%', 'SCORE_POSS_PCT']
+            home_offense_df = home_offense_df[[col for col in col_order if col in home_offense_df.columns]]
+        
+        # Build home team defense dataframe
+        home_defense_data = []
+        for playtype in synergy_playtypes:
+            df = home_synergy.get(playtype, {}).get('defensive')
+            metrics = extract_metrics(df, playtype)
+            # Rename columns for defense (allowed)
+            metrics['PPP Allowed'] = metrics.pop('PPP')
+            metrics['eFG% Allowed'] = metrics.pop('eFG%')
+            metrics['SCORE_POSS_PCT Allowed'] = metrics.pop('SCORE_POSS_PCT')
+            home_defense_data.append(metrics)
+        home_defense_df = pd.DataFrame(home_defense_data)
+        # Ensure column order: Playtype, PPP Allowed, Rank, Percentile, eFG% Allowed, SCORE_POSS_PCT Allowed
+        if len(home_defense_df) > 0:
+            col_order = ['Playtype', 'PPP Allowed', 'Rank', 'Percentile', 'eFG% Allowed', 'SCORE_POSS_PCT Allowed']
+            home_defense_df = home_defense_df[[col for col in col_order if col in home_defense_df.columns]]
+        
+        build_time = time.time() - build_start
+        
+        # Log timing
+        log_path = Path("/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log")
+        try:
+            with open(log_path, 'a') as f:
+                log_entry = {
+                    "timestamp": time.time() * 1000,
+                    "location": "1_Teams.py:1136",
+                    "message": "build_synergy_matchup_dataframes timing",
+                    "data": {
+                        "away_team_id": away_team_id,
+                        "home_team_id": home_team_id,
+                        "season": season,
+                        "away_fetch_time_ms": away_time * 1000,
+                        "home_fetch_time_ms": home_time * 1000,
+                        "build_time_ms": build_time * 1000,
+                        "total_time_ms": build_time * 1000
+                    },
+                    "sessionId": "debug-session",
+                    "runId": "timing",
+                    "hypothesisId": "B"
+                }
+                f.write(json.dumps(log_entry) + "\n")
+        except Exception:
+            pass
+        
+        print(f"[TIMING] build_synergy_matchup_dataframes: away={away_time*1000:.1f}ms, home={home_time*1000:.1f}ms, build={build_time*1000:.1f}ms, total={build_time*1000:.1f}ms")
+        
+        return away_offense_df, away_defense_df, home_offense_df, home_defense_df
+    
+    # Get last 10 games for both teams
+    try:
+        away_last_10 = get_team_last_10_games(away_team_id)
+        home_last_10 = get_team_last_10_games(home_team_id)
+    except Exception as e:
+        st.error(f"Error fetching game logs: {str(e)}")
+        away_last_10 = pd.DataFrame()
+        home_last_10 = pd.DataFrame()
+    
+    # Debug output (can be removed later)
+    with st.expander("🔍 Debug Info (Click to expand)", expanded=False):
+        st.write(f"Away Team ID: {away_team_id}, Home Team ID: {home_team_id}")
+        st.write(f"Config Season: {pf.CURRENT_SEASON}")
+        
+        # Test the API call directly with multiple seasons
+        seasons_to_try = [pf.CURRENT_SEASON, "2024-25", "2023-24"]
+        for test_season in seasons_to_try:
+            try:
+                test_logs_away = pf.get_team_game_logs(away_team_id, test_season)
+                test_logs_home = pf.get_team_game_logs(home_team_id, test_season)
+                st.write(f"**Season {test_season}:**")
+                st.write(f"  - Away team logs: {len(test_logs_away)}")
+                st.write(f"  - Home team logs: {len(test_logs_home)}")
+                if len(test_logs_away) > 0:
+                    st.write(f"  - Away columns: {test_logs_away.columns.tolist()[:5]}...")
+                if len(test_logs_home) > 0:
+                    st.write(f"  - Home columns: {test_logs_home.columns.tolist()[:5]}...")
+            except Exception as e:
+                st.write(f"  - Error with {test_season}: {str(e)}")
+    
+    # Create two columns for display
+    game_logs_cols = st.columns(2)
+    
+    # Helper function to style game logs dataframe
+    def style_game_logs(df):
+        """Apply conditional row highlighting based on Outcome"""
+        def highlight_row(row):
+            if row['Outcome'] == 'W':
+                return ['background-color: #d4edda'] * len(row)  # Light green
+            elif row['Outcome'] == 'L':
+                return ['background-color: #f8d7da'] * len(row)  # Light red
+            else:
+                return [''] * len(row)
+        
+        if len(df) > 0 and 'Outcome' in df.columns:
+            return df.style.apply(highlight_row, axis=1)
+        return df
+    
+    # Column configuration for game logs dataframe
+    game_logs_column_config = {
+        "Opponent": st.column_config.ImageColumn("Opp", width=60),
+        "H/A": st.column_config.TextColumn("H/A", width=50),
+        "Date": st.column_config.TextColumn("Date", width=70),
+        "Outcome": st.column_config.TextColumn("Outcome", width=70),
+        "Final Score": st.column_config.TextColumn("Score", width=80),
+        "FG%": st.column_config.TextColumn("FG%", width=60),
+        "2PT%": st.column_config.TextColumn("2PT%", width=60),
+        "3PT%": st.column_config.TextColumn("3PT%", width=60),
+        "REB": st.column_config.NumberColumn("REB", format="%d", width=50),
+        "AST": st.column_config.NumberColumn("AST", format="%d", width=50),
+        "TO": st.column_config.NumberColumn("TO", format="%d", width=50),
+        "STL": st.column_config.NumberColumn("STL", format="%d", width=50),
+        "BLK": st.column_config.NumberColumn("BLK", format="%d", width=50),
+    }
+    
+    with game_logs_cols[0]:
+        st.markdown(f"#### {away_abbr}")
+        if len(away_last_10) > 0:
+            styled_df = style_game_logs(away_last_10)
+            st.dataframe(
+                styled_df,
+                width='stretch',
+                hide_index=True,
+                column_config=game_logs_column_config
+            )
+        else:
+            st.caption("No game logs available")
+            st.info(f"Team ID: {away_team_id}, Season: {pf.CURRENT_SEASON}")
+    
+    with game_logs_cols[1]:
+        st.markdown(f"#### {home_abbr}")
+        if len(home_last_10) > 0:
+            styled_df = style_game_logs(home_last_10)
+            st.dataframe(
+                styled_df,
+                width='stretch',
+                hide_index=True,
+                column_config=game_logs_column_config
+            )
+        else:
+            st.caption("No game logs available")
+            st.info(f"Team ID: {home_team_id}, Season: {pf.CURRENT_SEASON}")
+    
+    st.markdown("---")
+    
+    # ============================================================
+    # SYNERGY PLAYTYPE MATCHUPS SECTION
+    # ============================================================
+    st.markdown("### 🎯 Synergy Playtype Matchups")
+    
+    try:
+        # Build synergy dataframes
+        with st.spinner("Loading synergy data..."):
+            away_offense_df, away_defense_df, home_offense_df, home_defense_df = build_synergy_matchup_dataframes(
+                away_team_id, home_team_id, pf.CURRENT_SEASON
+            )
+        
+        # Helper function to style offense rows based on rank (green for 1st, red for 30th)
+        def style_synergy_offense(row):
+            """Apply background color based on rank: green (1st) to red (30th)"""
+            styles = [''] * len(row)
+            
+            # Get rank value
+            rank = row.get('Rank', 30)
+            try:
+                rank = float(rank)
+                if pd.isna(rank) or rank == 0 or rank < 1:
+                    rank = 30
+                elif rank > 30:
+                    rank = 30
+            except (ValueError, TypeError):
+                rank = 30
+            
+            # Normalize rank to 0-1 scale (1st = 0.0, 30th = 1.0)
+            normalized = (rank - 1) / 29.0 if rank > 1 else 0.0
+            
+            # Color gradient: Green (rank 1) -> Yellow (neutral) -> Red (rank 30)
+            if normalized < 0.5:
+                # Green to Yellow (best to neutral)
+                r = int(255 * (normalized * 2))  # 0 -> 255
+                g = 255
+                b = 100
+            else:
+                # Yellow to Red (neutral to worst)
+                r = 255
+                g = int(255 * (1 - (normalized - 0.5) * 2))  # 255 -> 0
+                b = 100
+            
+            # Apply background color with rgba and 0.3 opacity
+            bg_color = f'background-color: rgba({r}, {g}, {b}, 0.3);'
+            for i in range(len(styles)):
+                styles[i] = bg_color
+            
+            return styles
+        
+        # Helper function to style defense rows based on rank (green for 1st, red for 30th)
+        def style_synergy_defense(row):
+            """Apply background color based on rank: green (rank 1 = best defense) to red (rank 30 = worst defense)"""
+            styles = [''] * len(row)
+            
+            # Get rank value (rank 1 = best defense/lowest PPP Allowed, rank 30 = worst defense/highest PPP Allowed)
+            rank = row.get('Rank', 30)
+            try:
+                rank = float(rank)
+                if pd.isna(rank) or rank == 0 or rank < 1:
+                    rank = 30
+                elif rank > 30:
+                    rank = 30
+            except (ValueError, TypeError):
+                rank = 30
+            
+            # Normalize rank to 0-1 scale (1st = 0.0, 30th = 1.0)
+            normalized = (rank - 1) / 29.0 if rank > 1 else 0.0
+            
+            # Color gradient: Green (rank 1) -> Yellow (neutral) -> Red (rank 30)
+            if normalized < 0.5:
+                # Green to Yellow (best to neutral)
+                r = int(255 * (normalized * 2))  # 0 -> 255
+                g = 255
+                b = 100
+            else:
+                # Yellow to Red (neutral to worst)
+                r = 255
+                g = int(255 * (1 - (normalized - 0.5) * 2))  # 255 -> 0
+                b = 100
+            
+            # Apply background color with rgba and 0.3 opacity
+            bg_color = f'background-color: rgba({r}, {g}, {b}, 0.3);'
+            for i in range(len(styles)):
+                styles[i] = bg_color
+            
+            return styles
+        
+        # Column configuration for synergy dataframes
+        synergy_column_config = {
+            "Playtype": st.column_config.TextColumn("Playtype", width=120),
+            "PPP": st.column_config.NumberColumn("PPP", format="%.2f", width=80),
+            "Rank": st.column_config.NumberColumn("Rank", format="%d", width=70),
+            "Percentile": st.column_config.NumberColumn("Percentile", format="%.3f", width=100),
+            "eFG%": st.column_config.NumberColumn("eFG%", format="%.1f%%", width=80),
+            "SCORE_POSS_PCT": st.column_config.NumberColumn("SCORE_POSS_PCT", format="%.1f%%", width=130),
+            "PPP Allowed": st.column_config.NumberColumn("PPP Allowed", format="%.2f", width=100),
+            "eFG% Allowed": st.column_config.NumberColumn("eFG% Allowed", format="%.1f%%", width=110),
+            "SCORE_POSS_PCT Allowed": st.column_config.NumberColumn("SCORE_POSS_PCT Allowed", format="%.1f%%", width=160),
+        }
+        
+        # Apply styling to all dataframes (offense uses rank, defense uses PPP Allowed)
+        styled_away_offense = away_offense_df.style.apply(style_synergy_offense, axis=1) if len(away_offense_df) > 0 else None
+        styled_away_defense = away_defense_df.style.apply(style_synergy_defense, axis=1) if len(away_defense_df) > 0 else None
+        styled_home_offense = home_offense_df.style.apply(style_synergy_offense, axis=1) if len(home_offense_df) > 0 else None
+        styled_home_defense = home_defense_df.style.apply(style_synergy_defense, axis=1) if len(home_defense_df) > 0 else None
+        
+        # Create two columns for 2x2 layout
+        synergy_cols = st.columns(2)
+        
+        # Left column, top: Away Offense
+        with synergy_cols[0]:
+            st.markdown(f"#### {away_abbr} Offense")
+            if styled_away_offense is not None:
+                st.dataframe(
+                    styled_away_offense,
+                    width='stretch',
+                    hide_index=True,
+                    column_config=synergy_column_config
+                )
+            else:
+                st.caption("No offensive synergy data available")
+        
+        # Right column, top: Home Defense
+        with synergy_cols[1]:
+            st.markdown(f"#### {home_abbr} Defense")
+            if styled_home_defense is not None:
+                st.dataframe(
+                    styled_home_defense,
+                    width='stretch',
+                    hide_index=True,
+                    column_config=synergy_column_config
+                )
+            else:
+                st.caption("No defensive synergy data available")
+        
+        st.markdown("")  # Spacing between rows
+        
+        # Create new columns for bottom row
+        synergy_cols_bottom = st.columns(2)
+        
+        # Left column, bottom: Away Defense
+        with synergy_cols_bottom[0]:
+            st.markdown(f"#### {away_abbr} Defense")
+            if styled_away_defense is not None:
+                st.dataframe(
+                    styled_away_defense,
+                    width='stretch',
+                    hide_index=True,
+                    column_config=synergy_column_config
+                )
+            else:
+                st.caption("No defensive synergy data available")
+        
+        # Right column, bottom: Home Offense
+        with synergy_cols_bottom[1]:
+            st.markdown(f"#### {home_abbr} Offense")
+            if styled_home_offense is not None:
+                st.dataframe(
+                    styled_home_offense,
+                    width='stretch',
+                    hide_index=True,
+                    column_config=synergy_column_config
+                )
+            else:
+                st.caption("No offensive synergy data available")
+    
+    except Exception as e:
+        st.error(f"Error loading synergy data: {str(e)}")
+        st.info("Synergy data may not be available for the current season. Trying fallback season...")
+        try:
+            # Try fallback season
+            with st.spinner("Loading synergy data (fallback season)..."):
+                away_offense_df, away_defense_df, home_offense_df, home_defense_df = build_synergy_matchup_dataframes(
+                    away_team_id, home_team_id, "2024-25"
+                )
+            
+            # Helper function to style offense rows based on rank (green for 1st, red for 30th)
+            def style_synergy_offense(row):
+                """Apply background color based on rank: green (1st) to red (30th)"""
+                styles = [''] * len(row)
+                
+                # Get rank value
+                rank = row.get('Rank', 30)
+                try:
+                    rank = float(rank)
+                    if pd.isna(rank) or rank == 0 or rank < 1:
+                        rank = 30
+                    elif rank > 30:
+                        rank = 30
+                except (ValueError, TypeError):
+                    rank = 30
+                
+                # Normalize rank to 0-1 scale (1st = 0.0, 30th = 1.0)
+                normalized = (rank - 1) / 29.0 if rank > 1 else 0.0
+                
+                # Color gradient: Green (rank 1) -> Yellow (neutral) -> Red (rank 30)
+                if normalized < 0.5:
+                    # Green to Yellow (best to neutral)
+                    r = int(255 * (normalized * 2))  # 0 -> 255
+                    g = 255
+                    b = 100
+                else:
+                    # Yellow to Red (neutral to worst)
+                    r = 255
+                    g = int(255 * (1 - (normalized - 0.5) * 2))  # 255 -> 0
+                    b = 100
+                
+                # Apply background color with rgba and 0.3 opacity
+                bg_color = f'background-color: rgba({r}, {g}, {b}, 0.3);'
+                for i in range(len(styles)):
+                    styles[i] = bg_color
+                
+                return styles
+            
+            # Helper function to style defense rows based on rank (green for 1st, red for 30th)
+            def style_synergy_defense(row):
+                """Apply background color based on rank: green (rank 1 = best defense) to red (rank 30 = worst defense)"""
+                styles = [''] * len(row)
+                
+                # Get rank value (rank 1 = best defense/lowest PPP Allowed, rank 30 = worst defense/highest PPP Allowed)
+                rank = row.get('Rank', 30)
+                try:
+                    rank = float(rank)
+                    if pd.isna(rank) or rank == 0 or rank < 1:
+                        rank = 30
+                    elif rank > 30:
+                        rank = 30
+                except (ValueError, TypeError):
+                    rank = 30
+                
+                # Normalize rank to 0-1 scale (1st = 0.0, 30th = 1.0)
+                normalized = (rank - 1) / 29.0 if rank > 1 else 0.0
+                
+                # Color gradient: Green (rank 1) -> Yellow (neutral) -> Red (rank 30)
+                if normalized < 0.5:
+                    # Green to Yellow (best to neutral)
+                    r = int(255 * (normalized * 2))  # 0 -> 255
+                    g = 255
+                    b = 100
+                else:
+                    # Yellow to Red (neutral to worst)
+                    r = 255
+                    g = int(255 * (1 - (normalized - 0.5) * 2))  # 255 -> 0
+                    b = 100
+                
+                # Apply background color with rgba and 0.3 opacity
+                bg_color = f'background-color: rgba({r}, {g}, {b}, 0.3);'
+                for i in range(len(styles)):
+                    styles[i] = bg_color
+                
+                return styles
+            
+            # Column configuration for synergy dataframes
+            synergy_column_config = {
+                "Playtype": st.column_config.TextColumn("Playtype", width=120),
+                "PPP": st.column_config.NumberColumn("PPP", format="%.2f", width=80),
+                "Rank": st.column_config.NumberColumn("Rank", format="%d", width=70),
+                "Percentile": st.column_config.NumberColumn("Percentile", format="%.3f", width=100),
+                "eFG%": st.column_config.NumberColumn("eFG%", format="%.1f%%", width=80),
+                "SCORE_POSS_PCT": st.column_config.NumberColumn("SCORE_POSS_PCT", format="%.1f%%", width=130),
+                "PPP Allowed": st.column_config.NumberColumn("PPP Allowed", format="%.2f", width=100),
+                "eFG% Allowed": st.column_config.NumberColumn("eFG% Allowed", format="%.1f%%", width=110),
+                "SCORE_POSS_PCT Allowed": st.column_config.NumberColumn("SCORE_POSS_PCT Allowed", format="%.1f%%", width=160),
+            }
+            
+            # Apply styling to all dataframes (offense uses rank, defense uses PPP Allowed)
+            styled_away_offense = away_offense_df.style.apply(style_synergy_offense, axis=1) if len(away_offense_df) > 0 else None
+            styled_away_defense = away_defense_df.style.apply(style_synergy_defense, axis=1) if len(away_defense_df) > 0 else None
+            styled_home_offense = home_offense_df.style.apply(style_synergy_offense, axis=1) if len(home_offense_df) > 0 else None
+            styled_home_defense = home_defense_df.style.apply(style_synergy_defense, axis=1) if len(home_defense_df) > 0 else None
+            
+            # Create two columns for 2x2 layout
+            synergy_cols = st.columns(2)
+            
+            # Left column, top: Away Offense
+            with synergy_cols[0]:
+                st.markdown(f"#### {away_abbr} Offense")
+                if styled_away_offense is not None:
+                    st.dataframe(styled_away_offense, width='stretch', hide_index=True, column_config=synergy_column_config)
+                else:
+                    st.caption("No offensive synergy data available")
+            
+            # Right column, top: Home Defense
+            with synergy_cols[1]:
+                st.markdown(f"#### {home_abbr} Defense")
+                if styled_home_defense is not None:
+                    st.dataframe(styled_home_defense, width='stretch', hide_index=True, column_config=synergy_column_config)
+                else:
+                    st.caption("No defensive synergy data available")
+            
+            st.markdown("")  # Spacing between rows
+            
+            # Create new columns for bottom row
+            synergy_cols_bottom = st.columns(2)
+            
+            # Left column, bottom: Away Defense
+            with synergy_cols_bottom[0]:
+                st.markdown(f"#### {away_abbr} Defense")
+                if styled_away_defense is not None:
+                    st.dataframe(styled_away_defense, width='stretch', hide_index=True, column_config=synergy_column_config)
+                else:
+                    st.caption("No defensive synergy data available")
+            
+            # Right column, bottom: Home Offense
+            with synergy_cols_bottom[1]:
+                st.markdown(f"#### {home_abbr} Offense")
+                if styled_home_offense is not None:
+                    st.dataframe(styled_home_offense, width='stretch', hide_index=True, column_config=synergy_column_config)
+                else:
+                    st.caption("No offensive synergy data available")
+        except Exception as e2:
+            st.error(f"Error loading synergy data (fallback also failed): {str(e2)}")
+            st.info("Synergy data is currently unavailable. Please try again later.")
+    
+    st.markdown("---")
+    
+    # Tab selector (Core Stats, Shooting, Rosters, Injury Report)
+    tab1, tab2, tab3, tab4 = st.tabs(["Core Stats", "Shooting", "Rosters", "Injury Report"])
 
     stat_font_size = 20
     rank_font_size = 16
@@ -388,7 +1632,7 @@ if selected_matchup:
     body_header_background_color = 'f9f9f9'
     body_background_color = 'white'
 
-    if tab == 'Core Stats':
+    with tab1:
 
         # Create the HTML for the header
         header_html = f"""
@@ -1077,7 +2321,7 @@ if selected_matchup:
         # Render the table in Streamlit
         st.markdown(html_table_2, unsafe_allow_html=True)
 
-    elif tab == 'Shooting':
+    with tab2:
 
         # Create the HTML for the header
         header_html_shooting = f"""
@@ -2006,7 +3250,7 @@ if selected_matchup:
         # Render the table in Streamlit
         st.markdown(html_table_shooting, unsafe_allow_html=True)
 
-    elif tab == 'Rosters':
+    with tab3:
         # ============================================================
         # ROSTERS TAB - Player averages for both teams
         # ============================================================
@@ -2040,12 +3284,7 @@ if selected_matchup:
             if not home_team_abbr:
                 home_team_abbr = team_name_to_abbr.get(home_team_name, home_team_name.split()[-1][:3].upper())
         
-        # ============================================================
-        # INJURY REPORT SECTION
-        # ============================================================
-        st.markdown("### Injury Report")
-        
-        # Load player data first (needed for injury matching)
+        # Load player data first (needed for On/Off Court Summary and Player Averages)
         @st.cache_data(ttl=1800, show_spinner="Loading player data...")
         def load_roster_data():
             players_df = functions.get_players_dataframe()
@@ -2053,6 +3292,563 @@ if selected_matchup:
             return players_df, game_logs_df
         
         players_df, game_logs_df = load_roster_data()
+        
+        # ============================================================
+        # ON/OFF COURT SUMMARY SECTION
+        # ============================================================
+        st.markdown("### On/Off Court Summary")
+        
+        try:
+            # Fetch on/off court data for both teams
+            away_onoff_data = toff.get_team_onoff_formatted(
+                team_id=int(away_team_id),
+                season='2025-26',
+                players_df=players_df,
+                min_minutes=100
+            )
+            
+            home_onoff_data = toff.get_team_onoff_formatted(
+                team_id=int(home_team_id),
+                season='2025-26',
+                players_df=players_df,
+                min_minutes=100
+            )
+            
+            if len(away_onoff_data) > 0 or len(home_onoff_data) > 0:
+                # Create two columns for away/home teams
+                onoff_col1, onoff_col2 = st.columns(2)
+                
+                with onoff_col1:
+                    st.markdown(f"**{away_team_name}**")
+                    if len(away_onoff_data) > 0:
+                        # Prepare column configuration for display
+                        column_config = {}
+                        
+                        # Add headshot column if present
+                        if 'headshot' in away_onoff_data.columns:
+                            column_config['headshot'] = st.column_config.ImageColumn("", width=50)
+                        
+                        # Add player name column
+                        if 'PLAYER_NAME' in away_onoff_data.columns:
+                            column_config['PLAYER_NAME'] = st.column_config.TextColumn("Player", width=150)
+                        
+                        # Add minutes columns
+                        if 'MIN_ON_COURT' in away_onoff_data.columns:
+                            column_config['MIN_ON_COURT'] = st.column_config.NumberColumn("MIN ON", format="%.0f", width=70)
+                        if 'MIN_OFF_COURT' in away_onoff_data.columns:
+                            column_config['MIN_OFF_COURT'] = st.column_config.NumberColumn("MIN OFF", format="%.0f", width=70)
+                        
+                        # Add Net Rating columns
+                        if 'NET_RATING_ON_COURT' in away_onoff_data.columns:
+                            column_config['NET_RATING_ON_COURT'] = st.column_config.NumberColumn("NET ON", format="%.1f", width=70)
+                        if 'NET_RATING_OFF_COURT' in away_onoff_data.columns:
+                            column_config['NET_RATING_OFF_COURT'] = st.column_config.NumberColumn("NET OFF", format="%.1f", width=70)
+                        if 'NET_RTG_DIFF' in away_onoff_data.columns:
+                            column_config['NET_RTG_DIFF'] = st.column_config.NumberColumn("NET DIFF", format="%.1f", width=80)
+                        
+                        # Add Offensive Rating columns
+                        if 'OFF_RATING_ON_COURT' in away_onoff_data.columns:
+                            column_config['OFF_RATING_ON_COURT'] = st.column_config.NumberColumn("OFF ON", format="%.1f", width=70)
+                        if 'OFF_RATING_OFF_COURT' in away_onoff_data.columns:
+                            column_config['OFF_RATING_OFF_COURT'] = st.column_config.NumberColumn("OFF OFF", format="%.1f", width=70)
+                        if 'OFF_RTG_DIFF' in away_onoff_data.columns:
+                            column_config['OFF_RTG_DIFF'] = st.column_config.NumberColumn("OFF DIFF", format="%.1f", width=80)
+                        
+                        # Add Defensive Rating columns
+                        if 'DEF_RATING_ON_COURT' in away_onoff_data.columns:
+                            column_config['DEF_RATING_ON_COURT'] = st.column_config.NumberColumn("DEF ON", format="%.1f", width=70)
+                        if 'DEF_RATING_OFF_COURT' in away_onoff_data.columns:
+                            column_config['DEF_RATING_OFF_COURT'] = st.column_config.NumberColumn("DEF OFF", format="%.1f", width=70)
+                        if 'DEF_RTG_DIFF' in away_onoff_data.columns:
+                            column_config['DEF_RTG_DIFF'] = st.column_config.NumberColumn("DEF DIFF", format="%.1f", width=80)
+                        
+                        # Display dataframe with color coding
+                        st.dataframe(
+                            away_onoff_data,
+                            column_config=column_config,
+                            hide_index=True,
+                            width='stretch'
+                        )
+                    else:
+                        st.info("No on/off court data available")
+                
+                with onoff_col2:
+                    st.markdown(f"**{home_team_name}**")
+                    if len(home_onoff_data) > 0:
+                        # Prepare column configuration for display (same as away team)
+                        column_config = {}
+                        
+                        # Add headshot column if present
+                        if 'headshot' in home_onoff_data.columns:
+                            column_config['headshot'] = st.column_config.ImageColumn("", width=50)
+                        
+                        # Add player name column
+                        if 'PLAYER_NAME' in home_onoff_data.columns:
+                            column_config['PLAYER_NAME'] = st.column_config.TextColumn("Player", width=150)
+                        
+                        # Add minutes columns
+                        if 'MIN_ON_COURT' in home_onoff_data.columns:
+                            column_config['MIN_ON_COURT'] = st.column_config.NumberColumn("MIN ON", format="%.0f", width=70)
+                        if 'MIN_OFF_COURT' in home_onoff_data.columns:
+                            column_config['MIN_OFF_COURT'] = st.column_config.NumberColumn("MIN OFF", format="%.0f", width=70)
+                        
+                        # Add Net Rating columns
+                        if 'NET_RATING_ON_COURT' in home_onoff_data.columns:
+                            column_config['NET_RATING_ON_COURT'] = st.column_config.NumberColumn("NET ON", format="%.1f", width=70)
+                        if 'NET_RATING_OFF_COURT' in home_onoff_data.columns:
+                            column_config['NET_RATING_OFF_COURT'] = st.column_config.NumberColumn("NET OFF", format="%.1f", width=70)
+                        if 'NET_RTG_DIFF' in home_onoff_data.columns:
+                            column_config['NET_RTG_DIFF'] = st.column_config.NumberColumn("NET DIFF", format="%.1f", width=80)
+                        
+                        # Add Offensive Rating columns
+                        if 'OFF_RATING_ON_COURT' in home_onoff_data.columns:
+                            column_config['OFF_RATING_ON_COURT'] = st.column_config.NumberColumn("OFF ON", format="%.1f", width=70)
+                        if 'OFF_RATING_OFF_COURT' in home_onoff_data.columns:
+                            column_config['OFF_RATING_OFF_COURT'] = st.column_config.NumberColumn("OFF OFF", format="%.1f", width=70)
+                        if 'OFF_RTG_DIFF' in home_onoff_data.columns:
+                            column_config['OFF_RTG_DIFF'] = st.column_config.NumberColumn("OFF DIFF", format="%.1f", width=80)
+                        
+                        # Add Defensive Rating columns
+                        if 'DEF_RATING_ON_COURT' in home_onoff_data.columns:
+                            column_config['DEF_RATING_ON_COURT'] = st.column_config.NumberColumn("DEF ON", format="%.1f", width=70)
+                        if 'DEF_RATING_OFF_COURT' in home_onoff_data.columns:
+                            column_config['DEF_RATING_OFF_COURT'] = st.column_config.NumberColumn("DEF OFF", format="%.1f", width=70)
+                        if 'DEF_RTG_DIFF' in home_onoff_data.columns:
+                            column_config['DEF_RTG_DIFF'] = st.column_config.NumberColumn("DEF DIFF", format="%.1f", width=80)
+                        
+                        # Display dataframe with color coding
+                        st.dataframe(
+                            home_onoff_data,
+                            column_config=column_config,
+                            hide_index=True,
+                            width='stretch'
+                        )
+                    else:
+                        st.info("No on/off court data available")
+            else:
+                st.info("On/off court data is currently unavailable. Please try again later.")
+        
+        except Exception as e:
+            st.warning(f"⚠️ Could not fetch on/off court data: {str(e)}")
+        
+        st.divider()
+        
+        # ============================================================
+        # PLAYER AVERAGES SECTION
+        # ============================================================
+        st.markdown("### Player Averages")
+        
+        # Scope selector
+        scope_options = ["Traditional", "Clutch"]
+        selected_scope = st.selectbox(
+            "Select Scope:",
+            options=scope_options,
+            index=0,  # Default to Traditional
+            help="Choose between traditional stats or clutch time performance"
+        )
+        
+        # Period selector (now visible for both scopes)
+        period_options = ["Last 10 Games", "Last 5 Games", "Last 3 Games", "All Games"]
+        selected_period = st.selectbox(
+            "Select Period:",
+            options=period_options,
+            index=0,  # Default to Last 10 Games
+            help="Choose the time period for calculating player averages"
+        )
+        
+        # Map period to num_games
+        period_map = {
+            "Last 10 Games": 10,
+            "Last 5 Games": 5,
+            "Last 3 Games": 3,
+            "All Games": None
+        }
+        num_games = period_map[selected_period]
+        
+        # Per Game/Total toggle
+        show_totals = st.toggle(
+            "Show Totals",
+            value=False,
+            help="Toggle between Per Game and Total stats"
+        )
+        per_mode_str = 'Totals' if show_totals else 'PerGame'
+        
+        # Check data availability based on scope
+        if selected_scope == "Traditional":
+            data_available = len(players_df) > 0 and len(game_logs_df) > 0
+        else:  # Clutch
+            data_available = len(players_df) > 0
+        
+        if not data_available:
+            st.warning("Unable to load player data. Please try again.")
+        else:
+            # Column config for dataframes - use specific pixel widths for tighter columns
+            column_config = {
+                "headshot": st.column_config.ImageColumn("", width=85),  # Specific width for headshot
+                "Player": st.column_config.TextColumn("Player", width=140),
+                "Pos": st.column_config.TextColumn("Pos", width=50),
+                "GP": st.column_config.NumberColumn("GP", format="%d", width=45),
+                "MIN": st.column_config.NumberColumn("MIN", format="%.1f", width=50),
+                "PTS": st.column_config.NumberColumn("PTS", format="%.1f", width=50),
+                "REB": st.column_config.NumberColumn("REB", format="%.1f", width=50),
+                "AST": st.column_config.NumberColumn("AST", format="%.1f", width=50),
+                "PRA": st.column_config.NumberColumn("PRA", format="%.1f", width=50),
+                "STL": st.column_config.NumberColumn("STL", format="%.1f", width=50),
+                "BLK": st.column_config.NumberColumn("BLK", format="%.1f", width=50),
+                "TOV": st.column_config.NumberColumn("TOV", format="%.1f", width=50),
+                "FGM": st.column_config.NumberColumn("FGM", format="%.1f", width=50),
+                "FPTS": st.column_config.NumberColumn("FPTS", format="%.1f", width=50),
+                "FGA": st.column_config.NumberColumn("FGA", format="%.1f", width=50),
+                "FG%": st.column_config.NumberColumn("FG%", format="%.1f%%", width=55),
+                "3PM": st.column_config.NumberColumn("3PM", format="%.1f", width=50),
+                "3PA": st.column_config.NumberColumn("3PA", format="%.1f", width=50),
+                "3P%": st.column_config.NumberColumn("3P%", format="%.1f%%", width=55),
+                "FTM": st.column_config.NumberColumn("FTM", format="%.1f", width=50),
+                "FTA": st.column_config.NumberColumn("FTA", format="%.1f", width=50),
+                "FT%": st.column_config.NumberColumn("FT%", format="%.1f%%", width=55),
+            }
+            
+            # Display columns (exclude hidden _player_id)
+            display_columns = ['headshot', 'Player', 'Pos', 'GP', 'MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', 'FGM', 'FPTS', 'FGA', 'FG%', '3PM', '3PA', '3P%', 'FTM', 'FTA', 'FT%']
+            
+            # Function to calculate individual player season averages
+            def calculate_player_season_averages(roster_df, game_logs_df, per_mode='PerGame'):
+                """
+                Calculate full-season averages for each player in the roster.
+                
+                Args:
+                    roster_df: DataFrame with player stats (must have '_player_id' column)
+                    game_logs_df: DataFrame with all player game logs
+                    per_mode: 'PerGame' for averages or 'Totals' for totals
+                
+                Returns:
+                    Dictionary mapping player_id to their season averages: {player_id: {col: value, ...}}
+                """
+                player_season_averages = {}
+                
+                # Get all unique player IDs from roster
+                if '_player_id' not in roster_df.columns:
+                    return player_season_averages
+                
+                numeric_cols = ['MIN', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'FGM', 'FGA', 'FG3M', 'FG3A', 'FTM', 'FTA']
+                pct_cols = ['FG%', '3P%', 'FT%']
+                
+                for _, row in roster_df.iterrows():
+                    player_id = row['_player_id']
+                    
+                    # Get all games for this player (full season)
+                    player_logs = game_logs_df[game_logs_df['PLAYER_ID'] == player_id].copy()
+                    
+                    if len(player_logs) == 0:
+                        continue
+                    
+                    # Calculate season averages/totals
+                    season_avg = {}
+                    
+                    if per_mode == 'Totals':
+                        # Calculate totals
+                        for col in numeric_cols:
+                            if col in player_logs.columns:
+                                season_avg[col] = player_logs[col].sum()
+                        
+                        # Calculate percentages from totals
+                        if 'FGM' in player_logs.columns and 'FGA' in player_logs.columns:
+                            total_fgm = player_logs['FGM'].sum()
+                            total_fga = player_logs['FGA'].sum()
+                            season_avg['FG%'] = (total_fgm / total_fga * 100) if total_fga > 0 else 0.0
+                        
+                        if 'FG3M' in player_logs.columns and 'FG3A' in player_logs.columns:
+                            total_fg3m = player_logs['FG3M'].sum()
+                            total_fg3a = player_logs['FG3A'].sum()
+                            season_avg['3P%'] = (total_fg3m / total_fg3a * 100) if total_fg3a > 0 else 0.0
+                        
+                        if 'FTM' in player_logs.columns and 'FTA' in player_logs.columns:
+                            total_ftm = player_logs['FTM'].sum()
+                            total_fta = player_logs['FTA'].sum()
+                            season_avg['FT%'] = (total_ftm / total_fta * 100) if total_fta > 0 else 0.0
+                        
+                        # Calculate PRA (totals)
+                        pts = season_avg.get('PTS', 0)
+                        reb = season_avg.get('REB', 0)
+                        ast = season_avg.get('AST', 0)
+                        season_avg['PRA'] = pts + reb + ast
+                        
+                        # Calculate FPTS (totals)
+                        fpts = (pts + reb * 1.2 + ast * 1.5 + 
+                               season_avg.get('STL', 0) * 3 + 
+                               season_avg.get('BLK', 0) * 3 - 
+                               season_avg.get('TOV', 0))
+                        season_avg['FPTS'] = fpts
+                        
+                        # Map column names
+                        season_avg['3PM'] = season_avg.get('FG3M', 0)
+                        season_avg['3PA'] = season_avg.get('FG3A', 0)
+                    else:
+                        # Calculate averages (PerGame)
+                        for col in numeric_cols:
+                            if col in player_logs.columns:
+                                season_avg[col] = player_logs[col].mean()
+                        
+                        # Calculate percentages from totals
+                        if 'FGM' in player_logs.columns and 'FGA' in player_logs.columns:
+                            total_fgm = player_logs['FGM'].sum()
+                            total_fga = player_logs['FGA'].sum()
+                            season_avg['FG%'] = (total_fgm / total_fga * 100) if total_fga > 0 else 0.0
+                        
+                        if 'FG3M' in player_logs.columns and 'FG3A' in player_logs.columns:
+                            total_fg3m = player_logs['FG3M'].sum()
+                            total_fg3a = player_logs['FG3A'].sum()
+                            season_avg['3P%'] = (total_fg3m / total_fg3a * 100) if total_fg3a > 0 else 0.0
+                        
+                        if 'FTM' in player_logs.columns and 'FTA' in player_logs.columns:
+                            total_ftm = player_logs['FTM'].sum()
+                            total_fta = player_logs['FTA'].sum()
+                            season_avg['FT%'] = (total_ftm / total_fta * 100) if total_fta > 0 else 0.0
+                        
+                        # Calculate PRA (averages)
+                        pts = season_avg.get('PTS', 0)
+                        reb = season_avg.get('REB', 0)
+                        ast = season_avg.get('AST', 0)
+                        season_avg['PRA'] = pts + reb + ast
+                        
+                        # Calculate FPTS (averages)
+                        fpts = (pts + reb * 1.2 + ast * 1.5 + 
+                               season_avg.get('STL', 0) * 3 + 
+                               season_avg.get('BLK', 0) * 3 - 
+                               season_avg.get('TOV', 0))
+                        season_avg['FPTS'] = fpts
+                        
+                        # Map column names
+                        season_avg['3PM'] = season_avg.get('FG3M', 0)
+                        season_avg['3PA'] = season_avg.get('FG3A', 0)
+                    
+                    player_season_averages[player_id] = season_avg
+                
+                return player_season_averages
+            
+            # Function to style player averages based on individual season averages
+            def style_player_averages_heatmap(df, player_season_averages_dict):
+                """Apply heatmap colors to player averages: light red (below avg) → gray (at avg) → light green (above avg)
+                
+                Args:
+                    df: DataFrame with player stats (must have '_player_id' column)
+                    player_season_averages_dict: Dictionary mapping player_id to their season averages
+                """
+                def style_row(row):
+                    styles = [''] * len(row)
+                    
+                    # Get player ID from row
+                    if '_player_id' not in row.index:
+                        return styles
+                    
+                    player_id = row['_player_id']
+                    
+                    # Get this player's season averages
+                    if player_id not in player_season_averages_dict:
+                        return styles  # No season data for this player
+                    
+                    season_avg = player_season_averages_dict[player_id]
+                    
+                    # Columns to skip (non-numeric or identifiers)
+                    skip_cols = ['headshot', 'Player', 'Pos', 'GP', '_player_id']
+                    
+                    # Numeric columns to style
+                    numeric_cols = ['MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', 'FGM', 'FPTS', 'FGA', '3PM', '3PA', 'FTM', 'FTA']
+                    
+                    # Percentage columns to style
+                    pct_cols = ['FG%', '3P%', 'FT%']
+                    
+                    for i, col in enumerate(df.columns):
+                        if col in skip_cols:
+                            continue
+                        
+                        if col in numeric_cols:
+                            try:
+                                # Handle string values that might be formatted
+                                current_val_str = str(row[col]).replace(',', '')
+                                current_val = float(current_val_str)
+                                
+                                # Get season average for this column
+                                season_val = season_avg.get(col, None)
+                                if season_val is None:
+                                    continue
+                                
+                                season_val = float(season_val)
+                                
+                                if current_val > season_val:
+                                    # Green gradient - better than season average
+                                    diff_pct = ((current_val - season_val) / season_val * 100) if season_val > 0 else 0
+                                    intensity = min(diff_pct / 20, 1.0)  # Cap at 20% difference for max intensity
+                                    green_intensity = int(200 + (55 * intensity))
+                                    styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
+                                elif current_val < season_val:
+                                    # Red gradient - worse than season average
+                                    diff_pct = ((season_val - current_val) / season_val * 100) if season_val > 0 else 0
+                                    intensity = min(diff_pct / 20, 1.0)
+                                    red_intensity = int(200 + (55 * intensity))
+                                    styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
+                                else:
+                                    # Gray - same as season average
+                                    styles[i] = 'background-color: rgb(240, 240, 240);'
+                            except (ValueError, TypeError, KeyError):
+                                pass
+                        elif col in pct_cols:
+                            try:
+                                # Extract percentage value
+                                current_str = str(row[col]).replace('%', '')
+                                current_val = float(current_str)
+                                
+                                # Get season average for this column
+                                season_val = season_avg.get(col, None)
+                                if season_val is None:
+                                    continue
+                                
+                                season_val = float(season_val)
+                                
+                                if current_val > season_val:
+                                    diff_pct = ((current_val - season_val) / season_val * 100) if season_val > 0 else 0
+                                    intensity = min(diff_pct / 20, 1.0)
+                                    green_intensity = int(200 + (55 * intensity))
+                                    styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
+                                elif current_val < season_val:
+                                    diff_pct = ((season_val - current_val) / season_val * 100) if season_val > 0 else 0
+                                    intensity = min(diff_pct / 20, 1.0)
+                                    red_intensity = int(200 + (55 * intensity))
+                                    styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
+                                else:
+                                    styles[i] = 'background-color: rgb(240, 240, 240);'
+                            except (ValueError, TypeError, KeyError):
+                                pass
+                    
+                    return styles
+                
+                return df.style.apply(style_row, axis=1)
+            
+            # Away Team
+            st.markdown(f"""
+                <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0 10px 0;">
+                    <img src="https://cdn.nba.com/logos/nba/{away_team_id}/primary/L/logo.svg" style="height: 60px; width: auto;">
+                    <span style="font-size: 24px; font-weight: bold;">{away_team_name}</span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if selected_scope == "Traditional":
+                away_roster_df = functions.get_team_roster_stats(away_team_id, players_df, game_logs_df, num_games, per_mode=per_mode_str)
+            else:  # Clutch
+                away_roster_df = functions.get_team_clutch_stats(away_team_id, season='2025-26', players_df=players_df, per_mode_detailed=per_mode_str)
+            
+            if len(away_roster_df) > 0:
+                # Filter to display columns only
+                away_display_df = away_roster_df[[col for col in display_columns if col in away_roster_df.columns]].copy()
+                
+                # Calculate individual player season averages for styling
+                if selected_scope == "Traditional":
+                    # For Traditional scope, use game_logs_df to calculate full-season averages
+                    away_player_season_averages = calculate_player_season_averages(away_roster_df, game_logs_df, per_mode=per_mode_str)
+                else:
+                    # For Clutch scope, we'll need to fetch clutch season averages differently
+                    # For now, use empty dict (will be handled in styling function)
+                    away_player_season_averages = {}
+                    # TODO: Implement clutch season averages calculation if needed
+                
+                # Apply styling
+                styled_away_df = style_player_averages_heatmap(away_display_df, away_player_season_averages)
+                
+                st.dataframe(
+                    styled_away_df,
+                    column_config=column_config,
+                    hide_index=True,
+                    width='stretch',
+                    height=min(600, 50 * len(away_display_df) + 38)
+                )
+            else:
+                st.info(f"No player data available for {away_team_name}")
+            
+            st.divider()
+            
+            # Home Team
+            st.markdown(f"""
+                <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0 10px 0;">
+                    <img src="https://cdn.nba.com/logos/nba/{home_team_id}/primary/L/logo.svg" style="height: 60px; width: auto;">
+                    <span style="font-size: 24px; font-weight: bold;">{home_team_name}</span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if selected_scope == "Traditional":
+                home_roster_df = functions.get_team_roster_stats(home_team_id, players_df, game_logs_df, num_games, per_mode=per_mode_str)
+            else:  # Clutch
+                home_roster_df = functions.get_team_clutch_stats(home_team_id, season='2025-26', players_df=players_df, per_mode_detailed=per_mode_str)
+            
+            if len(home_roster_df) > 0:
+                # Filter to display columns only
+                home_display_df = home_roster_df[[col for col in display_columns if col in home_roster_df.columns]].copy()
+                
+                # Calculate individual player season averages for styling
+                if selected_scope == "Traditional":
+                    # For Traditional scope, use game_logs_df to calculate full-season averages
+                    home_player_season_averages = calculate_player_season_averages(home_roster_df, game_logs_df, per_mode=per_mode_str)
+                else:
+                    # For Clutch scope, we'll need to fetch clutch season averages differently
+                    # For now, use empty dict (will be handled in styling function)
+                    home_player_season_averages = {}
+                    # TODO: Implement clutch season averages calculation if needed
+                
+                # Apply styling
+                styled_home_df = style_player_averages_heatmap(home_display_df, home_player_season_averages)
+                
+                st.dataframe(
+                    styled_home_df,
+                    column_config=column_config,
+                    hide_index=True,
+                    width='stretch',
+                    height=min(600, 50 * len(home_display_df) + 38)
+                )
+            else:
+                st.info(f"No player data available for {home_team_name}")
+    
+    with tab4:
+        # ============================================================
+        # INJURY REPORT TAB
+        # ============================================================
+        
+        # Get team info
+        away_team_name = selected_matchup['away_team_name']
+        home_team_name = selected_matchup['home_team_name']
+        away_team_id = selected_matchup['away_team_id']
+        home_team_id = selected_matchup['home_team_id']
+        
+        # Get tricodes directly from matchup (from API) - same as Matchup Summary
+        away_team_abbr = selected_matchup.get('away_team', '')
+        home_team_abbr = selected_matchup.get('home_team', '')
+        
+        # Fallback to mapping if tricodes not available
+        if not away_team_abbr or not home_team_abbr:
+            team_name_to_abbr = {
+                'Atlanta Hawks': 'ATL', 'Boston Celtics': 'BOS', 'Brooklyn Nets': 'BKN',
+                'Charlotte Hornets': 'CHA', 'Chicago Bulls': 'CHI', 'Cleveland Cavaliers': 'CLE',
+                'Dallas Mavericks': 'DAL', 'Denver Nuggets': 'DEN', 'Detroit Pistons': 'DET',
+                'Golden State Warriors': 'GSW', 'Houston Rockets': 'HOU', 'Indiana Pacers': 'IND',
+                'LA Clippers': 'LAC', 'Los Angeles Lakers': 'LAL', 'Memphis Grizzlies': 'MEM',
+                'Miami Heat': 'MIA', 'Milwaukee Bucks': 'MIL', 'Minnesota Timberwolves': 'MIN',
+                'New Orleans Pelicans': 'NOP', 'New York Knicks': 'NYK', 'Oklahoma City Thunder': 'OKC',
+                'Orlando Magic': 'ORL', 'Philadelphia 76ers': 'PHI', 'Phoenix Suns': 'PHX',
+                'Portland Trail Blazers': 'POR', 'Sacramento Kings': 'SAC', 'San Antonio Spurs': 'SAS',
+                'Toronto Raptors': 'TOR', 'Utah Jazz': 'UTA', 'Washington Wizards': 'WAS'
+            }
+            if not away_team_abbr:
+                away_team_abbr = team_name_to_abbr.get(away_team_name, away_team_name.split()[-1][:3].upper())
+            if not home_team_abbr:
+                home_team_abbr = team_name_to_abbr.get(home_team_name, home_team_name.split()[-1][:3].upper())
+        
+        st.markdown("### Injury Report")
+        
+        # Load player data first (needed for injury matching)
+        @st.cache_data(ttl=1800, show_spinner="Loading player data...")
+        def load_injury_player_data():
+            players_df = functions.get_players_dataframe()
+            return players_df
+        
+        players_df_injury = load_injury_player_data()
         
         # Fetch injury report
         @st.cache_data(ttl=600, show_spinner="Fetching injury report...")
@@ -2064,7 +3860,7 @@ if selected_matchup:
         # Get injuries for this matchup
         if injury_df is not None and len(injury_df) > 0:
             matchup_injuries = ir.get_injuries_for_matchup(
-                injury_df, away_team_abbr, home_team_abbr, players_df
+                injury_df, away_team_abbr, home_team_abbr, players_df_injury
             )
             
             # Create two columns for away/home injuries
@@ -2163,107 +3959,4 @@ if selected_matchup:
                     st.info("No injuries reported")
         else:
             st.warning(f"⚠️ Could not fetch injury report: {injury_status}")
-        
-        st.divider()
-        
-        # ============================================================
-        # PLAYER AVERAGES SECTION
-        # ============================================================
-        st.markdown("### Player Averages")
-        
-        # Period selector
-        period_options = ["Last 10 Games", "Last 5 Games", "Last 3 Games", "All Games"]
-        selected_period = st.selectbox(
-            "Select Period:",
-            options=period_options,
-            index=0,  # Default to Last 10 Games
-            help="Choose the time period for calculating player averages"
-        )
-        
-        # Map period to num_games
-        period_map = {
-            "Last 10 Games": 10,
-            "Last 5 Games": 5,
-            "Last 3 Games": 3,
-            "All Games": None
-        }
-        num_games = period_map[selected_period]
-        
-        if len(players_df) == 0 or len(game_logs_df) == 0:
-            st.warning("Unable to load player data. Please try again.")
-        else:
-            # Column config for dataframes - use specific pixel widths for tighter columns
-            column_config = {
-                "headshot": st.column_config.ImageColumn("", width=85),  # Specific width for headshot
-                "Player": st.column_config.TextColumn("Player", width=140),
-                "Pos": st.column_config.TextColumn("Pos", width=50),
-                "GP": st.column_config.NumberColumn("GP", format="%d", width=45),
-                "MIN": st.column_config.NumberColumn("MIN", format="%.1f", width=50),
-                "PTS": st.column_config.NumberColumn("PTS", format="%.1f", width=50),
-                "REB": st.column_config.NumberColumn("REB", format="%.1f", width=50),
-                "AST": st.column_config.NumberColumn("AST", format="%.1f", width=50),
-                "PRA": st.column_config.NumberColumn("PRA", format="%.1f", width=50),
-                "STL": st.column_config.NumberColumn("STL", format="%.1f", width=50),
-                "BLK": st.column_config.NumberColumn("BLK", format="%.1f", width=50),
-                "TOV": st.column_config.NumberColumn("TOV", format="%.1f", width=50),
-                "FGM": st.column_config.NumberColumn("FGM", format="%.1f", width=50),
-                "FGA": st.column_config.NumberColumn("FGA", format="%.1f", width=50),
-                "FG%": st.column_config.NumberColumn("FG%", format="%.1f%%", width=55),
-                "3PM": st.column_config.NumberColumn("3PM", format="%.1f", width=50),
-                "3PA": st.column_config.NumberColumn("3PA", format="%.1f", width=50),
-                "3P%": st.column_config.NumberColumn("3P%", format="%.1f%%", width=55),
-                "FTM": st.column_config.NumberColumn("FTM", format="%.1f", width=50),
-                "FTA": st.column_config.NumberColumn("FTA", format="%.1f", width=50),
-                "FT%": st.column_config.NumberColumn("FT%", format="%.1f%%", width=55),
-            }
-            
-            # Display columns (exclude hidden _player_id)
-            display_columns = ['headshot', 'Player', 'Pos', 'GP', 'MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', 'FGM', 'FGA', 'FG%', '3PM', '3PA', '3P%', 'FTM', 'FTA', 'FT%']
-            
-            # Away Team
-            st.markdown(f"""
-                <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0 10px 0;">
-                    <img src="https://cdn.nba.com/logos/nba/{away_team_id}/primary/L/logo.svg" style="height: 60px; width: auto;">
-                    <span style="font-size: 24px; font-weight: bold;">{away_team_name}</span>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            away_roster_df = functions.get_team_roster_stats(away_team_id, players_df, game_logs_df, num_games)
-            
-            if len(away_roster_df) > 0:
-                # Filter to display columns only
-                away_display_df = away_roster_df[[col for col in display_columns if col in away_roster_df.columns]]
-                st.dataframe(
-                    away_display_df,
-                    column_config=column_config,
-                    hide_index=True,
-                    width='stretch',
-                    height=min(600, 50 * len(away_display_df) + 38)
-                )
-            else:
-                st.info(f"No player data available for {away_team_name}")
-            
-            st.divider()
-            
-            # Home Team
-            st.markdown(f"""
-                <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0 10px 0;">
-                    <img src="https://cdn.nba.com/logos/nba/{home_team_id}/primary/L/logo.svg" style="height: 60px; width: auto;">
-                    <span style="font-size: 24px; font-weight: bold;">{home_team_name}</span>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            home_roster_df = functions.get_team_roster_stats(home_team_id, players_df, game_logs_df, num_games)
-            
-            if len(home_roster_df) > 0:
-                # Filter to display columns only
-                home_display_df = home_roster_df[[col for col in display_columns if col in home_roster_df.columns]]
-                st.dataframe(
-                    home_display_df,
-                    column_config=column_config,
-                    hide_index=True,
-                    width='stretch',
-                    height=min(600, 50 * len(home_display_df) + 38)
-                )
-            else:
-                st.info(f"No player data available for {home_team_name}")
+    

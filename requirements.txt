@@ -10,3 +10,7 @@ scikit-learn
 scipy
 joblib
 threadpoolctl
+matplotlib
+unidecode
+supabase
+python-dotenv

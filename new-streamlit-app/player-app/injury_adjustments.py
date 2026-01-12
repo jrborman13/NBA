@@ -110,61 +110,61 @@ def calculate_minutes_redistribution(
         # Stars get minutes from stars and starters
         for pos_group in ['G', 'F', 'C']:
             if star_minutes_out[pos_group] > 0:
-                extra_minutes += star_minutes_out[pos_group] * 0.16 * pos_mult[pos_group]
-                max_boost = 6
+                extra_minutes += star_minutes_out[pos_group] * 0.25 * pos_mult[pos_group]  # Up from 0.16
+                max_boost = 8  # Increase cap
             if starter_minutes_out[pos_group] > 0:
-                extra_minutes += starter_minutes_out[pos_group] * 0.12 * pos_mult[pos_group]
-                max_boost = max(max_boost, 5) if max_boost > 0 else 5
+                extra_minutes += starter_minutes_out[pos_group] * 0.20 * pos_mult[pos_group]  # Up from 0.12
+                max_boost = max(max_boost, 7) if max_boost > 0 else 7
         
     elif player_role == "starter":
         # Starters get minutes from stars and starters
+        max_boost = 7
         for pos_group in ['G', 'F', 'C']:
             if star_minutes_out[pos_group] > 0:
-                extra_minutes += star_minutes_out[pos_group] * 0.12 * pos_mult[pos_group]
-                max_boost = 5
+                extra_minutes += star_minutes_out[pos_group] * 0.20 * pos_mult[pos_group]  # Up from 0.12
             if starter_minutes_out[pos_group] > 0:
-                extra_minutes += starter_minutes_out[pos_group] * 0.11 * pos_mult[pos_group]
-                max_boost = max(max_boost, 4) if max_boost > 0 else 4
+                extra_minutes += starter_minutes_out[pos_group] * 0.18 * pos_mult[pos_group]  # Up from 0.11
+                max_boost = max(max_boost, 6) if max_boost > 0 else 6
         
     elif player_role == "rotation":
         # Rotation players get minutes from rotation and bench players
         for pos_group in ['G', 'F', 'C']:
             if rotation_minutes_out[pos_group] > 0:
-                extra_minutes += rotation_minutes_out[pos_group] * 0.10 * pos_mult[pos_group]
-                max_boost = 4
+                extra_minutes += rotation_minutes_out[pos_group] * 0.35 * pos_mult[pos_group]  # Up from 0.10
+                max_boost = 6
             if bench_minutes_out[pos_group] > 0:
-                extra_minutes += bench_minutes_out[pos_group] * 0.08 * pos_mult[pos_group]
-                max_boost = max(max_boost, 4) if max_boost > 0 else 4
+                extra_minutes += bench_minutes_out[pos_group] * 0.25 * pos_mult[pos_group]  # Up from 0.08
+                max_boost = max(max_boost, 6) if max_boost > 0 else 6
         # Can also get some from starters if they're out (backup role)
         for pos_group in ['G', 'F', 'C']:
             if starter_minutes_out[pos_group] > 0:
-                extra_minutes += starter_minutes_out[pos_group] * 0.06 * pos_mult[pos_group]
-                max_boost = max(max_boost, 4) if max_boost > 0 else 4
+                extra_minutes += starter_minutes_out[pos_group] * 0.10 * pos_mult[pos_group]  # Up from 0.06
+                max_boost = max(max_boost, 6) if max_boost > 0 else 6
         
     elif player_role == "bench":
         # Bench players get minutes from bench and deep bench
+        max_boost = 7
         for pos_group in ['G', 'F', 'C']:
             if bench_minutes_out[pos_group] > 0:
-                extra_minutes += bench_minutes_out[pos_group] * 0.08 * pos_mult[pos_group]
-                max_boost = 5
+                extra_minutes += bench_minutes_out[pos_group] * 0.30 * pos_mult[pos_group]  # Up from 0.08
             if deep_bench_minutes_out[pos_group] > 0:
-                extra_minutes += deep_bench_minutes_out[pos_group] * 0.06 * pos_mult[pos_group]
-                max_boost = max(max_boost, 5) if max_boost > 0 else 5
+                extra_minutes += deep_bench_minutes_out[pos_group] * 0.20 * pos_mult[pos_group]  # Up from 0.06
+                max_boost = max(max_boost, 7) if max_boost > 0 else 7
         # Can also get some from rotation players
         for pos_group in ['G', 'F', 'C']:
             if rotation_minutes_out[pos_group] > 0:
-                extra_minutes += rotation_minutes_out[pos_group] * 0.05 * pos_mult[pos_group]
-                max_boost = max(max_boost, 5) if max_boost > 0 else 5
+                extra_minutes += rotation_minutes_out[pos_group] * 0.15 * pos_mult[pos_group]  # Up from 0.05
+                max_boost = max(max_boost, 7) if max_boost > 0 else 7
         
     else:  # deep_bench
         # Deep bench gets minutes from deep bench and bench
         for pos_group in ['G', 'F', 'C']:
             if deep_bench_minutes_out[pos_group] > 0:
-                extra_minutes += deep_bench_minutes_out[pos_group] * 0.06 * pos_mult[pos_group]
-                max_boost = 6
+                extra_minutes += deep_bench_minutes_out[pos_group] * 0.25 * pos_mult[pos_group]  # Up from 0.06
+                max_boost = 8  # Increase cap
             if bench_minutes_out[pos_group] > 0:
-                extra_minutes += bench_minutes_out[pos_group] * 0.05 * pos_mult[pos_group]
-                max_boost = max(max_boost, 6) if max_boost > 0 else 6
+                extra_minutes += bench_minutes_out[pos_group] * 0.20 * pos_mult[pos_group]  # Up from 0.05
+                max_boost = max(max_boost, 8) if max_boost > 0 else 8
     
     # Apply the cap if we have any minutes to redistribute
     if max_boost > 0:
@@ -206,8 +206,8 @@ def calculate_usage_boost(
         elif out_mins >= 18:  # Rotation
             usage_boost += 0.01
     
-    # Cap the total usage boost - REDUCED from 25% to 18%
-    return min(usage_boost, 1.18)  # Max 18% usage boost (down from 25%)
+    # Cap the total usage boost - REDUCED from 18% to 12%
+    return min(usage_boost, 1.12)  # Max 12% usage boost (down from 18%)
 
 
 def calculate_injury_adjustments(
@@ -299,15 +299,15 @@ def calculate_injury_adjustments(
         # Role-based caps for total injury boost (keeps role differences but prevents extremes)
         # FURTHER REDUCED caps to address remaining over-prediction
         if player_mins >= 32:  # Star - can handle bigger boost
-            max_pts_mult = 1.15  # Max 15% boost (down from 20%)
+            max_pts_mult = 1.10  # Max 10% boost (down from 15%)
         elif player_mins >= 28:  # Starter
-            max_pts_mult = 1.14  # Max 14% boost (down from 18%)
+            max_pts_mult = 1.09  # Max 9% boost (down from 14%)
         elif player_mins >= 22:  # Rotation
-            max_pts_mult = 1.12  # Max 12% boost (down from 16%)
+            max_pts_mult = 1.08  # Max 8% boost (down from 12%)
         elif player_mins >= 15:  # Bench
-            max_pts_mult = 1.11  # Max 11% boost (down from 14%)
+            max_pts_mult = 1.07  # Max 7% boost (down from 11%)
         else:  # Deep bench
-            max_pts_mult = 1.10  # Max 10% boost (down from 12%)
+            max_pts_mult = 1.06  # Max 6% boost (down from 10%)
         
         adjustments['PTS'] = min(raw_pts_mult, max_pts_mult)
         adjustments['FG3M'] = min(raw_pts_mult, max_pts_mult)

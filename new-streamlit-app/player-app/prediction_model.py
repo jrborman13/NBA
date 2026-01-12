@@ -81,6 +81,11 @@ class PlayerStatPredictor:
             weighted_avg = utils.weighted_average(recent_values, decay=0.85)
         else:
             weighted_avg = l5_avg
+        
+        # Cap hot player effect: weighted average cannot exceed season average by more than 15%
+        if season_avg > 0 and weighted_avg > season_avg * 1.15:
+            weighted_avg = season_avg * 1.15
+        
         breakdown['weighted_avg'] = weighted_avg
         
         # 3. Historical vs opponent
@@ -116,6 +121,11 @@ class PlayerStatPredictor:
         
         breakdown['base_prediction'] = round(base_prediction, 1)
         
+        # Apply regression factor to reduce over-prediction bias
+        # This accounts for natural regression to the mean
+        regression_factor = 0.96  # 4% reduction to account for natural regression
+        base_prediction *= regression_factor
+        
         # 5. Apply adjustments
         adjusted_prediction = base_prediction
         
@@ -128,6 +138,8 @@ class PlayerStatPredictor:
         
         if stat in ['PTS', 'PRA']:  # Only adjust scoring stats
             def_adjustment = opp_def_rating / league_def_rating
+            # Cap defensive adjustments at ±10% to prevent extreme swings
+            def_adjustment = max(0.90, min(1.10, def_adjustment))
             adjusted_prediction *= def_adjustment
             factors['defense'] = f"Opp DEF RTG {opp_def_rating} vs league avg {league_def_rating}"
         
@@ -181,6 +193,44 @@ class PlayerStatPredictor:
                         f"Tough matchup ({round((matchup_adjustment-1)*100, 1)}%): "
                         f"Paint {player_breakdown.get('pts_paint', 0)} vs opp allows {opp_vuln.get('opp_pts_paint_allowed', 0)}"
                     )
+        
+        # Synergy playtype adjustments
+        synergy_data = player_features.get('synergy', {})
+        stat_adjustments = synergy_data.get('stat_adjustments', {})
+        
+        if stat_adjustments:
+            # Apply synergy adjustments for relevant stats
+            synergy_weight = 0.25  # Weight synergy adjustments at 25% (similar to matchup weight)
+            
+            if stat == 'PTS' and 'PTS' in stat_adjustments:
+                synergy_factor = stat_adjustments['PTS']
+                # Cap synergy adjustment similar to matchup caps
+                synergy_factor = max(0.85, min(1.15, synergy_factor))
+                # Apply weighted adjustment
+                synergy_adjustment = 1.0 + synergy_weight * (synergy_factor - 1.0)
+                adjusted_prediction *= synergy_adjustment
+                factors['synergy'] = f"Playtype matchup: {round((synergy_factor-1)*100, 1)}% (weighted {round((synergy_adjustment-1)*100, 1)}%)"
+            
+            elif stat == 'AST' and 'AST' in stat_adjustments:
+                synergy_factor = stat_adjustments['AST']
+                synergy_factor = max(0.85, min(1.15, synergy_factor))
+                synergy_adjustment = 1.0 + synergy_weight * (synergy_factor - 1.0)
+                adjusted_prediction *= synergy_adjustment
+                factors['synergy'] = f"Playtype matchup: {round((synergy_factor-1)*100, 1)}% (weighted {round((synergy_adjustment-1)*100, 1)}%)"
+            
+            elif stat == 'REB' and 'REB' in stat_adjustments:
+                synergy_factor = stat_adjustments['REB']
+                synergy_factor = max(0.90, min(1.10, synergy_factor))  # Smaller cap for rebounds
+                synergy_adjustment = 1.0 + synergy_weight * (synergy_factor - 1.0)
+                adjusted_prediction *= synergy_adjustment
+                factors['synergy'] = f"Playtype matchup: {round((synergy_factor-1)*100, 1)}% (weighted {round((synergy_adjustment-1)*100, 1)}%)"
+            
+            elif stat == 'FG3M' and 'FG3M' in stat_adjustments:
+                synergy_factor = stat_adjustments['FG3M']
+                synergy_factor = max(0.80, min(1.20, synergy_factor))  # Larger cap for 3PM (more variable)
+                synergy_adjustment = 1.0 + synergy_weight * (synergy_factor - 1.0)
+                adjusted_prediction *= synergy_adjustment
+                factors['synergy'] = f"Playtype matchup: {round((synergy_factor-1)*100, 1)}% (weighted {round((synergy_adjustment-1)*100, 1)}%)"
         
         # FT Rate adjustment for FTM predictions (with drives integration)
         # FT Rate = FTA / FGA (how often a player/team gets to the line per field goal attempt)
@@ -298,8 +348,8 @@ class PlayerStatPredictor:
             if stat == 'PTS':
                 sim_adjustment_factor = similar_players_data.get('pts_adjustment_factor', 1.0)
                 if sim_adjustment_factor != 1.0:
-                    # Cap the raw adjustment factor at ±20% before applying weight
-                    capped_sim_factor = max(0.80, min(1.20, sim_adjustment_factor))
+                    # Cap the raw adjustment factor at ±12% before applying weight (reduced from ±20%)
+                    capped_sim_factor = max(0.88, min(1.12, sim_adjustment_factor))
                     
                     # Blend: (1 - weight) * current + weight * similar_players_adjustment
                     similar_adjustment = 1.0 + similar_weight * (capped_sim_factor - 1.0)
@@ -314,8 +364,8 @@ class PlayerStatPredictor:
             elif stat == 'REB':
                 sim_adjustment_factor = similar_players_data.get('reb_adjustment_factor', 1.0)
                 if sim_adjustment_factor != 1.0:
-                    # Cap at ±20%
-                    capped_sim_factor = max(0.80, min(1.20, sim_adjustment_factor))
+                    # Cap at ±12% (reduced from ±20%)
+                    capped_sim_factor = max(0.88, min(1.12, sim_adjustment_factor))
                     similar_adjustment = 1.0 + similar_weight * (capped_sim_factor - 1.0)
                     adjusted_prediction *= similar_adjustment
                     
@@ -328,8 +378,8 @@ class PlayerStatPredictor:
             elif stat == 'AST':
                 sim_adjustment_factor = similar_players_data.get('ast_adjustment_factor', 1.0)
                 if sim_adjustment_factor != 1.0:
-                    # Cap at ±20%
-                    capped_sim_factor = max(0.80, min(1.20, sim_adjustment_factor))
+                    # Cap at ±12% (reduced from ±20%)
+                    capped_sim_factor = max(0.88, min(1.12, sim_adjustment_factor))
                     similar_adjustment = 1.0 + similar_weight * (capped_sim_factor - 1.0)
                     adjusted_prediction *= similar_adjustment
                     
@@ -374,8 +424,13 @@ class PlayerStatPredictor:
             factors['location'] = "Away game"
         
         # Blend location adjustment (don't overweight)
-        if location_avg > 0:
-            location_factor = location_avg / season_avg if season_avg > 0 else 1.0
+        # Cap location_factor to prevent extreme home/away swings
+        if location_avg > 0 and season_avg > 0:
+            location_factor = location_avg / season_avg
+            # Cap location_factor at ±16.7% to limit final adjustment to ±5%
+            # Formula: adjustment = 0.7 + 0.3 * location_factor
+            # For ±5% cap: location_factor between 0.833 and 1.167
+            location_factor = max(0.833, min(1.167, location_factor))
             adjusted_prediction *= (0.7 + 0.3 * location_factor)
         
         # Minutes scaling adjustment (if projected_minutes provided)
@@ -723,6 +778,7 @@ def generate_prediction(
     bulk_game_logs: pd.DataFrame = None,
     bulk_advanced_stats: pd.DataFrame = None,
     bulk_drives_stats: pd.DataFrame = None,
+    bulk_offensive_synergy: Dict[str, pd.DataFrame] = None,
     use_similar_players: bool = False,
     projected_minutes: Optional[float] = None
 ) -> Dict[str, Prediction]:
@@ -739,6 +795,7 @@ def generate_prediction(
         bulk_game_logs: Optional pre-fetched bulk game logs (for batch processing)
         bulk_advanced_stats: Optional pre-fetched bulk advanced stats (for batch processing)
         bulk_drives_stats: Optional pre-fetched bulk drives stats (for batch processing)
+        bulk_offensive_synergy: Optional pre-fetched bulk offensive synergy data (for batch processing)
     
     Returns:
         Dict of stat -> Prediction
@@ -754,6 +811,7 @@ def generate_prediction(
         bulk_game_logs=bulk_game_logs,
         bulk_advanced_stats=bulk_advanced_stats,
         bulk_drives_stats=bulk_drives_stats,
+        bulk_offensive_synergy=bulk_offensive_synergy,
         use_similar_players=use_similar_players
     )
     
@@ -851,6 +909,9 @@ def generate_predictions_for_game(
     import drives_stats as ds
     bulk_drives_stats = ds.get_all_player_drives_stats()
     
+    # Fetch bulk offensive synergy data (11 API calls total for all players, all playtypes)
+    bulk_offensive_synergy = features.get_cached_bulk_offensive_synergy()
+    
     for idx, player_id in enumerate(player_ids):
         player_name = player_names.get(player_id, f"Player {player_id}")
         player_team_id = player_team_ids.get(player_id)
@@ -887,6 +948,7 @@ def generate_predictions_for_game(
                 bulk_game_logs=bulk_game_logs,
                 bulk_advanced_stats=bulk_advanced_stats,
                 bulk_drives_stats=bulk_drives_stats,
+                bulk_offensive_synergy=bulk_offensive_synergy,
                 use_similar_players=False  # Skip for batch to improve performance
             )
             

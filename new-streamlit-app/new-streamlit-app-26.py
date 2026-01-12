@@ -242,7 +242,7 @@ if selected_team_abbrevs and len(selected_team_abbrevs) == 2:
             
             st.dataframe(
                 styled_left,
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
             
@@ -276,7 +276,7 @@ if selected_team_abbrevs and len(selected_team_abbrevs) == 2:
             
             st.dataframe(
                 styled_right,
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
             
@@ -330,7 +330,7 @@ else:
                     subset=['Freq_Rank'],
                     cmap='RdYlGn_r'  # Higher frequency is better
                 ),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
             
@@ -364,7 +364,7 @@ else:
                     subset=['Freq_Rank'],
                     cmap='RdYlGn_r'  # Higher frequency is better
                 ),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
             

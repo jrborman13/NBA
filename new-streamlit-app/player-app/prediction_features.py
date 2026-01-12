@@ -16,22 +16,97 @@ import positional_defense as pos_def
 import team_defensive_stats as tds
 import drives_stats as ds
 import player_similarity as ps
+import player_synergy as psyn
+try:
+    import supabase_cache as scache
+    import supabase_data_reader as db_reader
+    from supabase_config import is_supabase_configured
+    print(f"[DEBUG] prediction_features: scache imported, Supabase configured: {is_supabase_configured()}")
+except ImportError as e:
+    print(f"[DEBUG] prediction_features: Failed to import scache/db_reader: {e}")
+    scache = None
+    db_reader = None
 
 # Current season configuration
 CURRENT_SEASON = "2025-26"
 LEAGUE_ID = "00"
 
 
-@st.cache_data(ttl=1800, show_spinner="Fetching all player game logs...")
-@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+# Removed @st.cache_data - using Supabase cache instead
+def get_cached_bulk_offensive_synergy(season: str = CURRENT_SEASON) -> Dict[str, pd.DataFrame]:
+    """
+    Get cached bulk offensive synergy data for all players.
+    Checks Supabase cache first, then falls back to API calls.
+    This makes only 11 API calls total (one per playtype) and caches the result.
+    """
+    # Try database first (populated by scheduled Edge Functions)
+    if db_reader is not None:
+        try:
+            db_data = db_reader.get_synergy_data_from_db(season, 'player', None, 'offensive')
+            if db_data is not None and len(db_data) > 0:
+                print(f"[DB READ] Player offensive synergy from database: {len(db_data)} playtypes")
+                return db_data
+        except Exception as e:
+            print(f"Error reading player synergy from database: {e}, falling back to API")
+    
+    # Try Supabase cache as fallback
+    if scache is not None:
+        cached_data = scache.get_cached_bulk_data('synergy', season, ttl_hours=1)
+        if cached_data is not None:
+            return cached_data
+    
+    # Database and cache miss - fetch from API (safety net)
+    data = psyn.get_all_players_offensive_synergy_bulk(season)
+    
+    # Store in Supabase cache
+    if data and scache is not None:
+        scache.set_cached_bulk_data('synergy', season, data, ttl_hours=1)
+    
+    return data
+
+
+# Removed @st.cache_data decorators - using Supabase cache instead
 def get_bulk_player_game_logs(season: str = CURRENT_SEASON) -> pd.DataFrame:
     """
     Fetch ALL player game logs for the season in ONE API call.
+    Checks Supabase cache first, then falls back to API calls.
     This is much faster than fetching individually for each player.
     
     Returns:
         DataFrame with all player game logs, sorted by date descending
     """
+    # Try database first (populated by scheduled Edge Functions)
+    if db_reader is not None:
+        try:
+            db_data = db_reader.get_game_logs_from_db(season, 'player')
+            if db_data is not None and len(db_data) > 0:
+                print(f"[DB READ] Player game logs from database: {len(db_data)} records")
+                # Filter to regular season games only (game_id starts with '002')
+                if 'GAME_ID' in db_data.columns:
+                    db_data = db_data[
+                        db_data['GAME_ID'].astype(str).str[2].isin(['2', '4'])
+                    ].copy()
+                return db_data
+        except Exception as e:
+            print(f"Error reading player game logs from database: {e}, falling back to API")
+    
+    # Try Supabase cache as fallback
+    try:
+        if scache is not None:
+            cached_data = scache.get_cached_bulk_data('game_logs', season, ttl_hours=1)
+            if cached_data is not None:
+                print(f"[CACHE] Game logs cache HIT for season {season}")
+                return cached_data
+            else:
+                print(f"[CACHE] Game logs cache MISS for season {season}")
+        else:
+            print("[CACHE] scache is None, skipping cache lookup")
+    except Exception as e:
+        print(f"[CACHE ERROR] Error checking cache for game logs: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    # Database and cache miss - fetch from API (safety net)
     try:
         from nba_api.stats.endpoints import PlayerGameLogs
         
@@ -49,6 +124,17 @@ def get_bulk_player_game_logs(season: str = CURRENT_SEASON) -> pd.DataFrame:
             # Convert date and sort
             game_logs['GAME_DATE'] = pd.to_datetime(game_logs['GAME_DATE'])
             game_logs = game_logs.sort_values('GAME_DATE', ascending=False)
+        
+        # Store in Supabase cache
+        if len(game_logs) > 0:
+            try:
+                if scache is not None:
+                    scache.set_cached_bulk_data('game_logs', season, game_logs, ttl_hours=1)
+                    print(f"[CACHE] Stored game logs in cache for season {season}")
+            except Exception as e:
+                print(f"[CACHE ERROR] Error storing game logs in cache: {e}")
+                import traceback
+                traceback.print_exc()
         
         return game_logs
     except Exception as e:
@@ -75,17 +161,45 @@ def get_player_logs_from_bulk(player_id: str, bulk_game_logs: pd.DataFrame) -> p
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def get_player_position_from_index(player_id: str) -> str:
+def get_bulk_player_index() -> pd.DataFrame:
     """
-    Get player's position from PlayerIndex endpoint.
+    Get all players from PlayerIndex endpoint (cached).
+    Returns entire PlayerIndex dataframe.
+    This avoids making individual API calls for each player's position.
+    
+    Returns:
+        DataFrame with all players from PlayerIndex
     """
     try:
         player_index = endpoints.PlayerIndex(
             season=CURRENT_SEASON,
             league_id=LEAGUE_ID
         ).get_data_frames()[0]
+        return player_index
+    except Exception as e:
+        print(f"Error fetching PlayerIndex: {e}")
+        return pd.DataFrame()
+
+
+def get_player_position_from_index(player_id: str, bulk_player_index: pd.DataFrame = None) -> str:
+    """
+    Get player's position from PlayerIndex endpoint.
+    
+    Args:
+        player_id: Player ID as string
+        bulk_player_index: Optional bulk PlayerIndex dataframe (if None, will fetch it)
+    
+    Returns:
+        Player position string (e.g., 'PG', 'SG', 'SF', 'PF', 'C') or 'F' as default
+    """
+    try:
+        if bulk_player_index is None:
+            bulk_player_index = get_bulk_player_index()
         
-        player_row = player_index[player_index['PERSON_ID'] == int(player_id)]
+        if len(bulk_player_index) == 0:
+            return 'F'  # Default
+        
+        player_row = bulk_player_index[bulk_player_index['PERSON_ID'] == int(player_id)]
         if len(player_row) > 0:
             return player_row['POSITION'].iloc[0]
         return 'F'  # Default
@@ -119,28 +233,167 @@ def get_player_game_logs(player_id: str, season: str = CURRENT_SEASON) -> pd.Dat
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
+# Removed @st.cache_data - using Supabase cache instead
+def get_bulk_team_game_logs(season: str = CURRENT_SEASON) -> pd.DataFrame:
+    """
+    Fetch ALL team game logs for the season in ONE API call.
+    Checks Supabase cache first, then falls back to API calls.
+    This is much faster than fetching individually for each team.
+    
+    Returns:
+        DataFrame with all team game logs, sorted by date descending
+    """
+    # Try database first (populated by scheduled Edge Functions)
+    if db_reader is not None:
+        try:
+            db_data = db_reader.get_game_logs_from_db(season, 'team')
+            if db_data is not None and len(db_data) > 0:
+                print(f"[DB READ] Team game logs from database: {len(db_data)} records")
+                return db_data
+        except Exception as e:
+            print(f"Error reading team game logs from database: {e}, falling back to API")
+    
+    # Try Supabase cache as fallback
+    try:
+        if scache is not None:
+            cached_data = scache.get_cached_bulk_data('team_game_logs', season, ttl_hours=1)
+            if cached_data is not None:
+                print(f"[CACHE] Team game logs cache HIT for season {season}")
+                return cached_data
+            else:
+                print(f"[CACHE] Team game logs cache MISS for season {season}")
+        else:
+            print("[CACHE] scache is None, skipping cache lookup")
+    except Exception as e:
+        print(f"[CACHE ERROR] Error checking cache for team game logs: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    # Database and cache miss - fetch from API (safety net)
+    try:
+        from nba_api.stats.endpoints import TeamGameLogs
+        
+        # Try to fetch all teams' game logs in one call (omit team_id_nullable)
+        try:
+            all_team_logs = TeamGameLogs(
+                season_nullable=season,
+                season_type_nullable='Regular Season'
+            ).get_data_frames()[0]
+            print(f"[BULK] Successfully fetched all team game logs in one call")
+        except Exception as bulk_error:
+            # If bulk call fails (e.g., team_id_nullable is required), fetch all teams individually
+            print(f"[BULK] Bulk call failed ({bulk_error}), fetching teams individually...")
+            all_team_logs_list = []
+            
+            # All 30 NBA team IDs
+            team_ids = [1610612737, 1610612738, 1610612739, 1610612740, 1610612741, 1610612742,
+                       1610612743, 1610612744, 1610612745, 1610612746, 1610612747, 1610612748,
+                       1610612749, 1610612750, 1610612751, 1610612752, 1610612753, 1610612754,
+                       1610612755, 1610612756, 1610612757, 1610612758, 1610612759, 1610612760,
+                       1610612761, 1610612762, 1610612763, 1610612764, 1610612765, 1610612766]
+            
+            for team_id in team_ids:
+                try:
+                    team_logs = TeamGameLogs(
+                        team_id_nullable=team_id,
+                        season_nullable=season,
+                        season_type_nullable='Regular Season'
+                    ).get_data_frames()[0]
+                    all_team_logs_list.append(team_logs)
+                except Exception as team_error:
+                    print(f"[BULK] Error fetching logs for team {team_id}: {team_error}")
+                    continue
+            
+            if all_team_logs_list:
+                all_team_logs = pd.concat(all_team_logs_list, ignore_index=True)
+                print(f"[BULK] Fetched {len(all_team_logs)} team game log records from {len(all_team_logs_list)} teams")
+            else:
+                return pd.DataFrame()
+        
+        # Sort by date descending
+        if len(all_team_logs) > 0:
+            all_team_logs['GAME_DATE'] = pd.to_datetime(all_team_logs['GAME_DATE'])
+            all_team_logs = all_team_logs.sort_values('GAME_DATE', ascending=False)
+        
+        # Store in Supabase cache
+        if len(all_team_logs) > 0:
+            try:
+                if scache is not None:
+                    scache.set_cached_bulk_data('team_game_logs', season, all_team_logs, ttl_hours=1)
+                    print(f"[CACHE] Stored team game logs in cache for season {season}")
+            except Exception as e:
+                print(f"[CACHE ERROR] Error storing team game logs in cache: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        return all_team_logs
+    except Exception as e:
+        print(f"Error fetching bulk team game logs: {e}")
+        import traceback
+        traceback.print_exc()
+        return pd.DataFrame()
+
+
+# Removed @st.cache_data - using Supabase cache via get_bulk_team_game_logs()
 def get_team_game_logs(team_id: int, season: str = CURRENT_SEASON) -> pd.DataFrame:
     """
     Get team's game logs for the season (for rest day calculation).
+    Now uses bulk fetch and filters for the specific team.
     
     Returns:
         DataFrame with team game logs sorted by date descending (most recent first)
     """
+    import time
+    import json
+    from pathlib import Path
+    
+    start_time = time.time()
+    
     try:
-        team_logs = endpoints.TeamGameLog(
-            team_id=team_id,
-            season=season,
-            season_type_all_star='Regular Season'
-        ).get_data_frames()[0]
+        # Use bulk fetch (cached) and filter for specific team
+        bulk_start = time.time()
+        all_team_logs = get_bulk_team_game_logs(season)
+        bulk_time = time.time() - bulk_start
         
-        # Sort by date descending
-        team_logs['GAME_DATE'] = pd.to_datetime(team_logs['GAME_DATE'])
-        team_logs = team_logs.sort_values('GAME_DATE', ascending=False)
+        filter_start = time.time()
+        if len(all_team_logs) > 0 and 'TEAM_ID' in all_team_logs.columns:
+            team_logs = all_team_logs[all_team_logs['TEAM_ID'] == team_id].copy()
+        else:
+            team_logs = pd.DataFrame()
+        filter_time = time.time() - filter_start
+        
+        total_time = time.time() - start_time
+        
+        # Log timing
+        log_path = Path("/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log")
+        try:
+            with open(log_path, 'a') as f:
+                log_entry = {
+                    "timestamp": time.time() * 1000,
+                    "location": "prediction_features.py:310",
+                    "message": "get_team_game_logs timing",
+                    "data": {
+                        "team_id": team_id,
+                        "season": season,
+                        "bulk_time_ms": bulk_time * 1000,
+                        "filter_time_ms": filter_time * 1000,
+                        "total_time_ms": total_time * 1000
+                    },
+                    "sessionId": "debug-session",
+                    "runId": "timing",
+                    "hypothesisId": "C"
+                }
+                f.write(json.dumps(log_entry) + "\n")
+        except Exception:
+            pass
+        
+        print(f"[TIMING] get_team_game_logs: bulk={bulk_time*1000:.1f}ms, filter={filter_time*1000:.1f}ms, total={total_time*1000:.1f}ms")
         
         return team_logs
     except Exception as e:
         print(f"Error fetching game logs for team {team_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return pd.DataFrame()
 
 
@@ -317,14 +570,22 @@ def get_team_defensive_rating_last_n(
 ) -> float:
     """
     Get team's defensive rating over last N games.
+    Uses LeagueDashTeamStats with last_n_games parameter (same approach as Teams page).
     """
     try:
-        team_stats = endpoints.TeamDashboardByLastNGames(
-            team_id=team_id,
-            season=season,
+        # Use LeagueDashTeamStats with last_n_games parameter (same as Teams page)
+        league_stats = endpoints.LeagueDashTeamStats(
+            league_id_nullable='00',
             measure_type_detailed_defense='Advanced',
+            pace_adjust='N',
+            per_mode_detailed='PerGame',
+            season=season,
+            season_type_all_star='Regular Season',
             last_n_games=n_games
         ).get_data_frames()[0]
+        
+        # Filter by team_id
+        team_stats = league_stats[league_stats['TEAM_ID'] == team_id]
         
         if 'DEF_RATING' in team_stats.columns and len(team_stats) > 0:
             return round(team_stats['DEF_RATING'].iloc[0], 1)
@@ -356,21 +617,44 @@ def get_league_averages(season: str = CURRENT_SEASON) -> Dict[str, float]:
         return {'pace': 100.0, 'def_rating': 110.0, 'off_rating': 110.0}
 
 
-@st.cache_data(ttl=3600, show_spinner="Fetching player advanced stats...")
+# Removed @st.cache_data - using Supabase cache instead
 def get_bulk_player_advanced_stats(season: str = CURRENT_SEASON) -> pd.DataFrame:
     """
     Fetch ALL players' advanced stats (including usage rate) in ONE API call.
+    Checks Supabase cache first, then falls back to API calls.
     This is much faster than fetching individually for each player.
     
     Returns:
         DataFrame with all player advanced stats
     """
+    # Try database first (populated by scheduled Edge Functions)
+    if db_reader is not None:
+        try:
+            db_data = db_reader.get_player_stats_from_db(season)
+            if db_data is not None and len(db_data) > 0:
+                print(f"[DB READ] Player advanced stats from database: {len(db_data)} players")
+                return db_data
+        except Exception as e:
+            print(f"Error reading player stats from database: {e}, falling back to API")
+    
+    # Try Supabase cache as fallback
+    if scache is not None:
+        cached_data = scache.get_cached_bulk_data('advanced_stats', season, ttl_hours=1)
+        if cached_data is not None:
+            return cached_data
+    
+    # Database and cache miss - fetch from API (safety net)
     try:
         player_stats = endpoints.LeagueDashPlayerStats(
             season=season,
             measure_type_detailed_defense='Advanced',
             per_mode_detailed='PerGame'
         ).get_data_frames()[0]
+        
+        # Store in Supabase cache
+        if len(player_stats) > 0:
+            scache.set_cached_bulk_data('advanced_stats', season, player_stats, ttl_hours=1)
+        
         return player_stats
     except Exception as e:
         print(f"Error fetching bulk player advanced stats: {e}")
@@ -480,6 +764,7 @@ def get_all_prediction_features(
     bulk_advanced_stats: pd.DataFrame = None,
     bulk_misc_stats: pd.DataFrame = None,
     bulk_drives_stats: pd.DataFrame = None,
+    bulk_offensive_synergy: Dict[str, pd.DataFrame] = None,
     use_similar_players: bool = False
 ) -> Dict:
     """
@@ -612,9 +897,50 @@ def get_all_prediction_features(
             }
         }
     
+    # Synergy playtype data (player offensive playtypes vs opponent defensive playtypes)
+    try:
+        # Use bulk offensive synergy data if provided, otherwise fetch individually (backward compatibility)
+        if bulk_offensive_synergy is not None:
+            # Extract player's data from bulk results (much more efficient)
+            player_synergy_data = psyn.get_player_offensive_synergy_from_bulk(player_id, bulk_offensive_synergy)
+        else:
+            # Fallback to individual fetching (for backward compatibility)
+            player_synergy_data = psyn.get_all_player_offensive_synergy(player_id, CURRENT_SEASON)
+        
+        # Fetch opponent defensive synergy data
+        opp_defense_data = psyn.get_opponent_defensive_synergy(opponent_team_id, CURRENT_SEASON)
+        
+        # Calculate matchup factors
+        playtype_factors = psyn.calculate_playtype_matchup_factors(
+            player_synergy_data,
+            opp_defense_data,
+            league_avgs=None  # Can be enhanced later with actual league averages
+        )
+        
+        # Get stat-specific adjustments
+        stat_adjustments = psyn.get_stat_adjustments_from_playtypes(playtype_factors)
+        
+        features['synergy'] = {
+            'player_synergy': player_synergy_data,
+            'opponent_defense': opp_defense_data,
+            'matchup_factors': playtype_factors,
+            'stat_adjustments': stat_adjustments
+        }
+    except Exception as e:
+        print(f"Error fetching synergy playtype data: {e}")
+        # Graceful degradation - predictions should still work without synergy data
+        features['synergy'] = {
+            'player_synergy': {},
+            'opponent_defense': {},
+            'matchup_factors': {},
+            'stat_adjustments': {}
+        }
+    
     # Positional defense adjustment
     try:
-        player_position = get_player_position_from_index(player_id)
+        # Fetch bulk PlayerIndex once (cached) to avoid individual API calls per player
+        bulk_player_index = get_bulk_player_index()
+        player_position = get_player_position_from_index(player_id, bulk_player_index=bulk_player_index)
         features['player_position'] = player_position
         features['positional_defense'] = pos_def.get_positional_defense_adjustment(
             opponent_abbr=opponent_abbr,

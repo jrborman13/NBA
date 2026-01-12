@@ -12,8 +12,13 @@ import json
 import os
 import requests
 import pytz
+import logging
 
-# File to store manually entered lines
+from supabase_config import get_supabase_client, is_supabase_configured
+
+logger = logging.getLogger(__name__)
+
+# File to store manually entered lines (for backward compatibility)
 LINES_FILE = "player_lines.json"
 
 # ============================================================
@@ -82,7 +87,33 @@ class OddsAPIResponse:
 # ============================================================
 
 def load_saved_lines() -> Dict:
-    """Load previously saved lines from file"""
+    """Load previously saved lines from Supabase (or JSON file as fallback)"""
+    # Try Supabase first
+    if is_supabase_configured():
+        try:
+            supabase = get_supabase_client()
+            if supabase:
+                result = supabase.table('vegas_lines').select('*').execute()
+                
+                if result.data:
+                    # Convert to the old format: {player_id_game_date: {stat: {...}}}
+                    lines_dict = {}
+                    for row in result.data:
+                        key = f"{row['player_id']}_{row['game_date']}"
+                        if key not in lines_dict:
+                            lines_dict[key] = {}
+                        lines_dict[key][row['stat']] = {
+                            'line': float(row['line']),
+                            'over_odds': int(row['over_odds']),
+                            'under_odds': int(row['under_odds']),
+                            'source': str(row['source'])
+                        }
+                    logger.debug(f"Loaded {len(lines_dict)} player-date combinations from Supabase")
+                    return lines_dict
+        except Exception as e:
+            logger.warning(f"Failed to load lines from Supabase: {e}. Falling back to JSON.")
+    
+    # Fallback to JSON
     if os.path.exists(LINES_FILE):
         try:
             with open(LINES_FILE, 'r') as f:
@@ -93,7 +124,55 @@ def load_saved_lines() -> Dict:
 
 
 def save_lines(lines: Dict):
-    """Save lines to file"""
+    """Save lines to Supabase (or JSON file as fallback)"""
+    # Try Supabase first
+    if is_supabase_configured():
+        try:
+            supabase = get_supabase_client()
+            if supabase:
+                records = []
+                for key, player_lines in lines.items():
+                    # Key format: "player_id_game_date"
+                    parts = key.split('_')
+                    if len(parts) < 2:
+                        continue
+                    
+                    player_id = parts[0]
+                    game_date = '_'.join(parts[1:])
+                    
+                    if not isinstance(player_lines, dict):
+                        continue
+                    
+                    for stat, line_data in player_lines.items():
+                        if not isinstance(line_data, dict):
+                            continue
+                        
+                        record = {
+                            'player_id': str(player_id),
+                            'game_date': str(game_date),
+                            'stat': str(stat),
+                            'line': float(line_data.get('line', 0)),
+                            'over_odds': int(line_data.get('over_odds', -110)),
+                            'under_odds': int(line_data.get('under_odds', -110)),
+                            'source': str(line_data.get('source', 'manual')),
+                        }
+                        records.append(record)
+                
+                if records:
+                    # Upsert in batches
+                    batch_size = 100
+                    for i in range(0, len(records), batch_size):
+                        batch = records[i:i + batch_size]
+                        supabase.table('vegas_lines').upsert(
+                            batch,
+                            on_conflict='player_id,game_date,stat'
+                        ).execute()
+                    logger.debug(f"Saved {len(records)} lines to Supabase")
+                    return
+        except Exception as e:
+            logger.warning(f"Failed to save lines to Supabase: {e}. Falling back to JSON.")
+    
+    # Fallback to JSON
     with open(LINES_FILE, 'w') as f:
         json.dump(lines, f, indent=2)
 
@@ -431,8 +510,8 @@ def fetch_player_props(event_id: str, markets: Optional[List[str]] = None) -> Od
         )
         
         # Extract credit info from headers
-        credits_used = int(response.headers.get('x-requests-used', 0))
-        credits_remaining = int(response.headers.get('x-requests-remaining', 0))
+        credits_used = int(float(response.headers.get('x-requests-used', 0)))
+        credits_remaining = int(float(response.headers.get('x-requests-remaining', 0)))
         
         if response.status_code == 200:
             return OddsAPIResponse(
@@ -701,7 +780,7 @@ def get_remaining_credits() -> Tuple[int, Optional[str]]:
         elif response.status_code != 200:
             return 0, f"API error: {response.status_code}"
         
-        remaining = int(response.headers.get('x-requests-remaining', 0))
+        remaining = int(float(response.headers.get('x-requests-remaining', 0)))
         return remaining, None
     except requests.exceptions.RequestException as e:
         return 0, f"Request error: {str(e)}"

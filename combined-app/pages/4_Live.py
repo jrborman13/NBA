@@ -14,6 +14,15 @@ from nba_api.stats.endpoints import ScoreboardV2
 st.set_page_config(layout="wide", page_title="Live Game Stats", page_icon="🏀")
 st.title("🏀 Live Game Stats")
 
+# Add sidebar with cache clear button
+with st.sidebar:
+    st.markdown("### Cache Management")
+    if st.button("🗑️ Clear All Cache", width='stretch'):
+        st.cache_data.clear()
+        st.success("✅ Cache cleared successfully!")
+        st.rerun()
+    st.markdown("---")  # Separator
+
 # Add custom CSS styling
 st.markdown("""
 <style>
@@ -706,6 +715,9 @@ if selected_game_id:
             game_leader_reb = all_players_df.loc[all_players_df['REB'].idxmax()] if len(all_players_df) > 0 else None
             game_leader_3pm = all_players_df.loc[all_players_df['3PM'].idxmax()] if len(all_players_df) > 0 else None
             game_leader_fta = all_players_df.loc[all_players_df['FTA'].idxmax()] if len(all_players_df) > 0 else None
+            # Convert FPTS to numeric for comparison (it's stored as string with 2 decimals)
+            all_players_df['FPTS_numeric'] = pd.to_numeric(all_players_df['FPTS'], errors='coerce').fillna(0.0)
+            game_leader_fpts = all_players_df.loc[all_players_df['FPTS_numeric'].idxmax()] if len(all_players_df) > 0 else None
             
             # Find away team leaders
             away_leader_pts = away_df.loc[away_df['PTS'].idxmax()] if len(away_df) > 0 else None
@@ -713,6 +725,8 @@ if selected_game_id:
             away_leader_reb = away_df.loc[away_df['REB'].idxmax()] if len(away_df) > 0 else None
             away_leader_3pm = away_df.loc[away_df['3PM'].idxmax()] if len(away_df) > 0 else None
             away_leader_fta = away_df.loc[away_df['FTA'].idxmax()] if len(away_df) > 0 else None
+            away_df['FPTS_numeric'] = pd.to_numeric(away_df['FPTS'], errors='coerce').fillna(0.0)
+            away_leader_fpts = away_df.loc[away_df['FPTS_numeric'].idxmax()] if len(away_df) > 0 else None
             
             # Find home team leaders
             home_leader_pts = home_df.loc[home_df['PTS'].idxmax()] if len(home_df) > 0 else None
@@ -720,8 +734,10 @@ if selected_game_id:
             home_leader_reb = home_df.loc[home_df['REB'].idxmax()] if len(home_df) > 0 else None
             home_leader_3pm = home_df.loc[home_df['3PM'].idxmax()] if len(home_df) > 0 else None
             home_leader_fta = home_df.loc[home_df['FTA'].idxmax()] if len(home_df) > 0 else None
+            home_df['FPTS_numeric'] = pd.to_numeric(home_df['FPTS'], errors='coerce').fillna(0.0)
+            home_leader_fpts = home_df.loc[home_df['FPTS_numeric'].idxmax()] if len(home_df) > 0 else None
             
-            leader_cols = st.columns(5)
+            leader_cols = st.columns(6)
             
             with leader_cols[0]:
                 st.markdown("**Points**")
@@ -767,6 +783,15 @@ if selected_game_id:
                     st.write(f"{away_team_abbr}: {away_leader_fta['Name']} ({away_leader_fta['FTA']})")
                 if home_leader_fta is not None:
                     st.write(f"{home_team_abbr}: {home_leader_fta['Name']} ({home_leader_fta['FTA']})")
+            
+            with leader_cols[5]:
+                st.markdown("**Fantasy Points**")
+                if game_leader_fpts is not None:
+                    st.write(f"🏀 **{game_leader_fpts['Name']}** ({game_leader_fpts['FPTS']})")
+                if away_leader_fpts is not None:
+                    st.write(f"{away_team_abbr}: {away_leader_fpts['Name']} ({away_leader_fpts['FPTS']})")
+                if home_leader_fpts is not None:
+                    st.write(f"{home_team_abbr}: {home_leader_fpts['Name']} ({home_leader_fpts['FPTS']})")
         
         # Continue with split view columns
         st.markdown("---")
@@ -877,7 +902,7 @@ if selected_game_id:
                 st.markdown(f"**Starter Shooting:** {away_starter_stats['FGM-FGA']} FG | {away_starter_stats['3PM-3PA']} 3PT | {away_starter_stats['FTM-FTA']} FT")
             
             # Bench Stats
-            if away_bench_stats and home_bench_stats and len(away_bench_stats) > 0:
+            if away_bench_stats and len(away_bench_stats) > 0:
                 st.markdown("---")
                 st.markdown("**Bench Stats**")
                 # Top row: Points and shooting percentages
@@ -957,9 +982,9 @@ if selected_game_id:
                         return [''] * len(away_display.columns)
                     
                     styled_away = away_display.style.apply(highlight_starters, axis=1)
-                    st.dataframe(styled_away, use_container_width=True, hide_index=True)
+                    st.dataframe(styled_away, width='stretch', hide_index=True)
                 else:
-                    st.dataframe(away_display, use_container_width=True, hide_index=True)
+                    st.dataframe(away_display, width='stretch', hide_index=True)
         
         # Home Team Column (continued)
         with col_home2:
@@ -1066,7 +1091,7 @@ if selected_game_id:
                 st.markdown(f"**Starter Shooting:** {home_starter_stats['FGM-FGA']} FG | {home_starter_stats['3PM-3PA']} 3PT | {home_starter_stats['FTM-FTA']} FT")
             
             # Bench Stats
-            if home_bench_stats and home_bench_stats.get('PTS', 0) > 0 and away_bench_stats:
+            if home_bench_stats and len(home_bench_stats) > 0:
                 st.markdown("---")
                 st.markdown("**Bench Stats**")
                 # Top row: Points and shooting percentages
@@ -1140,9 +1165,9 @@ if selected_game_id:
                         return [''] * len(home_display.columns)
                     
                     styled_home = home_display.style.apply(highlight_starters, axis=1)
-                    st.dataframe(styled_home, use_container_width=True, hide_index=True)
+                    st.dataframe(styled_home, width='stretch', hide_index=True)
                 else:
-                    st.dataframe(home_display, use_container_width=True, hide_index=True)
+                    st.dataframe(home_display, width='stretch', hide_index=True)
         
         # Auto-refresh logic
         if st.session_state['auto_refresh']:

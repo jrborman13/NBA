@@ -10,4 +10,4 @@ with st.container(height=500, border=True):
              caption='Anthony Edwards')
 
 with st.container(height=1000, border=True):
-    st.altair_chart(pf.final_chart, use_container_width=False)
+    st.altair_chart(pf.final_chart, width='content')

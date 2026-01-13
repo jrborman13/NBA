@@ -1765,15 +1765,15 @@ with tab3:
                                 season_val_float = computed_season_avgs[stat]
                             else:
                                 season_val = season_row.get(col_name)
-                                try:
+                            try:
                                     season_val_float = float(str(season_val).replace(',', '')) if season_val is not None else None
                                 except:
                                     season_val_float = None
                             
                             try:
                                 if season_val_float is not None:
-                                    diff = round(pred.value - season_val_float, 1)
-                                    diff_str = f"+{diff}" if diff >= 0 else str(diff)
+                                diff = round(pred.value - season_val_float, 1)
+                                diff_str = f"+{diff}" if diff >= 0 else str(diff)
                                     season_val_display = round(season_val_float, 1)
                                 else:
                                     diff_str = "-"
@@ -1876,7 +1876,7 @@ Estimated Cost: {preview['estimated_cost']}
                                     
                                     if all_props:
                                         st.success(f"✅ Cached props for {len(all_props)} players! Switch players freely - no additional credits needed.")
-                                    else:
+                        else:
                                         st.warning("⚠️ No props found for this game on Underdog")
                                     
                                     st.rerun()
@@ -1951,20 +1951,20 @@ Estimated Cost: {preview['estimated_cost']}
                             # Sort by absolute Edge descending
                             api_comparison_data.sort(key=lambda x: abs(x['Edge']), reverse=True)
                             api_df = pd.DataFrame(api_comparison_data)
-                            
+                    
                             # Style the lean column
                             def style_api_lean(val):
                                 if 'Strong Over' in val:
                                     return 'background-color: rgba(46, 125, 50, 0.4); font-weight: bold'
                                 elif 'Lean Over' in val:
-                                    return 'background-color: rgba(76, 175, 80, 0.3)'
+                            return 'background-color: rgba(76, 175, 80, 0.3)'
                                 elif 'Strong Under' in val:
                                     return 'background-color: rgba(183, 28, 28, 0.4); font-weight: bold'
                                 elif 'Lean Under' in val:
-                                    return 'background-color: rgba(244, 67, 54, 0.3)'
-                                else:
-                                    return 'background-color: rgba(158, 158, 158, 0.2)'
-                            
+                            return 'background-color: rgba(244, 67, 54, 0.3)'
+                        else:
+                            return 'background-color: rgba(158, 158, 158, 0.2)'
+                    
                             def style_edge(val):
                                 try:
                                     num = float(val) if not isinstance(val, (int, float)) else val
@@ -1990,7 +1990,7 @@ Estimated Cost: {preview['estimated_cost']}
                                 for play in strong_plays:
                                     direction = "OVER" if "Over" in play['Lean'] else "UNDER"
                                     st.markdown(f"- **{play['Stat']}** {direction} {play['Underdog Line']} (Pred: {play['Prediction']}, Edge: {play['Edge']})")
-                        else:
+                else:
                             st.info("No matching props found between predictions and Underdog lines.")
                     elif cached_props is not None and len(cached_props) == 0:
                         st.warning(f"No Underdog props available for {player_data['player_info_name']} in this game.")

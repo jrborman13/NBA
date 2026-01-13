@@ -349,7 +349,7 @@ if tab == 'Core Stats':
             
             st.dataframe(
                 display_df_left.style.apply(highlight_matchup_left_display, axis=1),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
         
@@ -503,7 +503,7 @@ if tab == 'Core Stats':
             
             st.dataframe(
                 display_df_right.style.apply(highlight_matchup_right_display, axis=1),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
         
@@ -552,13 +552,13 @@ if tab == 'Core Stats':
         st.markdown("#### Additional Metrics (Away Offense)")
         df_left_no_diff = st.session_state['left_no_diff'][['Metric', 'League Avg', 'Away Off', 'Off Rank']].copy()
         df_left_no_diff.columns = ['Metric', 'League Avg', 'Away Off', 'Off RK']
-        st.dataframe(df_left_no_diff, use_container_width=True, hide_index=True)
+        st.dataframe(df_left_no_diff, width='stretch', hide_index=True)
     
     if 'right_no_diff' in st.session_state and len(st.session_state['right_no_diff']) > 0:
         st.markdown("#### Additional Metrics (Away Defense)")
         df_right_no_diff = st.session_state['right_no_diff'][['Metric', 'League Avg', 'Away Def', 'Def Rank']].copy()
         df_right_no_diff.columns = ['Metric', 'League Avg', 'Away Def', 'Def RK']
-        st.dataframe(df_right_no_diff, use_container_width=True, hide_index=True)
+        st.dataframe(df_right_no_diff, width='stretch', hide_index=True)
 
 elif tab == 'Shooting':
     # Keep existing shooting tab structure

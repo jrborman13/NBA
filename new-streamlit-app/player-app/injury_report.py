@@ -9,6 +9,7 @@ from datetime import datetime, date, timedelta
 from io import BytesIO
 from typing import Optional, Dict, List, Tuple
 import re
+import unicodedata
 
 try:
     import pdfplumber
@@ -16,6 +17,13 @@ try:
 except ImportError:
     PDF_AVAILABLE = False
     print("pdfplumber not installed. Run: pip install pdfplumber")
+
+try:
+    from unidecode import unidecode
+    UNIDECODE_AVAILABLE = True
+except ImportError:
+    UNIDECODE_AVAILABLE = False
+    print("unidecode not installed. Using unicodedata fallback. For better transliteration, run: pip install unidecode")
 
 
 # Base URL for NBA injury reports
@@ -367,7 +375,45 @@ def normalize_player_name(name: str) -> str:
     # Clean up multiple spaces
     name = re.sub(r'\s+', ' ', name).strip()
     
+    # Apply ASCII normalization to handle special characters
+    # This ensures "Jokić" and "Jokic" both normalize to "jokic"
+    name = normalize_to_ascii(name)
+    
     return name.lower().strip()
+
+
+def normalize_to_ascii(text: str) -> str:
+    """
+    Normalize Unicode text to ASCII equivalent for matching.
+    
+    Converts special characters to their ASCII equivalents:
+    - "Jokić" → "Jokic"
+    - "Valančiūnas" → "Valanciunas"
+    - "Dončić" → "Doncic"
+    
+    Args:
+        text: Input string that may contain Unicode characters
+    
+    Returns:
+        Lowercase ASCII string
+    """
+    if not text:
+        return ""
+    
+    if UNIDECODE_AVAILABLE:
+        # Use unidecode for better transliteration
+        return unidecode(text).lower()
+    else:
+        # Fallback to unicodedata normalization
+        # Normalize to NFD (decomposed form), then remove combining characters
+        normalized = unicodedata.normalize('NFD', text)
+        # Filter out combining characters (diacritics) and convert to ASCII
+        ascii_text = ''.join(
+            char for char in normalized 
+            if unicodedata.category(char) != 'Mn'  # Mn = Mark, nonspacing (diacritics)
+        )
+        # Encode to ASCII, ignoring non-ASCII characters, then decode back
+        return ascii_text.encode('ascii', 'ignore').decode('ascii').lower()
 
 
 def match_player_to_id(
@@ -402,12 +448,14 @@ def match_player_to_id(
         if len(team_match) > 0:
             search_df = team_match
     
-    # Create full name column for matching
+    # Create full name column for matching with ASCII normalization
     search_df = search_df.copy()
     search_df['full_name_lower'] = (
         search_df['PLAYER_FIRST_NAME'].fillna('').str.lower() + ' ' +
         search_df['PLAYER_LAST_NAME'].fillna('').str.lower()
     ).str.strip()
+    # Apply ASCII normalization to database names for comparison
+    search_df['full_name_lower'] = search_df['full_name_lower'].apply(normalize_to_ascii)
     
     # Try exact match first
     exact_match = search_df[search_df['full_name_lower'] == normalized_name]
@@ -452,21 +500,30 @@ def match_player_to_id(
         else:
             last_name = player_name.lower()
     
+    # Normalize last names to ASCII for comparison
+    # Normalize the search last names (from injury report)
+    last_name_normalized = normalize_to_ascii(last_name)
+    last_name_with_suffix_normalized = normalize_to_ascii(last_name_with_suffix) if last_name_with_suffix else None
+    
+    # Create normalized last name column for database names
+    search_df['last_name_normalized'] = search_df['PLAYER_LAST_NAME'].fillna('').str.lower().apply(normalize_to_ascii)
+    
     # Try matching with suffix first (since that's how NBA stores it, e.g., "Pippen Jr.")
-    if last_name_with_suffix:
-        last_name_match = search_df[search_df['PLAYER_LAST_NAME'].str.lower() == last_name_with_suffix]
+    if last_name_with_suffix_normalized:
+        last_name_match = search_df[search_df['last_name_normalized'] == last_name_with_suffix_normalized]
         if len(last_name_match) == 0:
             # Also try with period variations
+            last_name_with_suffix_no_period = last_name_with_suffix_normalized.replace('.', '')
             last_name_match = search_df[
-                search_df['PLAYER_LAST_NAME'].str.lower().str.replace('.', '', regex=False) == 
-                last_name_with_suffix.replace('.', '')
+                search_df['last_name_normalized'].str.replace('.', '', regex=False) == last_name_with_suffix_no_period
             ]
     else:
         last_name_match = pd.DataFrame()
     
     # If no match with suffix, try without suffix
     if len(last_name_match) == 0:
-        last_name_match = search_df[search_df['PLAYER_LAST_NAME'].str.lower() == last_name]
+        last_name_match = search_df[search_df['last_name_normalized'] == last_name_normalized]
+    
     if len(last_name_match) == 1:
         return str(last_name_match['PERSON_ID'].iloc[0])
     elif len(last_name_match) > 1:
@@ -477,8 +534,13 @@ def match_player_to_id(
             first_name = player_name.split()[0].lower() if ' ' in player_name else ''
         
         if first_name:
+            # Normalize first name to ASCII for comparison
+            first_name_normalized = normalize_to_ascii(first_name)
+            # Create normalized first name column for database names
+            last_name_match['first_name_normalized'] = last_name_match['PLAYER_FIRST_NAME'].fillna('').str.lower().apply(normalize_to_ascii)
+            
             first_match = last_name_match[
-                last_name_match['PLAYER_FIRST_NAME'].str.lower().str.startswith(first_name[:3])
+                last_name_match['first_name_normalized'].str.startswith(first_name_normalized[:3])
             ]
             if len(first_match) > 0:
                 return str(first_match['PERSON_ID'].iloc[0])

@@ -18,6 +18,7 @@ CURRENT_SEASON = "2025-26"
 def get_all_player_drives_stats(season: str = CURRENT_SEASON) -> pd.DataFrame:
     """
     Fetch drives tracking data for all players.
+    Checks Supabase cache first, then falls back to API calls.
     
     Returns DataFrame with columns:
     - PLAYER_ID, PLAYER_NAME, TEAM_ABBREVIATION
@@ -28,6 +29,29 @@ def get_all_player_drives_stats(season: str = CURRENT_SEASON) -> pd.DataFrame:
     - DRIVE_AST, DRIVE_AST_PCT: Assists from drives
     - DRIVE_TOV, DRIVE_TOV_PCT: Turnovers from drives
     """
+    import supabase_cache as scache
+    try:
+        import supabase_data_reader as db_reader
+    except ImportError:
+        db_reader = None
+    
+    # Try database first (populated by scheduled Edge Functions)
+    if db_reader is not None:
+        try:
+            db_data = db_reader.get_drives_stats_from_db(season, 'player')
+            if db_data is not None and len(db_data) > 0:
+                print(f"[DB READ] Player drives stats from database: {len(db_data)} players")
+                return db_data
+        except Exception as e:
+            print(f"Error reading player drives stats from database: {e}, falling back to API")
+    
+    # Try Supabase cache as fallback
+    if scache is not None:
+        cached_data = scache.get_cached_bulk_data('drives_stats', season, ttl_hours=1)
+        if cached_data is not None:
+            return cached_data
+    
+    # Database and cache miss - fetch from API (safety net)
     try:
         drives_df = endpoints.LeagueDashPtStats(
             season=season,
@@ -36,13 +60,17 @@ def get_all_player_drives_stats(season: str = CURRENT_SEASON) -> pd.DataFrame:
             player_or_team='Player'
         ).get_data_frames()[0]
         
+        # Store in Supabase cache
+        if len(drives_df) > 0:
+            scache.set_cached_bulk_data('drives_stats', season, drives_df, ttl_hours=1)
+        
         return drives_df
     except Exception as e:
         print(f"Error fetching player drives stats: {e}")
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+# Removed @st.cache_data - using Supabase cache instead
 def get_all_team_drives_stats(season: str = CURRENT_SEASON) -> pd.DataFrame:
     """
     Fetch team-level drives tracking data (offensive).
@@ -55,6 +83,25 @@ def get_all_team_drives_stats(season: str = CURRENT_SEASON) -> pd.DataFrame:
     - DRIVE_AST: Assists from drives
     - DRIVE_PTS: Points from drives
     """
+    # Try database first (populated by scheduled Edge Functions)
+    try:
+        import supabase_data_reader as db_reader
+        if db_reader is not None:
+            db_data = db_reader.get_drives_stats_from_db(season, 'team')
+            if db_data is not None and len(db_data) > 0:
+                print(f"[DB READ] Team drives stats from database: {len(db_data)} teams")
+                return db_data
+    except Exception as e:
+        print(f"Error reading team drives stats from database: {e}, falling back to API")
+        db_reader = None
+    
+    # Try Supabase cache as fallback
+    if scache is not None:
+        cached_data = scache.get_cached_bulk_data('team_drives_stats', season, ttl_hours=1)
+        if cached_data is not None:
+            return cached_data
+    
+    # Database and cache miss - fetch from API (safety net)
     try:
         drives_df = endpoints.LeagueDashPtStats(
             season=season,

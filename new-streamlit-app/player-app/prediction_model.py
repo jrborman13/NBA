@@ -654,12 +654,18 @@ class PlayerStatPredictor:
         PRA is calculated as the sum of PTS + REB + AST, not predicted independently.
         FPTS uses Underdog formula: PTS*1 + REB*1.2 + AST*1.5 + STL*3 + BLK*3 - TOV*1
         """
+        import time
+        predict_start = time.time()
+        
         # Predict individual stats first (including TOV for fantasy calculation)
         stats_to_predict = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'FG3M', 'FTM', 'TOV']
         
         predictions = {}
+        stat_times = {}
         for stat in stats_to_predict:
+            stat_start = time.time()
             predictions[stat] = self.predict_stat(stat, player_features)
+            stat_times[stat] = time.time() - stat_start
         
         # Calculate PRA from the sum of PTS + REB + AST predictions
         pts_pred = predictions['PTS'].value
@@ -764,6 +770,13 @@ class PlayerStatPredictor:
                 'calculation': f"PTS({pts_pred})×1 + REB({reb_pred})×1.2 + AST({ast_pred})×1.5 + STL({stl_pred})×3 + BLK({blk_pred})×3 - TOV({tov_pred})×1"
             }
         )
+        
+        predict_total_time = time.time() - predict_start
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "perf-analysis", "hypothesisId": "PERF", "location": "prediction_model.py:770", "message": "Prediction generation completed", "data": {"predict_total_time_ms": predict_total_time * 1000, "stat_times_ms": {k: v * 1000 for k, v in stat_times.items()}}, "timestamp": int(time.time() * 1000)}) + '\n')
+        # #endregion
         
         return predictions
 
@@ -897,22 +910,52 @@ def generate_predictions_for_game(
     Returns:
         Dict of player_id -> Dict of stat -> Prediction
     """
+    import time
     all_predictions = {}
     total = len(player_ids)
     
+    # Track total time
+    total_start_time = time.time()
+    
     # OPTIMIZATION: Fetch ALL bulk data in a few API calls upfront
     # This replaces 100+ individual API calls with just a handful of bulk calls
+    # #region agent log
+    bulk_fetch_start = time.time()
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "perf-analysis", "hypothesisId": "PERF", "location": "prediction_model.py:905", "message": "Starting bulk data fetch", "data": {"player_count": total}, "timestamp": int(time.time() * 1000)}) + '\n')
+    # #endregion
+    
     bulk_game_logs = features.get_bulk_player_game_logs()
+    bulk_game_logs_time = time.time() - bulk_fetch_start
+    
+    bulk_advanced_start = time.time()
     bulk_advanced_stats = features.get_bulk_player_advanced_stats()
+    bulk_advanced_time = time.time() - bulk_advanced_start
     
     # Import drives_stats module for bulk drives data
     import drives_stats as ds
+    bulk_drives_start = time.time()
     bulk_drives_stats = ds.get_all_player_drives_stats()
+    bulk_drives_time = time.time() - bulk_drives_start
     
     # Fetch bulk offensive synergy data (11 API calls total for all players, all playtypes)
+    bulk_synergy_start = time.time()
     bulk_offensive_synergy = features.get_cached_bulk_offensive_synergy()
+    bulk_synergy_time = time.time() - bulk_synergy_start
+    
+    bulk_fetch_total = time.time() - bulk_fetch_start
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "perf-analysis", "hypothesisId": "PERF", "location": "prediction_model.py:930", "message": "Bulk data fetch completed", "data": {"bulk_game_logs_ms": bulk_game_logs_time * 1000, "bulk_advanced_ms": bulk_advanced_time * 1000, "bulk_drives_ms": bulk_drives_time * 1000, "bulk_synergy_ms": bulk_synergy_time * 1000, "bulk_total_ms": bulk_fetch_total * 1000}, "timestamp": int(time.time() * 1000)}) + '\n')
+    # #endregion
+    
+    # Track per-player timing
+    player_times = []
     
     for idx, player_id in enumerate(player_ids):
+        player_start_time = time.time()
         player_name = player_names.get(player_id, f"Player {player_id}")
         player_team_id = player_team_ids.get(player_id)
         
@@ -938,6 +981,9 @@ def generate_predictions_for_game(
         try:
             # Generate predictions for this player using bulk data
             # Skip similar players for batch predictions (too slow)
+            # #region agent log
+            pred_start = time.time()
+            # #endregion
             predictions = generate_prediction(
                 player_id=player_id,
                 player_team_id=int(player_team_id),
@@ -951,6 +997,16 @@ def generate_predictions_for_game(
                 bulk_offensive_synergy=bulk_offensive_synergy,
                 use_similar_players=False  # Skip for batch to improve performance
             )
+            pred_time = time.time() - pred_start
+            player_total_time = time.time() - player_start_time
+            
+            # #region agent log
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                import json
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "perf-analysis", "hypothesisId": "PERF", "location": "prediction_model.py:960", "message": "Player prediction completed", "data": {"player_id": player_id, "player_name": player_name, "prediction_time_ms": pred_time * 1000, "player_total_time_ms": player_total_time * 1000, "player_index": idx + 1, "total_players": total}, "timestamp": int(time.time() * 1000)}) + '\n')
+            # #endregion
+            
+            player_times.append(player_total_time)
             
             all_predictions[player_id] = {
                 'predictions': predictions,
@@ -961,8 +1017,23 @@ def generate_predictions_for_game(
             }
         except Exception as e:
             # Log error but continue with other players
+            player_total_time = time.time() - player_start_time
+            # #region agent log
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                import json
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "perf-analysis", "hypothesisId": "PERF", "location": "prediction_model.py:975", "message": "Player prediction error", "data": {"player_id": player_id, "player_name": player_name, "error": str(e), "player_total_time_ms": player_total_time * 1000}, "timestamp": int(time.time() * 1000)}) + '\n')
+            # #endregion
             print(f"Error generating predictions for {player_name}: {e}")
             continue
+    
+    total_time = time.time() - total_start_time
+    avg_player_time = sum(player_times) / len(player_times) if player_times else 0
+    
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "perf-analysis", "hypothesisId": "PERF", "location": "prediction_model.py:985", "message": "All predictions completed", "data": {"total_time_ms": total_time * 1000, "bulk_fetch_time_ms": bulk_fetch_total * 1000, "avg_player_time_ms": avg_player_time * 1000, "total_players": total, "successful_players": len(all_predictions)}, "timestamp": int(time.time() * 1000)}) + '\n')
+    # #endregion
     
     return all_predictions
 

@@ -14,6 +14,7 @@ import injury_adjustments as inj
 import backtest as bt
 import injury_report as ir
 import player_similarity as ps
+import player_synergy as psyn
 import pandas as pd
 import nba_api.stats.endpoints
 from datetime import datetime, date, timedelta
@@ -49,6 +50,117 @@ def get_player_name_map(player_ids_list, players_df):
     """Cache player names using the players dataframe"""
     return {pid: pf.get_player_name(pid, players_df) for pid in player_ids_list}
 
+# Helper functions for synergy matchup data
+def extract_player_synergy_metrics(df, playtype):
+    """Extract metrics from player offensive synergy DataFrame"""
+    if df is None or len(df) == 0:
+        return {
+            'Playtype': playtype,
+            'PPP': 0.0,
+            'Percentile': 0.0,
+            'Rank': 30,
+            'Freq Rank': 30,
+            'Freq': 0.0,
+            'eFG%': 0.0,
+            'Score %': 0.0
+        }
+    
+    row = df.iloc[0] if len(df) > 0 else None
+    if row is None:
+        return {
+            'Playtype': playtype,
+            'PPP': 0.0,
+            'Percentile': 0.0,
+            'Rank': 30,
+            'Freq Rank': 30,
+            'Freq': 0.0,
+            'eFG%': 0.0,
+            'Score %': 0.0
+        }
+    
+    # Extract metrics using actual API column names
+    ppp = row.get('PPP', 0.0)
+    percentile = row.get('PERCENTILE', 0.0)
+    rank = round((1.0 - float(percentile)) * 30 + 1) if percentile else 30
+    
+    # EFG_PCT (Effective Field Goal Percentage) - might be decimal (0-1) or percentage (0-100)
+    efg_pct_raw = row.get('EFG_PCT', 0.0)
+    efg_pct = float(efg_pct_raw) * 100 if efg_pct_raw < 1 else float(efg_pct_raw)
+    
+    # POSS_PCT (Possession Percentage / Frequency) - might be decimal (0-1) or percentage (0-100)
+    poss_pct_raw = row.get('POSS_PCT', 0.0)
+    poss_pct = float(poss_pct_raw) * 100 if poss_pct_raw < 1 else float(poss_pct_raw)
+    
+    # SCORE_POSS_PCT (Scoring Possession Percentage) - might be decimal (0-1) or percentage (0-100)
+    score_poss_pct_raw = row.get('SCORE_POSS_PCT', 0.0)
+    score_poss_pct = float(score_poss_pct_raw) * 100 if score_poss_pct_raw < 1 else float(score_poss_pct_raw)
+    
+    return {
+        'Playtype': playtype,
+        'PPP': float(ppp) if ppp else 0.0,
+        'Rank': int(rank),
+        'Percentile': float(percentile) if percentile else 0.0,
+        'Freq Rank': 30,  # Placeholder, will be calculated later
+        'Freq': float(poss_pct) if poss_pct else 0.0,
+        'eFG%': float(efg_pct) if efg_pct else 0.0,
+        'Score %': float(score_poss_pct) if score_poss_pct else 0.0
+    }
+
+def extract_opponent_synergy_metrics(df, playtype):
+    """Extract metrics from opponent defensive synergy DataFrame"""
+    if df is None or len(df) == 0:
+        return {
+            'Playtype': playtype,
+            'PPP': 0.0,
+            'Percentile': 0.0,
+            'Rank': 30,
+            'Freq Rank': 30,
+            'Freq': 0.0,
+            'eFG%': 0.0,
+            'Score %': 0.0
+        }
+    
+    row = df.iloc[0] if len(df) > 0 else None
+    if row is None:
+        return {
+            'Playtype': playtype,
+            'PPP': 0.0,
+            'Percentile': 0.0,
+            'Rank': 30,
+            'Freq Rank': 30,
+            'Freq': 0.0,
+            'eFG%': 0.0,
+            'Score %': 0.0
+        }
+    
+    # Extract metrics using actual API column names
+    ppp = row.get('PPP', 0.0)
+    percentile = row.get('PERCENTILE', 0.0)
+    rank = round((1.0 - float(percentile)) * 30 + 1) if percentile else 30
+    
+    # EFG_PCT (Effective Field Goal Percentage) - might be decimal (0-1) or percentage (0-100)
+    efg_pct_raw = row.get('EFG_PCT', 0.0)
+    efg_pct = float(efg_pct_raw) * 100 if efg_pct_raw < 1 else float(efg_pct_raw)
+    
+    # POSS_PCT (Possession Percentage / Frequency) - might be decimal (0-1) or percentage (0-100)
+    poss_pct_raw = row.get('POSS_PCT', 0.0)
+    poss_pct = float(poss_pct_raw) * 100 if poss_pct_raw < 1 else float(poss_pct_raw)
+    
+    # SCORE_POSS_PCT (Scoring Possession Percentage) - might be decimal (0-1) or percentage (0-100)
+    score_poss_pct_raw = row.get('SCORE_POSS_PCT', 0.0)
+    score_poss_pct = float(score_poss_pct_raw) * 100 if score_poss_pct_raw < 1 else float(score_poss_pct_raw)
+    
+    return {
+        'Playtype': playtype,
+        'PPP': float(ppp) if ppp else 0.0,
+        'Rank': int(rank),
+        'Percentile': float(percentile) if percentile else 0.0,
+        'Freq Rank': 30,  # Placeholder, will be calculated later
+        'Freq': float(poss_pct) if poss_pct else 0.0,
+        'eFG%': float(efg_pct) if efg_pct else 0.0,
+        'Score %': float(score_poss_pct) if score_poss_pct else 0.0
+    }
+
 # Cache team defensive shooting data
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_cached_shooting_data():
@@ -58,6 +170,42 @@ def get_cached_shooting_data():
         return team_stats, opp_team_stats, None
     except Exception as e:
         return None, None, str(e)
+
+# Cache bulk synergy data for frequency rank calculations
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_bulk_player_offensive_synergy(season=None):
+    """Fetch all players' offensive synergy data for frequency rank calculations"""
+    if season is None:
+        season = psyn.CURRENT_SEASON
+    return psyn.get_all_players_offensive_synergy_bulk(season)
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_bulk_team_defensive_synergy(season=None):
+    """Fetch all teams' defensive synergy data for frequency rank calculations"""
+    if season is None:
+        season = psyn.CURRENT_SEASON
+    
+    synergy_playtypes = ['Cut', 'Handoff', 'Isolation', 'Misc', 'OffScreen', 'Postup', 
+                        'PRBallHandler', 'PRRollman', 'OffRebound', 'Spotup', 'Transition']
+    
+    result = {}
+    for playtype in synergy_playtypes:
+        try:
+            synergy_data = nba_api.stats.endpoints.SynergyPlayTypes(
+                league_id='00',
+                per_mode_simple='Totals',
+                season=season,
+                season_type_all_star='Regular Season',
+                player_or_team_abbreviation='T',
+                type_grouping_nullable='defensive',
+                play_type_nullable=playtype,
+                timeout=60
+            ).get_data_frames()[0]
+            result[playtype] = synergy_data if synergy_data is not None else pd.DataFrame()
+        except Exception as e:
+            result[playtype] = pd.DataFrame()
+    
+    return result
 
 # Cache player shooting data
 @st.cache_data(ttl=3600)  # Cache for 1 hour
@@ -792,6 +940,264 @@ with tab1:
                                     st.info("Could not load player zone shooting data.")
                             
                             st.divider()
+                            
+                            # Synergy Playtype Matchup - Player vs Opponent
+                            st.subheader("🎯 Synergy Playtype Matchup")
+                            st.caption("Player offensive playtypes vs opponent defensive playtypes")
+                            
+                            try:
+                                with st.spinner("Loading synergy data..."):
+                                    # Fetch player offensive synergy data
+                                    player_synergy = psyn.get_all_player_offensive_synergy(str(selected_player_id), psyn.CURRENT_SEASON)
+                                    
+                                    # Fetch opponent defensive synergy data
+                                    opp_synergy = psyn.get_opponent_defensive_synergy(opponent_team_id, psyn.CURRENT_SEASON)
+                                    
+                                    # Get bulk data for frequency rank calculations
+                                    bulk_player_synergy = get_bulk_player_offensive_synergy(psyn.CURRENT_SEASON)
+                                    bulk_team_synergy = get_bulk_team_defensive_synergy(psyn.CURRENT_SEASON)
+                                    
+                                    # Helper function to calculate frequency rank
+                                    def calculate_player_freq_rank(player_id, playtype, bulk_data):
+                                        """Calculate player frequency rank (1-30) where 1 = highest frequency"""
+                                        if playtype not in bulk_data or len(bulk_data[playtype]) == 0:
+                                            return 30
+                                        
+                                        df = bulk_data[playtype]
+                                        if 'PLAYER_ID' not in df.columns or 'POSS_PCT' not in df.columns:
+                                            return 30
+                                        
+                                        poss_pct_values = df[['PLAYER_ID', 'POSS_PCT']].copy()
+                                        poss_pct_values['POSS_PCT'] = poss_pct_values['POSS_PCT'].apply(
+                                            lambda x: float(x) * 100 if float(x) < 1 else float(x)
+                                        )
+                                        
+                                        poss_pct_values = poss_pct_values.sort_values('POSS_PCT', ascending=False).reset_index(drop=True)
+                                        poss_pct_values['Freq Rank'] = range(1, len(poss_pct_values) + 1)
+                                        
+                                        player_row = poss_pct_values[poss_pct_values['PLAYER_ID'] == int(player_id)]
+                                        if len(player_row) > 0:
+                                            return int(player_row.iloc[0]['Freq Rank'])
+                                        return 30
+                                    
+                                    def calculate_team_freq_rank(team_id, playtype, bulk_data):
+                                        """Calculate team frequency rank (1-30) where 1 = highest frequency"""
+                                        if playtype not in bulk_data or len(bulk_data[playtype]) == 0:
+                                            return 30
+                                        
+                                        df = bulk_data[playtype]
+                                        if 'TEAM_ID' not in df.columns or 'POSS_PCT' not in df.columns:
+                                            return 30
+                                        
+                                        poss_pct_values = df[['TEAM_ID', 'POSS_PCT']].copy()
+                                        poss_pct_values['POSS_PCT'] = poss_pct_values['POSS_PCT'].apply(
+                                            lambda x: float(x) * 100 if float(x) < 1 else float(x)
+                                        )
+                                        
+                                        poss_pct_values = poss_pct_values.sort_values('POSS_PCT', ascending=False).reset_index(drop=True)
+                                        poss_pct_values['Freq Rank'] = range(1, len(poss_pct_values) + 1)
+                                        
+                                        team_row = poss_pct_values[poss_pct_values['TEAM_ID'] == team_id]
+                                        if len(team_row) > 0:
+                                            return int(team_row.iloc[0]['Freq Rank'])
+                                        return 30
+                                    
+                                    # Build comparison data
+                                    synergy_playtypes = ['Cut', 'Handoff', 'Isolation', 'Misc', 'OffScreen', 'Postup', 
+                                                        'PRBallHandler', 'PRRollman', 'OffRebound', 'Spotup', 'Transition']
+                                    
+                                    comparison_data = []
+                                    for playtype in synergy_playtypes:
+                                        player_df = player_synergy.get(playtype, pd.DataFrame())
+                                        opp_df = opp_synergy.get(playtype, pd.DataFrame())
+                                        
+                                        player_metrics = extract_player_synergy_metrics(player_df, playtype)
+                                        opp_metrics = extract_opponent_synergy_metrics(opp_df, playtype)
+                                        
+                                        # Calculate frequency ranks
+                                        player_metrics['Freq Rank'] = calculate_player_freq_rank(selected_player_id, playtype, bulk_player_synergy)
+                                        opp_metrics['Freq Rank'] = calculate_team_freq_rank(opponent_team_id, playtype, bulk_team_synergy)
+                                        
+                                        # Only include playtypes where player has meaningful usage (> 2%)
+                                        if player_metrics['Freq'] >= 2.0:
+                                            comparison_data.append({
+                                                'Playtype': playtype,
+                                                'Player PPP': player_metrics['PPP'],
+                                                'Player Percentile': player_metrics['Percentile'],
+                                                'Player Freq Rank': player_metrics['Freq Rank'],
+                                                'Player Freq': player_metrics['Freq'],
+                                                'Player eFG%': player_metrics['eFG%'],
+                                                'Player Score %': player_metrics['Score %'],
+                                                'Opponent PPP': opp_metrics['PPP'],
+                                                'Opponent Percentile': opp_metrics['Percentile'],
+                                                'Opponent Freq Rank': opp_metrics['Freq Rank'],
+                                                'Opponent Freq': opp_metrics['Freq'],
+                                                'Opponent eFG%': opp_metrics['eFG%'],
+                                                'Opponent Score %': opp_metrics['Score %']
+                                            })
+                                    
+                                    if comparison_data:
+                                        # Build separate dataframes for player offense and opponent defense
+                                        player_offense_data = []
+                                        opponent_defense_data = []
+                                        
+                                        for item in comparison_data:
+                                            player_offense_data.append({
+                                                'Playtype': item['Playtype'],
+                                                'PPP': item['Player PPP'],
+                                                'Rank': extract_player_synergy_metrics(
+                                                    player_synergy.get(item['Playtype'], pd.DataFrame()),
+                                                    item['Playtype']
+                                                )['Rank'],
+                                                'Percentile': item['Player Percentile'],
+                                                'Freq Rank': item['Player Freq Rank'],
+                                                'Freq': item['Player Freq'],
+                                                'eFG%': item['Player eFG%'],
+                                                'Score %': item['Player Score %']
+                                            })
+                                            
+                                            opponent_defense_data.append({
+                                                'Playtype': item['Playtype'],
+                                                'PPP': item['Opponent PPP'],
+                                                'Rank': extract_opponent_synergy_metrics(
+                                                    opp_synergy.get(item['Playtype'], pd.DataFrame()),
+                                                    item['Playtype']
+                                                )['Rank'],
+                                                'Percentile': item['Opponent Percentile'],
+                                                'Freq Rank': item['Opponent Freq Rank'],
+                                                'Freq': item['Opponent Freq'],
+                                                'eFG%': item['Opponent eFG%'],
+                                                'Score %': item['Opponent Score %']
+                                            })
+                                        
+                                        player_offense_df = pd.DataFrame(player_offense_data)
+                                        opponent_defense_df = pd.DataFrame(opponent_defense_data)
+                                        
+                                        # Helper function to style offense rows based on rank
+                                        def style_synergy_offense(row):
+                                            """Apply background color based on rank: green (1st) to red (30th)"""
+                                            styles = [''] * len(row)
+                                            
+                                            rank = row.get('Rank', 30)
+                                            try:
+                                                rank = float(rank)
+                                                if pd.isna(rank) or rank == 0 or rank < 1:
+                                                    rank = 30
+                                                elif rank > 30:
+                                                    rank = 30
+                                            except (ValueError, TypeError):
+                                                rank = 30
+                                            
+                                            normalized = (rank - 1) / 29.0 if rank > 1 else 0.0
+                                            
+                                            if normalized < 0.5:
+                                                r = int(255 * (normalized * 2))
+                                                g = 255
+                                                b = 100
+                                            else:
+                                                r = 255
+                                                g = int(255 * (1 - (normalized - 0.5) * 2))
+                                                b = 100
+                                            
+                                            bg_color = f'background-color: rgba({r}, {g}, {b}, 0.3);'
+                                            for i in range(len(styles)):
+                                                styles[i] = bg_color
+                                            
+                                            return styles
+                                        
+                                        # Helper function to style defense rows based on rank
+                                        def style_synergy_defense(row):
+                                            """Apply background color based on rank: green (rank 1 = best defense) to red (rank 30 = worst defense)"""
+                                            styles = [''] * len(row)
+                                            
+                                            rank = row.get('Rank', 30)
+                                            try:
+                                                rank = float(rank)
+                                                if pd.isna(rank) or rank == 0 or rank < 1:
+                                                    rank = 30
+                                                elif rank > 30:
+                                                    rank = 30
+                                            except (ValueError, TypeError):
+                                                rank = 30
+                                            
+                                            normalized = (rank - 1) / 29.0 if rank > 1 else 0.0
+                                            
+                                            if normalized < 0.5:
+                                                r = int(255 * (normalized * 2))
+                                                g = 255
+                                                b = 100
+                                            else:
+                                                r = 255
+                                                g = int(255 * (1 - (normalized - 0.5) * 2))
+                                                b = 100
+                                            
+                                            bg_color = f'background-color: rgba({r}, {g}, {b}, 0.3);'
+                                            for i in range(len(styles)):
+                                                styles[i] = bg_color
+                                            
+                                            return styles
+                                        
+                                        # Apply styling
+                                        styled_player_offense = player_offense_df.style.apply(style_synergy_offense, axis=1) if len(player_offense_df) > 0 else None
+                                        styled_opponent_defense = opponent_defense_df.style.apply(style_synergy_defense, axis=1) if len(opponent_defense_df) > 0 else None
+                                        
+                                        # Column configuration
+                                        synergy_column_config = {
+                                            "Playtype": st.column_config.TextColumn("Playtype", width=120),
+                                            "PPP": st.column_config.NumberColumn("PPP", format="%.2f", width=80),
+                                            "Rank": st.column_config.NumberColumn("Rank", format="%d", width=70),
+                                            "Percentile": st.column_config.NumberColumn("Percentile", format="%.3f", width=100),
+                                            "Freq Rank": st.column_config.NumberColumn("Freq Rank", format="%d", width=90),
+                                            "Freq": st.column_config.NumberColumn("Freq", format="%.1f%%", width=80),
+                                            "eFG%": st.column_config.NumberColumn("eFG%", format="%.1f%%", width=80),
+                                            "Score %": st.column_config.NumberColumn("Score %", format="%.1f%%", width=100),
+                                        }
+                                        
+                                        # Display in two columns
+                                        synergy_cols = st.columns(2)
+                                        
+                                        with synergy_cols[0]:
+                                            st.markdown("#### Player Offense")
+                                            if styled_player_offense is not None:
+                                                st.dataframe(
+                                                    styled_player_offense,
+                                                    width='stretch',
+                                                    hide_index=True,
+                                                    column_config=synergy_column_config
+                                                )
+                                            else:
+                                                st.caption("No offensive synergy data available")
+                                        
+                                        with synergy_cols[1]:
+                                            # Get opponent team name
+                                            opponent_team_name = "Opponent"
+                                            try:
+                                                if opp_def_stats and 'team_name' in opp_def_stats:
+                                                    opponent_team_name = opp_def_stats['team_name']
+                                                elif opponent_team_id:
+                                                    # Try to get team abbreviation from matchup data
+                                                    if opponent_team_id == matchup_home_team_id and matchup_home_team_abbr:
+                                                        opponent_team_name = matchup_home_team_abbr
+                                                    elif opponent_team_id == matchup_away_team_id and matchup_away_team_abbr:
+                                                        opponent_team_name = matchup_away_team_abbr
+                                            except:
+                                                pass
+                                            
+                                            st.markdown(f"#### {opponent_team_name} Defense")
+                                            if styled_opponent_defense is not None:
+                                                st.dataframe(
+                                                    styled_opponent_defense,
+                                                    width='stretch',
+                                                    hide_index=True,
+                                                    column_config=synergy_column_config
+                                                )
+                                            else:
+                                                st.caption("No defensive synergy data available")
+                                    else:
+                                        st.info("No synergy data available for playtypes with meaningful usage (>2%).")
+                                        
+                            except Exception as e:
+                                st.warning(f"⚠️ Could not load synergy data: {str(e)}")
 
         # ============================================================
         # SIMILAR PLAYERS SECTION

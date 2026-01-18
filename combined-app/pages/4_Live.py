@@ -19,6 +19,7 @@ with st.sidebar:
     st.markdown("### Cache Management")
     if st.button("🗑️ Clear All Cache", width='stretch'):
         st.cache_data.clear()
+        st.session_state['live_page_cache_refresh'] = 0  # Reset counter
         st.success("✅ Cache cleared successfully!")
         st.rerun()
     st.markdown("---")  # Separator
@@ -57,14 +58,18 @@ if 'auto_refresh' not in st.session_state:
 if 'last_refresh' not in st.session_state:
     st.session_state['last_refresh'] = None
 if 'refresh_interval' not in st.session_state:
-    st.session_state['refresh_interval'] = 10  # seconds
+    st.session_state['refresh_interval'] = 30  # seconds
+if 'selected_game_id' not in st.session_state:
+    st.session_state['selected_game_id'] = None
+if 'live_page_cache_refresh' not in st.session_state:
+    st.session_state['live_page_cache_refresh'] = 0  # Counter to force cache refresh for live page only
 
 # =============================================================================
 # DATA FETCHING FUNCTIONS
 # =============================================================================
 
 @st.cache_data(ttl=60, show_spinner="Fetching games...")
-def get_live_games_for_date(selected_date):
+def get_live_games_for_date(selected_date, cache_refresh=0):
     """
     Fetch NBA games for a given date.
     Returns list of games with game_id, away_team, home_team, game_status, game_time.
@@ -156,7 +161,7 @@ def get_live_games_for_date(selected_date):
         return [], f"Error fetching games: {str(e)}"
 
 @st.cache_data(ttl=300, show_spinner="Loading box score...")  # 5 minutes cache
-def get_box_score(game_id, game_status=None):
+def get_box_score(game_id, game_status=None, cache_refresh=0):
     """
     Fetch live box score for a given game ID.
     Returns structured dictionary with team and player data.
@@ -227,10 +232,30 @@ def format_player_stats(players_list):
         tov = stats.get('turnovers', 0)
         fpts = round(pts * 1.0 + reb * 1.2 + ast * 1.5 + stl * 3.0 + blk * 3.0 - tov * 1.0, 2)
         
+        # Convert minutes to numeric value for sorting (total seconds)
+        minutes_str = stats.get('minutes', '')
+        minutes_numeric = 0.0
+        if minutes_str:
+            try:
+                # Parse ISO 8601 duration (PT10M14.00S) to total seconds
+                minutes_str_clean = minutes_str.replace('PT', '')
+                if 'M' in minutes_str_clean:
+                    parts = minutes_str_clean.split('M')
+                    mins = int(parts[0])
+                    secs_str = parts[1].replace('S', '').split('.')[0] if len(parts) > 1 else '0'
+                    secs = int(secs_str) if secs_str else 0
+                    minutes_numeric = mins * 60 + secs
+                elif 'S' in minutes_str_clean:
+                    secs_str = minutes_str_clean.replace('S', '').split('.')[0]
+                    minutes_numeric = int(secs_str) if secs_str else 0
+            except:
+                minutes_numeric = 0.0
+        
         rows.append({
             'Name': player.get('name', ''),
             'Pos': player.get('position', ''),
-            'MIN': format_minutes(stats.get('minutes', '')),
+            'MIN': format_minutes(minutes_str),
+            'MIN_numeric': minutes_numeric,  # For sorting
             'PTS': pts,
             'REB': reb,
             'AST': ast,
@@ -268,8 +293,8 @@ def format_player_stats(players_list):
         if 'FPTS' in df.columns:
             df['FPTS'] = pd.to_numeric(df['FPTS'], errors='coerce').fillna(0.0).round(2)
         
-        # Sort by fantasy points (descending) before converting to string
-        df = df.sort_values('FPTS', ascending=False)
+        # Sort by FPTS descending, then MIN descending
+        df = df.sort_values(by=['FPTS', 'MIN_numeric'], ascending=[False, False])
         
         # Format FPTS as string with 2 decimal places for display (after sorting)
         if 'FPTS' in df.columns:
@@ -335,6 +360,9 @@ def calculate_starter_stats(players_df):
             'FGM': 0,
             'FGA': 0,
             'FG%': 0.0,
+            '2PM': 0,
+            '2PA': 0,
+            '2P%': 0.0,
             '3PM': 0,
             '3PA': 0,
             '3P%': 0.0,
@@ -345,7 +373,11 @@ def calculate_starter_stats(players_df):
             'AST': 0,
             'FB PTS': 0,
             'PITP': 0,
-            '2ND CH': 0
+            '2ND CH': 0,
+            'FGM-FGA': '0-0',
+            '2PM-2PA': '0-0',
+            '3PM-3PA': '0-0',
+            'FTM-FTA': '0-0'
         }
     
     starter_totals = {
@@ -363,12 +395,18 @@ def calculate_starter_stats(players_df):
         '2ND CH': starter_df.get('2ND CH', pd.Series([0])).sum() if '2ND CH' in starter_df.columns else 0,
     }
     
+    # Calculate 2PT stats (2PM = FGM - 3PM, 2PA = FGA - 3PA)
+    starter_totals['2PM'] = starter_totals['FGM'] - starter_totals['3PM']
+    starter_totals['2PA'] = starter_totals['FGA'] - starter_totals['3PA']
+    
     # Calculate percentages
     starter_totals['FG%'] = (starter_totals['FGM'] / starter_totals['FGA'] * 100) if starter_totals['FGA'] > 0 else 0
+    starter_totals['2P%'] = (starter_totals['2PM'] / starter_totals['2PA'] * 100) if starter_totals['2PA'] > 0 else 0
     starter_totals['3P%'] = (starter_totals['3PM'] / starter_totals['3PA'] * 100) if starter_totals['3PA'] > 0 else 0
     starter_totals['FT%'] = (starter_totals['FTM'] / starter_totals['FTA'] * 100) if starter_totals['FTA'] > 0 else 0
     
     starter_totals['FGM-FGA'] = f"{starter_totals['FGM']}-{starter_totals['FGA']}"
+    starter_totals['2PM-2PA'] = f"{starter_totals['2PM']}-{starter_totals['2PA']}"
     starter_totals['3PM-3PA'] = f"{starter_totals['3PM']}-{starter_totals['3PA']}"
     starter_totals['FTM-FTA'] = f"{starter_totals['FTM']}-{starter_totals['FTA']}"
     
@@ -387,6 +425,9 @@ def calculate_bench_stats(players_df):
             'FGM': 0,
             'FGA': 0,
             'FG%': 0.0,
+            '2PM': 0,
+            '2PA': 0,
+            '2P%': 0.0,
             '3PM': 0,
             '3PA': 0,
             '3P%': 0.0,
@@ -397,7 +438,11 @@ def calculate_bench_stats(players_df):
             'AST': 0,
             'FB PTS': 0,
             'PITP': 0,
-            '2ND CH': 0
+            '2ND CH': 0,
+            'FGM-FGA': '0-0',
+            '2PM-2PA': '0-0',
+            '3PM-3PA': '0-0',
+            'FTM-FTA': '0-0'
         }
     
     bench_totals = {
@@ -415,12 +460,18 @@ def calculate_bench_stats(players_df):
         '2ND CH': bench_df.get('2ND CH', pd.Series([0])).sum() if '2ND CH' in bench_df.columns else 0,
     }
     
+    # Calculate 2PT stats (2PM = FGM - 3PM, 2PA = FGA - 3PA)
+    bench_totals['2PM'] = bench_totals['FGM'] - bench_totals['3PM']
+    bench_totals['2PA'] = bench_totals['FGA'] - bench_totals['3PA']
+    
     # Calculate percentages
     bench_totals['FG%'] = (bench_totals['FGM'] / bench_totals['FGA'] * 100) if bench_totals['FGA'] > 0 else 0
+    bench_totals['2P%'] = (bench_totals['2PM'] / bench_totals['2PA'] * 100) if bench_totals['2PA'] > 0 else 0
     bench_totals['3P%'] = (bench_totals['3PM'] / bench_totals['3PA'] * 100) if bench_totals['3PA'] > 0 else 0
     bench_totals['FT%'] = (bench_totals['FTM'] / bench_totals['FTA'] * 100) if bench_totals['FTA'] > 0 else 0
     
     bench_totals['FGM-FGA'] = f"{bench_totals['FGM']}-{bench_totals['FGA']}"
+    bench_totals['2PM-2PA'] = f"{bench_totals['2PM']}-{bench_totals['2PA']}"
     bench_totals['3PM-3PA'] = f"{bench_totals['3PM']}-{bench_totals['3PA']}"
     bench_totals['FTM-FTA'] = f"{bench_totals['FTM']}-{bench_totals['FTA']}"
     
@@ -443,7 +494,7 @@ with col_date:
     )
 
 with col_game:
-    games_list, games_error = get_live_games_for_date(selected_date)
+    games_list, games_error = get_live_games_for_date(selected_date, st.session_state['live_page_cache_refresh'])
     
     if games_error:
         st.warning(f"⚠️ {games_error}")
@@ -458,19 +509,31 @@ with col_game:
                 matchup_str += f" ({status_str})"
             game_options.append(matchup_str)
         
+        # Find the index of the stored game_id, if it exists
+        default_idx = 0
+        if st.session_state['selected_game_id']:
+            for idx, game in enumerate(games_list):
+                if game['game_id'] == st.session_state['selected_game_id']:
+                    default_idx = idx
+                    break
+        
         selected_game_idx = st.selectbox(
             "Game:",
             options=range(len(game_options)),
             format_func=lambda x: game_options[x] if x < len(game_options) else "",
-            key="live_game_select"
+            key="live_game_select",
+            index=default_idx
         )
         
         if selected_game_idx < len(games_list):
             selected_game = games_list[selected_game_idx]
             selected_game_id = selected_game['game_id']
+            # Update session state with the selected game_id
+            st.session_state['selected_game_id'] = selected_game_id
         else:
             selected_game_id = None
             selected_game = None
+            st.session_state['selected_game_id'] = None
     else:
         st.info("No games found for this date.")
         selected_game_id = None
@@ -481,12 +544,13 @@ with col_refresh:
         "Auto-refresh",
         value=st.session_state['auto_refresh'],
         key="auto_refresh_checkbox",
-        help="Automatically refresh box score every 10 seconds"
+        help="Automatically refresh box score every 30 seconds"
     )
     st.session_state['auto_refresh'] = auto_refresh
     
     if st.button("🔄 Refresh", key="manual_refresh"):
-        st.cache_data.clear()
+        # Increment refresh counter to invalidate only live page caches
+        st.session_state['live_page_cache_refresh'] += 1
         st.rerun()
 
 # Display game status
@@ -510,7 +574,7 @@ if selected_game_id:
         box_error = None
     else:
         # Fetch from API
-        game_data, box_error = get_box_score(selected_game_id, game_status_for_cache)
+        game_data, box_error = get_box_score(selected_game_id, game_status_for_cache, st.session_state['live_page_cache_refresh'])
         
         # Cache in session state if successful
         if game_data and not box_error:
@@ -899,7 +963,7 @@ if selected_game_id:
                     st.metric("FB PTS", away_starter_stats.get('FB PTS', 0),
                              delta=f"{get_stat_delta(away_starter_stats.get('FB PTS', 0), home_starter_stats.get('FB PTS', 0)):.1f}",
                              delta_color="normal")
-                st.markdown(f"**Starter Shooting:** {away_starter_stats['FGM-FGA']} FG | {away_starter_stats['3PM-3PA']} 3PT | {away_starter_stats['FTM-FTA']} FT")
+                st.markdown(f"**Starter Shooting:** {away_starter_stats['FGM-FGA']} FG | {away_starter_stats['2PM-2PA']} 2PT | {away_starter_stats['3PM-3PA']} 3PT | {away_starter_stats['FTM-FTA']} FT")
             
             # Bench Stats
             if away_bench_stats and len(away_bench_stats) > 0:
@@ -941,7 +1005,7 @@ if selected_game_id:
                     st.metric("FB PTS", away_bench_stats.get('FB PTS', 0),
                              delta=f"{get_stat_delta(away_bench_stats.get('FB PTS', 0), home_bench_stats.get('FB PTS', 0)):.1f}",
                              delta_color="normal")
-                st.markdown(f"**Bench Shooting:** {away_bench_stats.get('FGM-FGA', '0-0')} FG | {away_bench_stats.get('3PM-3PA', '0-0')} 3PT | {away_bench_stats.get('FTM-FTA', '0-0')} FT")
+                st.markdown(f"**Bench Shooting:** {away_bench_stats.get('FGM-FGA', '0-0')} FG | {away_bench_stats.get('2PM-2PA', '0-0')} 2PT | {away_bench_stats.get('3PM-3PA', '0-0')} 3PT | {away_bench_stats.get('FTM-FTA', '0-0')} FT")
             
             st.markdown("---")
             
@@ -970,6 +1034,8 @@ if selected_game_id:
                     away_display = away_display.drop(columns=['OnCourt'])
                 if 'Status' in away_display.columns:
                     away_display = away_display.drop(columns=['Status'])
+                if 'MIN_numeric' in away_display.columns:
+                    away_display = away_display.drop(columns=['MIN_numeric'])
                 
                 # Highlight starters if available
                 if 'Starter' in away_df.columns:
@@ -1088,7 +1154,7 @@ if selected_game_id:
                     st.metric("FB PTS", home_starter_stats.get('FB PTS', 0),
                              delta=f"{get_stat_delta(home_starter_stats.get('FB PTS', 0), away_starter_stats.get('FB PTS', 0)):.1f}",
                              delta_color="normal")
-                st.markdown(f"**Starter Shooting:** {home_starter_stats['FGM-FGA']} FG | {home_starter_stats['3PM-3PA']} 3PT | {home_starter_stats['FTM-FTA']} FT")
+                st.markdown(f"**Starter Shooting:** {home_starter_stats['FGM-FGA']} FG | {home_starter_stats['2PM-2PA']} 2PT | {home_starter_stats['3PM-3PA']} 3PT | {home_starter_stats['FTM-FTA']} FT")
             
             # Bench Stats
             if home_bench_stats and len(home_bench_stats) > 0:
@@ -1130,7 +1196,7 @@ if selected_game_id:
                     st.metric("FB PTS", home_bench_stats.get('FB PTS', 0),
                              delta=f"{get_stat_delta(home_bench_stats.get('FB PTS', 0), away_bench_stats.get('FB PTS', 0)):.1f}",
                              delta_color="normal")
-                st.markdown(f"**Bench Shooting:** {home_bench_stats['FGM-FGA']} FG | {home_bench_stats['3PM-3PA']} 3PT | {home_bench_stats['FTM-FTA']} FT")
+                st.markdown(f"**Bench Shooting:** {home_bench_stats['FGM-FGA']} FG | {home_bench_stats['2PM-2PA']} 2PT | {home_bench_stats['3PM-3PA']} 3PT | {home_bench_stats['FTM-FTA']} FT")
             
             st.markdown("---")
             
@@ -1153,6 +1219,8 @@ if selected_game_id:
                     home_display = home_display.drop(columns=['OnCourt'])
                 if 'Status' in home_display.columns:
                     home_display = home_display.drop(columns=['Status'])
+                if 'MIN_numeric' in home_display.columns:
+                    home_display = home_display.drop(columns=['MIN_numeric'])
                 
                 # Highlight starters if available
                 if 'Starter' in home_df.columns:
@@ -1179,15 +1247,19 @@ if selected_game_id:
                 if st.session_state['last_refresh']:
                     elapsed = (datetime.now() - st.session_state['last_refresh']).total_seconds()
                     if elapsed >= st.session_state['refresh_interval']:
-                        # Clear cache and rerun
-                        st.cache_data.clear()
+                        # Increment refresh counter to invalidate only live page caches
+                        st.session_state['live_page_cache_refresh'] += 1
                         st.rerun()
                     else:
                         remaining = int(st.session_state['refresh_interval'] - elapsed)
                         st.caption(f"🔄 Auto-refresh enabled. Refreshing in {remaining} seconds...")
+                        # Sleep for 1 second and rerun to check again (creates continuous polling)
+                        time.sleep(1)
+                        st.rerun()
                 else:
                     st.caption("🔄 Auto-refresh enabled. Refreshing...")
-                    st.cache_data.clear()
+                    # Increment refresh counter to invalidate only live page caches
+                    st.session_state['live_page_cache_refresh'] += 1
                     st.rerun()
     else:
         st.info("Loading box score...")

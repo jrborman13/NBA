@@ -4,6 +4,8 @@ Fetches and parses official NBA injury reports from PDF.
 """
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import pandas as pd
 from datetime import datetime, date, timedelta
 from io import BytesIO
@@ -569,9 +571,19 @@ def get_injuries_for_matchup(
     Returns:
         Dict with 'away' and 'home' keys, each containing list of injury dicts
     """
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "injury_report.py:554", "message": "get_injuries_for_matchup entry", "data": {"injury_df_len": len(injury_df) if injury_df is not None else 0, "away_team": away_team_abbr, "home_team": home_team_abbr}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
     result = {'away': [], 'home': []}
     
     if injury_df is None or len(injury_df) == 0:
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "injury_report.py:575", "message": "get_injuries_for_matchup: Empty injury_df, returning early", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         return result
     
     # Build matchup pattern (e.g., "NYK@ORL" or "NYK @ ORL")
@@ -598,19 +610,51 @@ def get_injuries_for_matchup(
         # Check if this team is in the requested matchup
         return team_abbr.upper() == away_team_abbr.upper() or team_abbr.upper() == home_team_abbr.upper()
     
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "injury_report.py:601", "message": "get_injuries_for_matchup: Before filtering injuries", "data": {"injury_df_len": len(injury_df)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
     matchup_injuries = injury_df[injury_df['team'].apply(team_in_matchup)]
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "injury_report.py:603", "message": "get_injuries_for_matchup: After filtering injuries", "data": {"matchup_injuries_len": len(matchup_injuries)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
     
     if len(matchup_injuries) == 0:
         return result
     
-    for _, row in matchup_injuries.iterrows():
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "injury_report.py:606", "message": "get_injuries_for_matchup: Starting to iterate injuries", "data": {"injury_count": len(matchup_injuries)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
+    
+    for idx, (_, row) in enumerate(matchup_injuries.iterrows()):
+        # #region agent log
+        if idx < 5 or idx % 10 == 0:  # Log first 5 and every 10th
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                import json
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "injury_report.py:608", "message": f"get_injuries_for_matchup: Processing injury {idx}", "data": {"player_name": str(row.get('player_name', ''))}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         player_name = row['player_name']
         team = row['team']
         status = row['status']
         reason = row['reason']
         
         # Match player to ID
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "injury_report.py:613", "message": f"get_injuries_for_matchup: Before match_player_to_id", "data": {"player_name": str(player_name)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         player_id = match_player_to_id(player_name, players_df, team)
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "injury_report.py:620", "message": f"get_injuries_for_matchup: After match_player_to_id", "data": {"player_id": str(player_id) if player_id else None}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         
         injury_info = {
             'player_name': player_name,
@@ -714,8 +758,7 @@ def get_players_out_for_matchup(
 def fetch_injuries_for_date(report_date: date = None, players_df: pd.DataFrame = None) -> Tuple[pd.DataFrame, str]:
     """
     Fetch and parse injury report for a specific date.
-    Tries multiple URLs until one successfully parses.
-    Checks every 15 minutes (00, 15, 30, 45) going backwards from current time.
+    Tries multiple recent report times going backwards from current time.
     
     Args:
         report_date: Date to fetch injuries for (defaults to today)
@@ -726,6 +769,15 @@ def fetch_injuries_for_date(report_date: date = None, players_df: pd.DataFrame =
     """
     if report_date is None:
         report_date = date.today()
+    
+    # Always use today's date for URL construction (injury report PDF includes tomorrow's games too)
+    url_date = date.today()
+    
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "injury_report.py:756", "message": "fetch_injuries_for_date entry", "data": {"report_date": str(report_date), "url_date": str(url_date)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
     
     # Get current time in ET (Eastern Time)
     try:
@@ -752,61 +804,143 @@ def fetch_injuries_for_date(report_date: date = None, players_df: pd.DataFrame =
         else:
             return (h - 12, "PM")
     
-    # Build list of times to try (most recent first, going backwards in 15-min increments)
+    # Build list of times to try (most recent first, going backwards)
+    # Try only the last hour (4 attempts: current, 15min, 30min, 45min back)
     times_to_try = []
     
-    # Start from current rounded time and go backwards
+    # Always use current time rounded down (URL always uses today's date)
     start_datetime = now_et.replace(minute=rounded_minute, second=0, microsecond=0)
     
-    # Create a datetime for 6 AM of the report date (in ET timezone)
-    try:
-        import pytz
-        et_tz_check = pytz.timezone('US/Eastern')
-        report_datetime_6am = et_tz_check.localize(datetime.combine(report_date, datetime.min.time()).replace(hour=6))
-    except:
-        report_datetime_6am = datetime.combine(report_date, datetime.min.time()).replace(hour=6)
-    
-    # Go back up to 24 hours, checking every 15 minutes
-    for i in range(96):  # 24 hours * 4 (15-min intervals) = 96
+    # Go back only 1 hour (4 attempts), checking every 15 minutes
+    for i in range(4):  # 1 hour * 4 (15-min intervals) = 4 attempts
         check_time = start_datetime - timedelta(minutes=i * 15)
         
-        # Stop if we've gone back before 6 AM of the report date
-        if check_time < report_datetime_6am:
+        # Stop if we've gone back before today (don't check previous days)
+        if check_time.date() < url_date:
             break
         
         hour_12, period = hour_to_12h(check_time.hour)
         minute = check_time.minute
         
-        times_to_try.append((hour_12, minute, period))
+        times_to_try.append((hour_12, minute, period, check_time))
     
     # Remove duplicates while preserving order
     seen = set()
     unique_times = []
     for t in times_to_try:
-        if t not in seen:
-            seen.add(t)
+        time_key = (t[0], t[1], t[2])
+        if time_key not in seen:
+            seen.add(time_key)
             unique_times.append(t)
     
-    # Try each URL until one successfully parses
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "injury_report.py:800", "message": "fetch_injuries_for_date: Starting URL attempts", "data": {"num_times_to_try": len(unique_times), "first_time": f"{unique_times[0][0]:02d}:{unique_times[0][1]:02d}{unique_times[0][2]}" if unique_times else None}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
+    
     tried_urls = []
-    for hour, minute, period in unique_times:
-        url = build_injury_report_url(report_date, hour, minute, period)
-        time_str = f"{hour:02d}:{minute:02d}{period}"
+    for idx, (hour_12, minute, period, check_time) in enumerate(unique_times):
+        # Always use today's date for URL (injury report PDF includes tomorrow's games too)
+        url = build_injury_report_url(url_date, hour_12, minute, period)
+        time_str = f"{hour_12:02d}:{minute:02d}{period}"
         tried_urls.append(time_str)
         
+        # #region agent log
+        if idx < 5 or idx % 5 == 0:  # Log first 5 and every 5th attempt
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                import json
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "injury_report.py:810", "message": f"fetch_injuries_for_date: Attempt {idx+1}/{len(unique_times)}", "data": {"time_str": time_str, "url": url}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
+        
         try:
-            response = requests.get(url, timeout=10)
+            # Create session with retry strategy and proper headers
+            session = requests.Session()
+            retry_strategy = Retry(
+                total=2,
+                backoff_factor=0.5,
+                status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods=["GET"]
+            )
+            adapter = HTTPAdapter(max_retries=retry_strategy)
+            session.mount("https://", adapter)
+            
+            # Use proper User-Agent header (some CDNs block generic clients)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/pdf',
+                'Accept-Language': 'en-US,en;q=0.9'
+            }
+            
+            # GET request with proper timeout settings: (connect_timeout, read_timeout)
+            # Separate timeouts: 5s to connect, 30s to read
+            response = session.get(url, headers=headers, timeout=(5, 30), allow_redirects=True)
+            
+            # #region agent log
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                import json
+                response_text_preview = response.text[:200] if hasattr(response, 'text') and response.text else ""
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "injury_report.py:825", "message": f"fetch_injuries_for_date: GET response for {time_str}", "data": {"status_code": response.status_code, "url": url, "content_length": len(response.content) if response.content else 0, "response_preview": response_text_preview}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+            # #endregion
+            
+            # Handle different status codes
+            if response.status_code == 403:
+                # 403 Forbidden - might mean URL doesn't exist yet or server is blocking
+                # #region agent log
+                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                    import json
+                    response_text = response.text[:500] if hasattr(response, 'text') and response.text else ""
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "injury_report.py:830", "message": f"fetch_injuries_for_date: 403 Forbidden for {time_str}", "data": {"url": url, "response_text": response_text}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+                # #endregion
+                continue  # Skip to next time
+            elif response.status_code == 404:
+                # 404 Not Found - URL doesn't exist
+                # #region agent log
+                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                    import json
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "injury_report.py:837", "message": f"fetch_injuries_for_date: 404 Not Found for {time_str}", "data": {"url": url}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+                # #endregion
+                continue  # Skip to next time
+            
             if response.status_code == 200:
                 # Try to parse the PDF
                 injury_df = parse_injury_report_pdf(response.content)
                 
+                # #region agent log
+                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                    import json
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "injury_report.py:833", "message": f"fetch_injuries_for_date: Parsed PDF for {time_str}", "data": {"injury_count": len(injury_df) if injury_df is not None else 0}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+                # #endregion
+                
                 if len(injury_df) > 0:
                     return injury_df, f"✅ Loaded {len(injury_df)} injuries from **{time_str} ET** report ([source]({url}))"
-                # If parsing failed, continue to next URL
-        except requests.RequestException:
+        
+        except requests.Timeout as e:
+            # #region agent log
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                import json
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "injury_report.py:842", "message": f"fetch_injuries_for_date: Timeout for {time_str}", "data": {"error": str(e), "error_type": "Timeout"}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+            # #endregion
+            # Add small delay before next attempt to avoid overwhelming server
+            import time
+            time.sleep(0.5)
+            continue
+        except requests.RequestException as e:
+            # #region agent log
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                import json
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "injury_report.py:848", "message": f"fetch_injuries_for_date: RequestException for {time_str}", "data": {"error": str(e), "error_type": type(e).__name__}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+            # #endregion
             continue
     
-    return pd.DataFrame(), f"❌ No injury report found for {report_date.strftime('%m/%d/%Y')}. Tried: {', '.join(tried_urls[:10])}..."  # Show first 10 tried URLs
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "injury_report.py:838", "message": "fetch_injuries_for_date: All attempts failed", "data": {"num_attempts": len(tried_urls), "tried_times": tried_urls[:10]}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
+    
+    # If none of the times worked, return empty
+    return pd.DataFrame(), f"❌ No injury report found for {report_date.strftime('%m/%d/%Y')}. Tried: {', '.join(tried_urls[:5])}..."
 
 
 def fetch_todays_injuries(players_df: pd.DataFrame = None) -> Tuple[pd.DataFrame, str]:

@@ -14,9 +14,17 @@ import requests
 import pytz
 import logging
 
-from supabase_config import get_supabase_client, is_supabase_configured
+# Supabase imports removed - using JSON file fallback only
+# from supabase_config import get_supabase_client, is_supabase_configured
 
 logger = logging.getLogger(__name__)
+
+# Helper functions to avoid Supabase
+def is_supabase_configured():
+    return False
+
+def get_supabase_client():
+    return None
 
 # File to store manually entered lines (for backward compatibility)
 LINES_FILE = "player_lines.json"

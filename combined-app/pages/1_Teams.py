@@ -12,12 +12,6 @@ import time
 import nba_api.stats.endpoints
 import prediction_features as pf
 import team_onoff as toff
-try:
-    import supabase_cache as scache
-    import supabase_data_reader as db_reader
-except ImportError:
-    scache = None
-    db_reader = None
 
 import altair as alt
 import pandas as pd
@@ -39,47 +33,19 @@ with st.sidebar:
     st.markdown("---")  # Separator
 
 # Function to fetch matchups for a given date (same as Players page)
-# Removed @st.cache_data - using Supabase cache instead for persistent caching
+@st.cache_data(ttl=21600, show_spinner=False)
 def get_matchups_for_date(selected_date):
-    """Fetch NBA matchups for a given date from the API (uses Supabase cache)"""
+    """Fetch NBA matchups for a given date from the API"""
     season = '2025-26'
     
-    # Try database first (populated by scheduled Edge Functions)
-    league_schedule = None
-    if db_reader is not None:
-        try:
-            db_schedule = db_reader.get_schedule_from_db(season)
-            if db_schedule is not None and len(db_schedule) > 0:
-                print(f"[DB READ] Schedule from database: {len(db_schedule)} games")
-                league_schedule = db_schedule
-        except Exception as e:
-            print(f"Error reading schedule from database: {e}, falling back to API")
-    
-    # Try Supabase cache as fallback
-    if league_schedule is None and scache is not None:
-        try:
-            cached_schedule = scache.get_cached_bulk_data('schedule', season, ttl_hours=6)
-            if cached_schedule is not None:
-                league_schedule = cached_schedule
-        except Exception as e:
-            print(f"Error fetching cached schedule: {e}, falling back to API call")
-    
-    # Database and cache miss - fetch from API (safety net)
-    if league_schedule is None:
-        try:
-            league_schedule = nba_api.stats.endpoints.ScheduleLeagueV2(
-                league_id='00',
-                season=season
-            ).get_data_frames()[0]
-            
-            # Store in Supabase cache
-            if scache is not None:
-                try:
-                    scache.set_cached_bulk_data('schedule', season, league_schedule, ttl_hours=6)
-                except Exception as e:
-                    print(f"Error storing schedule in cache: {e}")
-        except Exception as e:
-            return [], f"Error fetching schedule: {str(e)}"
+    # Fetch from API
+    try:
+        league_schedule = nba_api.stats.endpoints.ScheduleLeagueV2(
+            league_id='00',
+            season=season
+        ).get_data_frames()[0]
+    except Exception as e:
+        return [], f"Error fetching schedule: {str(e)}"
     
     try:
         
@@ -764,11 +730,10 @@ if selected_matchup:
     # SYNERGY DATA FETCHING FUNCTIONS
     # ============================================================
     
-    # Removed @st.cache_data - using Supabase cache instead
+    @st.cache_data(ttl=3600, show_spinner=False)
     def get_team_synergy_data(team_id, playtype, type_grouping, season=None, max_retries=3, timeout=60):
         """
         Fetch synergy data for a specific team, playtype, and type_grouping.
-        Uses Supabase cache when available.
         
         Args:
             team_id: Team ID
@@ -784,66 +749,42 @@ if selected_matchup:
         if season is None:
             season = pf.CURRENT_SEASON
         
-        # Try Supabase cache first (cache all teams, then filter)
-        cache_key = f"team_synergy_{playtype}_{type_grouping}"
+        # Fetch from API
         synergy_data = None
-        cache_hit = False
-        
-        if scache is not None:
+        for attempt in range(max_retries):
             try:
-                cached_data = scache.get_cached_bulk_data(cache_key, season, ttl_hours=1)
-                if cached_data is not None:
-                    synergy_data = cached_data
-                    cache_hit = True
-                    print(f"[SYNERGY CACHE HIT] {cache_key} for team {team_id}")
+                synergy_data = nba_api.stats.endpoints.SynergyPlayTypes(
+                    league_id='00',
+                    per_mode_simple='Totals',
+                    season=season,
+                    season_type_all_star='Regular Season',
+                    player_or_team_abbreviation='T',
+                    type_grouping_nullable=type_grouping,
+                    play_type_nullable=playtype,
+                    timeout=timeout
+                ).get_data_frames()[0]
+                break
             except Exception as e:
-                print(f"Error fetching cached synergy data: {e}, falling back to API call")
-        
-        # Cache miss - fetch from API
-        if synergy_data is None:
-            for attempt in range(max_retries):
-                try:
-                    synergy_data = nba_api.stats.endpoints.SynergyPlayTypes(
-                        league_id='00',
-                        per_mode_simple='Totals',
-                        season=season,
-                        season_type_all_star='Regular Season',
-                        player_or_team_abbreviation='T',
-                        type_grouping_nullable=type_grouping,
-                        play_type_nullable=playtype,
-                        timeout=timeout
-                    ).get_data_frames()[0]
-                    
-                    # Store in Supabase cache (cache all teams)
-                    if scache is not None and len(synergy_data) > 0:
-                        try:
-                            scache.set_cached_bulk_data(cache_key, season, synergy_data, ttl_hours=1)
-                        except Exception as e:
-                            print(f"Error storing synergy data in cache: {e}")
-                    
-                    break
-                except Exception as e:
-                    if attempt < max_retries - 1:
-                        wait_time = (attempt + 1) * 2
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        print(f"Error fetching synergy data for team {team_id}, playtype {playtype}, type {type_grouping}: {str(e)}")
-                        return pd.DataFrame(), False
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"Error fetching synergy data for team {team_id}, playtype {playtype}, type {type_grouping}: {str(e)}")
+                    return pd.DataFrame(), False
         
         # Filter for the specific team
         if synergy_data is not None and len(synergy_data) > 0 and 'TEAM_ID' in synergy_data.columns:
             team_data = synergy_data[synergy_data['TEAM_ID'] == team_id]
-            return team_data, cache_hit  # Return cache status
+            return team_data, False  # Return cache status
         else:
-            return pd.DataFrame(), cache_hit
+            return pd.DataFrame(), False
     
-    # Removed @st.cache_data - using Supabase cache instead
+    @st.cache_data(ttl=3600, show_spinner=False)
     def get_bulk_all_team_synergy_data(season=None):
         """
         Fetch ALL teams' synergy data for ALL playtypes/type_groupings in bulk.
         Makes only 22 API calls total (11 playtypes × 2 sides) instead of 22 per team.
-        Uses Supabase cache when available.
         
         Args:
             season: Season string (defaults to CURRENT_SEASON)
@@ -858,103 +799,47 @@ if selected_matchup:
                             'PRBallHandler', 'PRRollman', 'OffRebound', 'Spotup', 'Transition']
         synergy_sides = ['offensive', 'defensive']
         
-        # Try database first (populated by scheduled Edge Functions)
-        cache_key = "all_team_synergy"
-        bulk_data = None
-        
-        if db_reader is not None:
-            try:
-                db_data = db_reader.get_synergy_data_from_db(season, 'team')
-                if db_data is not None and len(db_data) > 0:
-                    print(f"[DB READ] Team synergy data from database: {len(db_data)} playtypes")
-                    return db_data
-            except Exception as e:
-                print(f"Error reading team synergy from database: {e}, falling back to API")
-        
-        # Try Supabase cache as fallback
-        if scache is not None:
-            try:
-                cached_data = scache.get_cached_bulk_data(cache_key, season, ttl_hours=1)
-                if cached_data is not None:
-                    print(f"[SYNERGY BULK CACHE HIT] All team synergy data for season {season}")
-                    return cached_data
-                else:
-                    print(f"[SYNERGY BULK CACHE MISS] Fetching all team synergy data for season {season}")
-            except Exception as e:
-                print(f"Error fetching cached bulk synergy data: {e}, falling back to API calls")
-        
-        # Database and cache miss - fetch from API (safety net)
+        # Fetch from API
         result = {}
         total_requests = len(synergy_playtypes) * len(synergy_sides)
         current_request = 0
-        api_calls = 0
         
         for playtype in synergy_playtypes:
             result[playtype] = {}
             for side in synergy_sides:
                 current_request += 1
-                cache_key_single = f"team_synergy_{playtype}_{side}"
                 
-                # Check individual cache first
+                # API call
                 synergy_data = None
-                if scache is not None:
+                for attempt in range(3):
                     try:
-                        cached_single = scache.get_cached_bulk_data(cache_key_single, season, ttl_hours=1)
-                        if cached_single is not None:
-                            synergy_data = cached_single
-                            print(f"[SYNERGY CACHE HIT] {cache_key_single}")
+                        synergy_data = nba_api.stats.endpoints.SynergyPlayTypes(
+                            league_id='00',
+                            per_mode_simple='Totals',
+                            season=season,
+                            season_type_all_star='Regular Season',
+                            player_or_team_abbreviation='T',
+                            type_grouping_nullable=side,
+                            play_type_nullable=playtype,
+                            timeout=60
+                        ).get_data_frames()[0]
+                        break
                     except Exception as e:
-                        pass
-                
-                # API call if cache miss
-                if synergy_data is None:
-                    api_calls += 1
-                    for attempt in range(3):
-                        try:
-                            synergy_data = nba_api.stats.endpoints.SynergyPlayTypes(
-                                league_id='00',
-                                per_mode_simple='Totals',
-                                season=season,
-                                season_type_all_star='Regular Season',
-                                player_or_team_abbreviation='T',
-                                type_grouping_nullable=side,
-                                play_type_nullable=playtype,
-                                timeout=60
-                            ).get_data_frames()[0]
-                            
-                            # Store in Supabase cache
-                            if scache is not None and len(synergy_data) > 0:
-                                try:
-                                    scache.set_cached_bulk_data(cache_key_single, season, synergy_data, ttl_hours=1)
-                                except Exception as e:
-                                    print(f"Error storing synergy data in cache: {e}")
-                            
+                        if attempt < 2:
+                            wait_time = (attempt + 1) * 2
+                            time.sleep(wait_time)
+                            continue
+                        else:
+                            print(f"Error fetching synergy data for playtype {playtype}, type {side}: {str(e)}")
+                            synergy_data = pd.DataFrame()
                             break
-                        except Exception as e:
-                            if attempt < 2:
-                                wait_time = (attempt + 1) * 2
-                                time.sleep(wait_time)
-                                continue
-                            else:
-                                print(f"Error fetching synergy data for playtype {playtype}, type {side}: {str(e)}")
-                                synergy_data = pd.DataFrame()
-                                break
                 
                 result[playtype][side] = synergy_data if synergy_data is not None else pd.DataFrame()
                 
-                # Only add delay if we made an API call and might need to make another
-                if api_calls > 0 and current_request < total_requests:
-                    time.sleep(1.5)  # Delay only for API calls to avoid rate limiting
+                # Add delay between API calls to avoid rate limiting
+                if current_request < total_requests:
+                    time.sleep(1.5)
         
-        # Store bulk data in cache
-        if scache is not None:
-            try:
-                scache.set_cached_bulk_data(cache_key, season, result, ttl_hours=1)
-                print(f"[SYNERGY BULK CACHE SET] Stored all team synergy data for season {season}")
-            except Exception as e:
-                print(f"Error storing bulk synergy data in cache: {e}")
-        
-        print(f"[SYNERGY BULK] Fetched all team synergy data: {api_calls} API calls, {total_requests - api_calls} cache hits")
         return result
     
     # Removed @st.cache_data - using Supabase cache instead
@@ -1075,8 +960,10 @@ if selected_matchup:
                     'PPP': 0.0,
                     'Percentile': 0.0,
                     'Rank': 30,
+                    'Freq Rank': 30,
+                    'Freq': 0.0,
                     'eFG%': 0.0,
-                    'SCORE_POSS_PCT': 0.0
+                    'Score %': 0.0
                 }
             
             row = df.iloc[0] if len(df) > 0 else None
@@ -1086,8 +973,10 @@ if selected_matchup:
                     'PPP': 0.0,
                     'Percentile': 0.0,
                     'Rank': 30,
+                    'Freq Rank': 30,
+                    'Freq': 0.0,
                     'eFG%': 0.0,
-                    'SCORE_POSS_PCT': 0.0
+                    'Score %': 0.0
                 }
             
             # Extract metrics using actual API column names
@@ -1095,7 +984,7 @@ if selected_matchup:
             
             # PERCENTILE ranges from 0.0 to 1.0 (higher is better)
             # For offense: higher PPP = better → higher percentile → rank 1
-            # For defense: lower PPP Allowed = better → higher percentile → rank 1
+            # For defense: lower PPP = better → higher percentile → rank 1
             # The API's percentile calculation already accounts for context (offense vs defense)
             percentile = row.get('PERCENTILE', 0.0)
             
@@ -1103,12 +992,16 @@ if selected_matchup:
             # Formula: (1.0 - percentile) * 30 + 1, rounded to nearest integer
             # This works for both offense and defense because percentile reflects "better performance":
             # - Offense: rank 1 = highest PPP = highest percentile
-            # - Defense: rank 1 = lowest PPP Allowed = highest percentile
+            # - Defense: rank 1 = lowest PPP = highest percentile
             rank = round((1.0 - float(percentile)) * 30 + 1) if percentile else 30
             
             # EFG_PCT (Effective Field Goal Percentage) - might be decimal (0-1) or percentage (0-100)
             efg_pct_raw = row.get('EFG_PCT', 0.0)
             efg_pct = float(efg_pct_raw) * 100 if efg_pct_raw < 1 else float(efg_pct_raw)
+            
+            # POSS_PCT (Possession Percentage / Frequency) - might be decimal (0-1) or percentage (0-100)
+            poss_pct_raw = row.get('POSS_PCT', 0.0)
+            poss_pct = float(poss_pct_raw) * 100 if poss_pct_raw < 1 else float(poss_pct_raw)
             
             # SCORE_POSS_PCT (Scoring Possession Percentage) - might be decimal (0-1) or percentage (0-100)
             score_poss_pct_raw = row.get('SCORE_POSS_PCT', 0.0)
@@ -1119,8 +1012,10 @@ if selected_matchup:
                 'PPP': float(ppp) if ppp else 0.0,
                 'Rank': int(rank),
                 'Percentile': float(percentile) if percentile else 0.0,
+                'Freq Rank': 30,  # Placeholder, will be calculated later
+                'Freq': float(poss_pct) if poss_pct else 0.0,
                 'eFG%': float(efg_pct) if efg_pct else 0.0,
-                'SCORE_POSS_PCT': float(score_poss_pct) if score_poss_pct else 0.0
+                'Score %': float(score_poss_pct) if score_poss_pct else 0.0
             }
         
         # Build away team offense dataframe
@@ -1129,9 +1024,9 @@ if selected_matchup:
             df = away_synergy.get(playtype, {}).get('offensive')
             away_offense_data.append(extract_metrics(df, playtype))
         away_offense_df = pd.DataFrame(away_offense_data)
-        # Ensure column order: Playtype, PPP, Rank, Percentile, eFG%, SCORE_POSS_PCT
+        # Ensure column order: Playtype, PPP, Rank, Percentile, Freq Rank, Freq, eFG%, Score %
         if len(away_offense_df) > 0:
-            col_order = ['Playtype', 'PPP', 'Rank', 'Percentile', 'eFG%', 'SCORE_POSS_PCT']
+            col_order = ['Playtype', 'PPP', 'Rank', 'Percentile', 'Freq Rank', 'Freq', 'eFG%', 'Score %']
             away_offense_df = away_offense_df[[col for col in col_order if col in away_offense_df.columns]]
         
         # Build away team defense dataframe
@@ -1139,15 +1034,12 @@ if selected_matchup:
         for playtype in synergy_playtypes:
             df = away_synergy.get(playtype, {}).get('defensive')
             metrics = extract_metrics(df, playtype)
-            # Rename columns for defense (allowed)
-            metrics['PPP Allowed'] = metrics.pop('PPP')
-            metrics['eFG% Allowed'] = metrics.pop('eFG%')
-            metrics['SCORE_POSS_PCT Allowed'] = metrics.pop('SCORE_POSS_PCT')
+            # Keep original column names (no "Allowed" suffix)
             away_defense_data.append(metrics)
         away_defense_df = pd.DataFrame(away_defense_data)
-        # Ensure column order: Playtype, PPP Allowed, Rank, Percentile, eFG% Allowed, SCORE_POSS_PCT Allowed
+        # Ensure column order: Playtype, PPP, Rank, Percentile, Freq Rank, Freq, eFG%, Score %
         if len(away_defense_df) > 0:
-            col_order = ['Playtype', 'PPP Allowed', 'Rank', 'Percentile', 'eFG% Allowed', 'SCORE_POSS_PCT Allowed']
+            col_order = ['Playtype', 'PPP', 'Rank', 'Percentile', 'Freq Rank', 'Freq', 'eFG%', 'Score %']
             away_defense_df = away_defense_df[[col for col in col_order if col in away_defense_df.columns]]
         
         # Build home team offense dataframe
@@ -1156,9 +1048,9 @@ if selected_matchup:
             df = home_synergy.get(playtype, {}).get('offensive')
             home_offense_data.append(extract_metrics(df, playtype))
         home_offense_df = pd.DataFrame(home_offense_data)
-        # Ensure column order: Playtype, PPP, Rank, Percentile, eFG%, SCORE_POSS_PCT
+        # Ensure column order: Playtype, PPP, Rank, Percentile, Freq Rank, Freq, eFG%, Score %
         if len(home_offense_df) > 0:
-            col_order = ['Playtype', 'PPP', 'Rank', 'Percentile', 'eFG%', 'SCORE_POSS_PCT']
+            col_order = ['Playtype', 'PPP', 'Rank', 'Percentile', 'Freq Rank', 'Freq', 'eFG%', 'Score %']
             home_offense_df = home_offense_df[[col for col in col_order if col in home_offense_df.columns]]
         
         # Build home team defense dataframe
@@ -1166,16 +1058,71 @@ if selected_matchup:
         for playtype in synergy_playtypes:
             df = home_synergy.get(playtype, {}).get('defensive')
             metrics = extract_metrics(df, playtype)
-            # Rename columns for defense (allowed)
-            metrics['PPP Allowed'] = metrics.pop('PPP')
-            metrics['eFG% Allowed'] = metrics.pop('eFG%')
-            metrics['SCORE_POSS_PCT Allowed'] = metrics.pop('SCORE_POSS_PCT')
+            # Keep original column names (no "Allowed" suffix)
             home_defense_data.append(metrics)
         home_defense_df = pd.DataFrame(home_defense_data)
-        # Ensure column order: Playtype, PPP Allowed, Rank, Percentile, eFG% Allowed, SCORE_POSS_PCT Allowed
+        # Ensure column order: Playtype, PPP, Rank, Percentile, Freq Rank, Freq, eFG%, Score %
         if len(home_defense_df) > 0:
-            col_order = ['Playtype', 'PPP Allowed', 'Rank', 'Percentile', 'eFG% Allowed', 'SCORE_POSS_PCT Allowed']
+            col_order = ['Playtype', 'PPP', 'Rank', 'Percentile', 'Freq Rank', 'Freq', 'eFG%', 'Score %']
             home_defense_df = home_defense_df[[col for col in col_order if col in home_defense_df.columns]]
+        
+        # Calculate frequency ranks for all playtypes using bulk data
+        # Get bulk data to calculate ranks across all teams
+        bulk_data = get_bulk_all_team_synergy_data(season)
+        
+        # Helper function to calculate frequency rank for a team's playtype/side
+        def calculate_freq_rank(team_id, playtype, side, bulk_data):
+            """Calculate frequency rank (1-30) where 1 = highest frequency (closest to 1), 30 = lowest (closest to 0)"""
+            if playtype not in bulk_data or side not in bulk_data[playtype]:
+                return 30
+            
+            team_df = bulk_data[playtype][side]
+            if len(team_df) == 0 or 'TEAM_ID' not in team_df.columns or 'POSS_PCT' not in team_df.columns:
+                return 30
+            
+            # Get all teams' POSS_PCT values
+            poss_pct_values = team_df[['TEAM_ID', 'POSS_PCT']].copy()
+            poss_pct_values['POSS_PCT'] = poss_pct_values['POSS_PCT'].apply(
+                lambda x: float(x) * 100 if float(x) < 1 else float(x)
+            )
+            
+            # Sort descending (highest POSS_PCT = rank 1)
+            poss_pct_values = poss_pct_values.sort_values('POSS_PCT', ascending=False).reset_index(drop=True)
+            
+            # Assign ranks (1 = highest frequency, 30 = lowest)
+            poss_pct_values['Freq Rank'] = range(1, len(poss_pct_values) + 1)
+            
+            # Find the rank for the specific team
+            team_row = poss_pct_values[poss_pct_values['TEAM_ID'] == team_id]
+            if len(team_row) > 0:
+                return int(team_row.iloc[0]['Freq Rank'])
+            else:
+                return 30
+        
+        # Update frequency ranks for all dataframes
+        if len(away_offense_df) > 0:
+            for idx, row in away_offense_df.iterrows():
+                playtype = row['Playtype']
+                freq_rank = calculate_freq_rank(away_team_id, playtype, 'offensive', bulk_data)
+                away_offense_df.at[idx, 'Freq Rank'] = freq_rank
+        
+        if len(away_defense_df) > 0:
+            for idx, row in away_defense_df.iterrows():
+                playtype = row['Playtype']
+                freq_rank = calculate_freq_rank(away_team_id, playtype, 'defensive', bulk_data)
+                away_defense_df.at[idx, 'Freq Rank'] = freq_rank
+        
+        if len(home_offense_df) > 0:
+            for idx, row in home_offense_df.iterrows():
+                playtype = row['Playtype']
+                freq_rank = calculate_freq_rank(home_team_id, playtype, 'offensive', bulk_data)
+                home_offense_df.at[idx, 'Freq Rank'] = freq_rank
+        
+        if len(home_defense_df) > 0:
+            for idx, row in home_defense_df.iterrows():
+                playtype = row['Playtype']
+                freq_rank = calculate_freq_rank(home_team_id, playtype, 'defensive', bulk_data)
+                home_defense_df.at[idx, 'Freq Rank'] = freq_rank
         
         build_time = time.time() - build_start
         
@@ -1358,7 +1305,7 @@ if selected_matchup:
             """Apply background color based on rank: green (rank 1 = best defense) to red (rank 30 = worst defense)"""
             styles = [''] * len(row)
             
-            # Get rank value (rank 1 = best defense/lowest PPP Allowed, rank 30 = worst defense/highest PPP Allowed)
+            # Get rank value (rank 1 = best defense/lowest PPP, rank 30 = worst defense/highest PPP)
             rank = row.get('Rank', 30)
             try:
                 rank = float(rank)
@@ -1397,14 +1344,13 @@ if selected_matchup:
             "PPP": st.column_config.NumberColumn("PPP", format="%.2f", width=80),
             "Rank": st.column_config.NumberColumn("Rank", format="%d", width=70),
             "Percentile": st.column_config.NumberColumn("Percentile", format="%.3f", width=100),
+            "Freq Rank": st.column_config.NumberColumn("Freq Rank", format="%d", width=90),
+            "Freq": st.column_config.NumberColumn("Freq", format="%.1f%%", width=80),
             "eFG%": st.column_config.NumberColumn("eFG%", format="%.1f%%", width=80),
-            "SCORE_POSS_PCT": st.column_config.NumberColumn("SCORE_POSS_PCT", format="%.1f%%", width=130),
-            "PPP Allowed": st.column_config.NumberColumn("PPP Allowed", format="%.2f", width=100),
-            "eFG% Allowed": st.column_config.NumberColumn("eFG% Allowed", format="%.1f%%", width=110),
-            "SCORE_POSS_PCT Allowed": st.column_config.NumberColumn("SCORE_POSS_PCT Allowed", format="%.1f%%", width=160),
+            "Score %": st.column_config.NumberColumn("Score %", format="%.1f%%", width=100),
         }
         
-        # Apply styling to all dataframes (offense uses rank, defense uses PPP Allowed)
+        # Apply styling to all dataframes (offense and defense both use rank)
         styled_away_offense = away_offense_df.style.apply(style_synergy_offense, axis=1) if len(away_offense_df) > 0 else None
         styled_away_defense = away_defense_df.style.apply(style_synergy_defense, axis=1) if len(away_defense_df) > 0 else None
         styled_home_offense = home_offense_df.style.apply(style_synergy_offense, axis=1) if len(home_offense_df) > 0 else None
@@ -1523,7 +1469,7 @@ if selected_matchup:
                 """Apply background color based on rank: green (rank 1 = best defense) to red (rank 30 = worst defense)"""
                 styles = [''] * len(row)
                 
-                # Get rank value (rank 1 = best defense/lowest PPP Allowed, rank 30 = worst defense/highest PPP Allowed)
+                # Get rank value (rank 1 = best defense/lowest PPP, rank 30 = worst defense/highest PPP)
                 rank = row.get('Rank', 30)
                 try:
                     rank = float(rank)
@@ -1562,14 +1508,13 @@ if selected_matchup:
                 "PPP": st.column_config.NumberColumn("PPP", format="%.2f", width=80),
                 "Rank": st.column_config.NumberColumn("Rank", format="%d", width=70),
                 "Percentile": st.column_config.NumberColumn("Percentile", format="%.3f", width=100),
+                "Freq Rank": st.column_config.NumberColumn("Freq Rank", format="%d", width=90),
+                "Freq": st.column_config.NumberColumn("Freq", format="%.1f%%", width=80),
                 "eFG%": st.column_config.NumberColumn("eFG%", format="%.1f%%", width=80),
-                "SCORE_POSS_PCT": st.column_config.NumberColumn("SCORE_POSS_PCT", format="%.1f%%", width=130),
-                "PPP Allowed": st.column_config.NumberColumn("PPP Allowed", format="%.2f", width=100),
-                "eFG% Allowed": st.column_config.NumberColumn("eFG% Allowed", format="%.1f%%", width=110),
-                "SCORE_POSS_PCT Allowed": st.column_config.NumberColumn("SCORE_POSS_PCT Allowed", format="%.1f%%", width=160),
+                "Score %": st.column_config.NumberColumn("Score %", format="%.1f%%", width=100),
             }
             
-            # Apply styling to all dataframes (offense uses rank, defense uses PPP Allowed)
+            # Apply styling to all dataframes (offense and defense both use rank)
             styled_away_offense = away_offense_df.style.apply(style_synergy_offense, axis=1) if len(away_offense_df) > 0 else None
             styled_away_defense = away_defense_df.style.apply(style_synergy_defense, axis=1) if len(away_defense_df) > 0 else None
             styled_home_offense = home_offense_df.style.apply(style_synergy_offense, axis=1) if len(home_offense_df) > 0 else None
@@ -3299,6 +3244,13 @@ if selected_matchup:
         st.markdown("### On/Off Court Summary")
         
         try:
+            # #region agent log
+            import json
+            import time
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "1_Teams.py:3247", "message": "Calling get_team_onoff_formatted", "data": {"away_team_id": int(away_team_id), "home_team_id": int(home_team_id), "has_players_df": players_df is not None, "players_df_rows": len(players_df) if players_df is not None else 0}, "timestamp": int(time.time() * 1000)}) + '\n')
+            # #endregion
+            
             # Fetch on/off court data for both teams
             away_onoff_data = toff.get_team_onoff_formatted(
                 team_id=int(away_team_id),
@@ -3314,117 +3266,83 @@ if selected_matchup:
                 min_minutes=100
             )
             
+            # #region agent log
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "1_Teams.py:3262", "message": "After get_team_onoff_formatted calls", "data": {"away_onoff_rows": len(away_onoff_data), "home_onoff_rows": len(home_onoff_data), "away_onoff_cols": list(away_onoff_data.columns) if len(away_onoff_data) > 0 else [], "home_onoff_cols": list(home_onoff_data.columns) if len(home_onoff_data) > 0 else []}, "timestamp": int(time.time() * 1000)}) + '\n')
+            # #endregion
+            
             if len(away_onoff_data) > 0 or len(home_onoff_data) > 0:
-                # Create two columns for away/home teams
-                onoff_col1, onoff_col2 = st.columns(2)
+                # Helper function to create column config (shared for both teams)
+                def create_onoff_column_config(df):
+                    column_config = {}
+                    
+                    # Add headshot column if present
+                    if 'headshot' in df.columns:
+                        column_config['headshot'] = st.column_config.ImageColumn("", width=50)
+                    
+                    # Add player name column
+                    if 'PLAYER_NAME' in df.columns:
+                        column_config['PLAYER_NAME'] = st.column_config.TextColumn("Player", width=150)
+                    
+                    # Add minutes columns
+                    if 'MIN_ON_COURT' in df.columns:
+                        column_config['MIN_ON_COURT'] = st.column_config.NumberColumn("MIN ON", format="%.0f", width=70)
+                    if 'MIN_OFF_COURT' in df.columns:
+                        column_config['MIN_OFF_COURT'] = st.column_config.NumberColumn("MIN OFF", format="%.0f", width=70)
+                    
+                    # Add Net Rating columns
+                    if 'NET_RATING_ON_COURT' in df.columns:
+                        column_config['NET_RATING_ON_COURT'] = st.column_config.NumberColumn("NET ON", format="%.1f", width=70)
+                    if 'NET_RATING_OFF_COURT' in df.columns:
+                        column_config['NET_RATING_OFF_COURT'] = st.column_config.NumberColumn("NET OFF", format="%.1f", width=70)
+                    if 'NET_RTG_DIFF' in df.columns:
+                        column_config['NET_RTG_DIFF'] = st.column_config.NumberColumn("NET DIFF", format="%.1f", width=80)
+                    
+                    # Add Offensive Rating columns
+                    if 'OFF_RATING_ON_COURT' in df.columns:
+                        column_config['OFF_RATING_ON_COURT'] = st.column_config.NumberColumn("OFF ON", format="%.1f", width=70)
+                    if 'OFF_RATING_OFF_COURT' in df.columns:
+                        column_config['OFF_RATING_OFF_COURT'] = st.column_config.NumberColumn("OFF OFF", format="%.1f", width=70)
+                    if 'OFF_RTG_DIFF' in df.columns:
+                        column_config['OFF_RTG_DIFF'] = st.column_config.NumberColumn("OFF DIFF", format="%.1f", width=80)
+                    
+                    # Add Defensive Rating columns
+                    if 'DEF_RATING_ON_COURT' in df.columns:
+                        column_config['DEF_RATING_ON_COURT'] = st.column_config.NumberColumn("DEF ON", format="%.1f", width=70)
+                    if 'DEF_RATING_OFF_COURT' in df.columns:
+                        column_config['DEF_RATING_OFF_COURT'] = st.column_config.NumberColumn("DEF OFF", format="%.1f", width=70)
+                    if 'DEF_RTG_DIFF' in df.columns:
+                        column_config['DEF_RTG_DIFF'] = st.column_config.NumberColumn("DEF DIFF", format="%.1f", width=80)
+                    
+                    return column_config
                 
-                with onoff_col1:
-                    st.markdown(f"**{away_team_name}**")
-                    if len(away_onoff_data) > 0:
-                        # Prepare column configuration for display
-                        column_config = {}
-                        
-                        # Add headshot column if present
-                        if 'headshot' in away_onoff_data.columns:
-                            column_config['headshot'] = st.column_config.ImageColumn("", width=50)
-                        
-                        # Add player name column
-                        if 'PLAYER_NAME' in away_onoff_data.columns:
-                            column_config['PLAYER_NAME'] = st.column_config.TextColumn("Player", width=150)
-                        
-                        # Add minutes columns
-                        if 'MIN_ON_COURT' in away_onoff_data.columns:
-                            column_config['MIN_ON_COURT'] = st.column_config.NumberColumn("MIN ON", format="%.0f", width=70)
-                        if 'MIN_OFF_COURT' in away_onoff_data.columns:
-                            column_config['MIN_OFF_COURT'] = st.column_config.NumberColumn("MIN OFF", format="%.0f", width=70)
-                        
-                        # Add Net Rating columns
-                        if 'NET_RATING_ON_COURT' in away_onoff_data.columns:
-                            column_config['NET_RATING_ON_COURT'] = st.column_config.NumberColumn("NET ON", format="%.1f", width=70)
-                        if 'NET_RATING_OFF_COURT' in away_onoff_data.columns:
-                            column_config['NET_RATING_OFF_COURT'] = st.column_config.NumberColumn("NET OFF", format="%.1f", width=70)
-                        if 'NET_RTG_DIFF' in away_onoff_data.columns:
-                            column_config['NET_RTG_DIFF'] = st.column_config.NumberColumn("NET DIFF", format="%.1f", width=80)
-                        
-                        # Add Offensive Rating columns
-                        if 'OFF_RATING_ON_COURT' in away_onoff_data.columns:
-                            column_config['OFF_RATING_ON_COURT'] = st.column_config.NumberColumn("OFF ON", format="%.1f", width=70)
-                        if 'OFF_RATING_OFF_COURT' in away_onoff_data.columns:
-                            column_config['OFF_RATING_OFF_COURT'] = st.column_config.NumberColumn("OFF OFF", format="%.1f", width=70)
-                        if 'OFF_RTG_DIFF' in away_onoff_data.columns:
-                            column_config['OFF_RTG_DIFF'] = st.column_config.NumberColumn("OFF DIFF", format="%.1f", width=80)
-                        
-                        # Add Defensive Rating columns
-                        if 'DEF_RATING_ON_COURT' in away_onoff_data.columns:
-                            column_config['DEF_RATING_ON_COURT'] = st.column_config.NumberColumn("DEF ON", format="%.1f", width=70)
-                        if 'DEF_RATING_OFF_COURT' in away_onoff_data.columns:
-                            column_config['DEF_RATING_OFF_COURT'] = st.column_config.NumberColumn("DEF OFF", format="%.1f", width=70)
-                        if 'DEF_RTG_DIFF' in away_onoff_data.columns:
-                            column_config['DEF_RTG_DIFF'] = st.column_config.NumberColumn("DEF DIFF", format="%.1f", width=80)
-                        
-                        # Display dataframe with color coding
-                        st.dataframe(
-                            away_onoff_data,
-                            column_config=column_config,
-                            hide_index=True,
-                            width='stretch'
-                        )
-                    else:
-                        st.info("No on/off court data available")
+                # Away Team (stacked first)
+                st.markdown(f"**{away_team_name}**")
+                if len(away_onoff_data) > 0:
+                    column_config = create_onoff_column_config(away_onoff_data)
+                    st.dataframe(
+                        away_onoff_data,
+                        column_config=column_config,
+                        hide_index=True,
+                        width='stretch'
+                    )
+                else:
+                    st.info("No on/off court data available")
                 
-                with onoff_col2:
-                    st.markdown(f"**{home_team_name}**")
-                    if len(home_onoff_data) > 0:
-                        # Prepare column configuration for display (same as away team)
-                        column_config = {}
-                        
-                        # Add headshot column if present
-                        if 'headshot' in home_onoff_data.columns:
-                            column_config['headshot'] = st.column_config.ImageColumn("", width=50)
-                        
-                        # Add player name column
-                        if 'PLAYER_NAME' in home_onoff_data.columns:
-                            column_config['PLAYER_NAME'] = st.column_config.TextColumn("Player", width=150)
-                        
-                        # Add minutes columns
-                        if 'MIN_ON_COURT' in home_onoff_data.columns:
-                            column_config['MIN_ON_COURT'] = st.column_config.NumberColumn("MIN ON", format="%.0f", width=70)
-                        if 'MIN_OFF_COURT' in home_onoff_data.columns:
-                            column_config['MIN_OFF_COURT'] = st.column_config.NumberColumn("MIN OFF", format="%.0f", width=70)
-                        
-                        # Add Net Rating columns
-                        if 'NET_RATING_ON_COURT' in home_onoff_data.columns:
-                            column_config['NET_RATING_ON_COURT'] = st.column_config.NumberColumn("NET ON", format="%.1f", width=70)
-                        if 'NET_RATING_OFF_COURT' in home_onoff_data.columns:
-                            column_config['NET_RATING_OFF_COURT'] = st.column_config.NumberColumn("NET OFF", format="%.1f", width=70)
-                        if 'NET_RTG_DIFF' in home_onoff_data.columns:
-                            column_config['NET_RTG_DIFF'] = st.column_config.NumberColumn("NET DIFF", format="%.1f", width=80)
-                        
-                        # Add Offensive Rating columns
-                        if 'OFF_RATING_ON_COURT' in home_onoff_data.columns:
-                            column_config['OFF_RATING_ON_COURT'] = st.column_config.NumberColumn("OFF ON", format="%.1f", width=70)
-                        if 'OFF_RATING_OFF_COURT' in home_onoff_data.columns:
-                            column_config['OFF_RATING_OFF_COURT'] = st.column_config.NumberColumn("OFF OFF", format="%.1f", width=70)
-                        if 'OFF_RTG_DIFF' in home_onoff_data.columns:
-                            column_config['OFF_RTG_DIFF'] = st.column_config.NumberColumn("OFF DIFF", format="%.1f", width=80)
-                        
-                        # Add Defensive Rating columns
-                        if 'DEF_RATING_ON_COURT' in home_onoff_data.columns:
-                            column_config['DEF_RATING_ON_COURT'] = st.column_config.NumberColumn("DEF ON", format="%.1f", width=70)
-                        if 'DEF_RATING_OFF_COURT' in home_onoff_data.columns:
-                            column_config['DEF_RATING_OFF_COURT'] = st.column_config.NumberColumn("DEF OFF", format="%.1f", width=70)
-                        if 'DEF_RTG_DIFF' in home_onoff_data.columns:
-                            column_config['DEF_RTG_DIFF'] = st.column_config.NumberColumn("DEF DIFF", format="%.1f", width=80)
-                        
-                        # Display dataframe with color coding
-                        st.dataframe(
-                            home_onoff_data,
-                            column_config=column_config,
-                            hide_index=True,
-                            width='stretch'
-                        )
-                    else:
-                        st.info("No on/off court data available")
+                st.divider()
+                
+                # Home Team (stacked second)
+                st.markdown(f"**{home_team_name}**")
+                if len(home_onoff_data) > 0:
+                    column_config = create_onoff_column_config(home_onoff_data)
+                    st.dataframe(
+                        home_onoff_data,
+                        column_config=column_config,
+                        hide_index=True,
+                        width='stretch'
+                    )
+                else:
+                    st.info("No on/off court data available")
             else:
                 st.info("On/off court data is currently unavailable. Please try again later.")
         
@@ -3438,52 +3356,16 @@ if selected_matchup:
         # ============================================================
         st.markdown("### Player Averages")
         
-        # Scope selector
-        scope_options = ["Traditional", "Clutch"]
-        selected_scope = st.selectbox(
-            "Select Scope:",
-            options=scope_options,
-            index=0,  # Default to Traditional
-            help="Choose between traditional stats or clutch time performance"
-        )
-        
-        # Period selector (now visible for both scopes)
-        period_options = ["Last 10 Games", "Last 5 Games", "Last 3 Games", "All Games"]
-        selected_period = st.selectbox(
-            "Select Period:",
-            options=period_options,
-            index=0,  # Default to Last 10 Games
-            help="Choose the time period for calculating player averages"
-        )
-        
-        # Map period to num_games
+        # Map period to num_games (shared)
         period_map = {
             "Last 10 Games": 10,
             "Last 5 Games": 5,
             "Last 3 Games": 3,
             "All Games": None
         }
-        num_games = period_map[selected_period]
         
-        # Per Game/Total toggle
-        show_totals = st.toggle(
-            "Show Totals",
-            value=False,
-            help="Toggle between Per Game and Total stats"
-        )
-        per_mode_str = 'Totals' if show_totals else 'PerGame'
-        
-        # Check data availability based on scope
-        if selected_scope == "Traditional":
-            data_available = len(players_df) > 0 and len(game_logs_df) > 0
-        else:  # Clutch
-            data_available = len(players_df) > 0
-        
-        if not data_available:
-            st.warning("Unable to load player data. Please try again.")
-        else:
-            # Column config for dataframes - use specific pixel widths for tighter columns
-            column_config = {
+        # Column config for dataframes - use specific pixel widths for tighter columns (shared)
+        column_config = {
                 "headshot": st.column_config.ImageColumn("", width=85),  # Specific width for headshot
                 "Player": st.column_config.TextColumn("Player", width=140),
                 "Pos": st.column_config.TextColumn("Pos", width=50),
@@ -3508,11 +3390,11 @@ if selected_matchup:
                 "FT%": st.column_config.NumberColumn("FT%", format="%.1f%%", width=55),
             }
             
-            # Display columns (exclude hidden _player_id)
-            display_columns = ['headshot', 'Player', 'Pos', 'GP', 'MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', 'FGM', 'FPTS', 'FGA', 'FG%', '3PM', '3PA', '3P%', 'FTM', 'FTA', 'FT%']
-            
-            # Function to calculate individual player season averages
-            def calculate_player_season_averages(roster_df, game_logs_df, per_mode='PerGame'):
+        # Display columns (exclude hidden _player_id) (shared)
+        display_columns = ['headshot', 'Player', 'Pos', 'GP', 'MIN', 'PTS', 'REB', 'AST', 'PRA', 'STL', 'BLK', 'TOV', 'FGM', 'FPTS', 'FGA', 'FG%', '3PM', '3PA', '3P%', 'FTM', 'FTA', 'FT%']
+        
+        # Function to calculate individual player season averages (shared)
+        def calculate_player_season_averages(roster_df, game_logs_df, per_mode='PerGame'):
                 """
                 Calculate full-season averages for each player in the roster.
                 
@@ -3625,9 +3507,9 @@ if selected_matchup:
                     player_season_averages[player_id] = season_avg
                 
                 return player_season_averages
-            
-            # Function to style player averages based on individual season averages
-            def style_player_averages_heatmap(df, player_season_averages_dict):
+        
+        # Function to style player averages based on individual season averages (shared)
+        def style_player_averages_heatmap(df, player_season_averages_dict):
                 """Apply heatmap colors to player averages: light red (below avg) → gray (at avg) → light green (above avg)
                 
                 Args:
@@ -3723,88 +3605,227 @@ if selected_matchup:
                     return styles
                 
                 return df.style.apply(style_row, axis=1)
+        
+        # Create tabs for Traditional and Clutch
+        tab_traditional, tab_clutch = st.tabs(["Traditional", "Clutch"])
+        
+        with tab_traditional:
+            # Period selector - default to "Last 10 Games"
+            period_options = ["Last 10 Games", "Last 5 Games", "Last 3 Games", "All Games"]
+            selected_period = st.selectbox(
+                "Select Period:",
+                options=period_options,
+                index=0,  # Last 10 Games
+                key="traditional_period",
+                help="Choose the time period for calculating player averages"
+            )
+            num_games = period_map[selected_period]
             
-            # Away Team
-            st.markdown(f"""
-                <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0 10px 0;">
-                    <img src="https://cdn.nba.com/logos/nba/{away_team_id}/primary/L/logo.svg" style="height: 60px; width: auto;">
-                    <span style="font-size: 24px; font-weight: bold;">{away_team_name}</span>
-                </div>
-            """, unsafe_allow_html=True)
+            # Totals toggle - default to False (averages)
+            show_totals = st.toggle(
+                "Show Totals",
+                value=False,
+                key="traditional_totals",
+                help="Toggle between Per Game and Total stats"
+            )
+            per_mode_str = 'Totals' if show_totals else 'PerGame'
             
-            if selected_scope == "Traditional":
+            # Check data availability for Traditional scope
+            data_available = len(players_df) > 0 and len(game_logs_df) > 0
+            
+            if not data_available:
+                st.warning("Unable to load player data. Please try again.")
+            else:
+                # Away Team
+                st.markdown(f"""
+                    <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0 10px 0;">
+                        <img src="https://cdn.nba.com/logos/nba/{away_team_id}/primary/L/logo.svg" style="height: 60px; width: auto;">
+                        <span style="font-size: 24px; font-weight: bold;">{away_team_name}</span>
+                    </div>
+                """, unsafe_allow_html=True)
+                
                 away_roster_df = functions.get_team_roster_stats(away_team_id, players_df, game_logs_df, num_games, per_mode=per_mode_str)
-            else:  # Clutch
-                away_roster_df = functions.get_team_clutch_stats(away_team_id, season='2025-26', players_df=players_df, per_mode_detailed=per_mode_str)
-            
-            if len(away_roster_df) > 0:
-                # Filter to display columns only
-                away_display_df = away_roster_df[[col for col in display_columns if col in away_roster_df.columns]].copy()
                 
-                # Calculate individual player season averages for styling
-                if selected_scope == "Traditional":
-                    # For Traditional scope, use game_logs_df to calculate full-season averages
+                if len(away_roster_df) > 0:
+                    # Filter to display columns only
+                    away_display_df = away_roster_df[[col for col in display_columns if col in away_roster_df.columns]].copy()
+                    
+                    # Calculate individual player season averages for styling
                     away_player_season_averages = calculate_player_season_averages(away_roster_df, game_logs_df, per_mode=per_mode_str)
+                    
+                    # Apply styling
+                    styled_away_df = style_player_averages_heatmap(away_display_df, away_player_season_averages)
+                    
+                    st.dataframe(
+                        styled_away_df,
+                        column_config=column_config,
+                        hide_index=True,
+                        width='stretch',
+                        height=min(600, 50 * len(away_display_df) + 38)
+                    )
                 else:
-                    # For Clutch scope, we'll need to fetch clutch season averages differently
-                    # For now, use empty dict (will be handled in styling function)
-                    away_player_season_averages = {}
-                    # TODO: Implement clutch season averages calculation if needed
+                    st.info(f"No player data available for {away_team_name}")
                 
-                # Apply styling
-                styled_away_df = style_player_averages_heatmap(away_display_df, away_player_season_averages)
+                st.divider()
                 
-                st.dataframe(
-                    styled_away_df,
-                    column_config=column_config,
-                    hide_index=True,
-                    width='stretch',
-                    height=min(600, 50 * len(away_display_df) + 38)
-                )
-            else:
-                st.info(f"No player data available for {away_team_name}")
-            
-            st.divider()
-            
-            # Home Team
-            st.markdown(f"""
-                <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0 10px 0;">
-                    <img src="https://cdn.nba.com/logos/nba/{home_team_id}/primary/L/logo.svg" style="height: 60px; width: auto;">
-                    <span style="font-size: 24px; font-weight: bold;">{home_team_name}</span>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            if selected_scope == "Traditional":
+                # Home Team
+                st.markdown(f"""
+                    <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0 10px 0;">
+                        <img src="https://cdn.nba.com/logos/nba/{home_team_id}/primary/L/logo.svg" style="height: 60px; width: auto;">
+                        <span style="font-size: 24px; font-weight: bold;">{home_team_name}</span>
+                    </div>
+                """, unsafe_allow_html=True)
+                
                 home_roster_df = functions.get_team_roster_stats(home_team_id, players_df, game_logs_df, num_games, per_mode=per_mode_str)
-            else:  # Clutch
-                home_roster_df = functions.get_team_clutch_stats(home_team_id, season='2025-26', players_df=players_df, per_mode_detailed=per_mode_str)
-            
-            if len(home_roster_df) > 0:
-                # Filter to display columns only
-                home_display_df = home_roster_df[[col for col in display_columns if col in home_roster_df.columns]].copy()
                 
-                # Calculate individual player season averages for styling
-                if selected_scope == "Traditional":
-                    # For Traditional scope, use game_logs_df to calculate full-season averages
+                if len(home_roster_df) > 0:
+                    # Filter to display columns only
+                    home_display_df = home_roster_df[[col for col in display_columns if col in home_roster_df.columns]].copy()
+                    
+                    # Calculate individual player season averages for styling
                     home_player_season_averages = calculate_player_season_averages(home_roster_df, game_logs_df, per_mode=per_mode_str)
+                    
+                    # Apply styling
+                    styled_home_df = style_player_averages_heatmap(home_display_df, home_player_season_averages)
+                    
+                    st.dataframe(
+                        styled_home_df,
+                        column_config=column_config,
+                        hide_index=True,
+                        width='stretch',
+                        height=min(600, 50 * len(home_display_df) + 38)
+                    )
                 else:
-                    # For Clutch scope, we'll need to fetch clutch season averages differently
-                    # For now, use empty dict (will be handled in styling function)
-                    home_player_season_averages = {}
-                    # TODO: Implement clutch season averages calculation if needed
-                
-                # Apply styling
-                styled_home_df = style_player_averages_heatmap(home_display_df, home_player_season_averages)
-                
-                st.dataframe(
-                    styled_home_df,
-                    column_config=column_config,
-                    hide_index=True,
-                    width='stretch',
-                    height=min(600, 50 * len(home_display_df) + 38)
-                )
+                    st.info(f"No player data available for {home_team_name}")
+        
+        with tab_clutch:
+            # Period selector - default to "All Games"
+            period_options = ["Last 10 Games", "Last 5 Games", "Last 3 Games", "All Games"]
+            selected_period = st.selectbox(
+                "Select Period:",
+                options=period_options,
+                index=3,  # All Games
+                key="clutch_period",
+                help="Choose the time period for calculating player averages"
+            )
+            num_games = period_map[selected_period]
+            
+            # Totals toggle - default to True (totals)
+            show_totals = st.toggle(
+                "Show Totals",
+                value=True,
+                key="clutch_totals",
+                help="Toggle between Per Game and Total stats"
+            )
+            per_mode_str = 'Totals' if show_totals else 'PerGame'
+            
+            # Check data availability for Clutch scope
+            data_available = len(players_df) > 0
+            
+            if not data_available:
+                st.warning("Unable to load player data. Please try again.")
             else:
-                st.info(f"No player data available for {home_team_name}")
+                # Initialize session state cache for clutch data if not exists
+                if 'clutch_data_cache' not in st.session_state:
+                    st.session_state.clutch_data_cache = {}
+                
+                cache_key = f"player_clutch_{per_mode_str}"
+                season_str = '2025-26'
+                
+                # Check session state first (fastest)
+                if cache_key in st.session_state.clutch_data_cache:
+                    clutch_data_all_players = st.session_state.clutch_data_cache[cache_key]
+                else:
+                    # Fetch from API
+                    try:
+                        clutch_data_all_players = nba_api.stats.endpoints.LeagueDashPlayerClutch(
+                            season=season_str,
+                            season_type_all_star='Regular Season',
+                            per_mode_detailed=per_mode_str,
+                            clutch_time='Last 5 Minutes',
+                            ahead_behind='Ahead or Behind',
+                            point_diff=5
+                        ).get_data_frames()[0]
+                    except Exception as e:
+                        print(f"Error fetching clutch stats: {e}")
+                        clutch_data_all_players = pd.DataFrame()
+                    
+                    # Store in session state for fast access on subsequent toggles
+                    st.session_state.clutch_data_cache[cache_key] = clutch_data_all_players
+                
+                # Process data for each team
+                if clutch_data_all_players is not None and len(clutch_data_all_players) > 0:
+                    # Away Team
+                    st.markdown(f"""
+                        <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0 10px 0;">
+                            <img src="https://cdn.nba.com/logos/nba/{away_team_id}/primary/L/logo.svg" style="height: 60px; width: auto;">
+                            <span style="font-size: 24px; font-weight: bold;">{away_team_name}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Filter clutch data to away team
+                    away_clutch_data = clutch_data_all_players[clutch_data_all_players['TEAM_ID'].astype(int) == away_team_id].copy()
+                    away_roster_df = functions.process_clutch_data_to_roster(away_clutch_data, players_df, away_team_id)
+                    
+                    if away_roster_df is not None and len(away_roster_df) > 0:
+                        # Filter to display columns only
+                        away_display_df = away_roster_df[[col for col in display_columns if col in away_roster_df.columns]].copy()
+                        
+                        # For Clutch scope, we'll need to fetch clutch season averages differently
+                        # For now, use empty dict (will be handled in styling function)
+                        away_player_season_averages = {}
+                        # TODO: Implement clutch season averages calculation if needed
+                        
+                        # Apply styling
+                        styled_away_df = style_player_averages_heatmap(away_display_df, away_player_season_averages)
+                        
+                        st.dataframe(
+                            styled_away_df,
+                            column_config=column_config,
+                            hide_index=True,
+                            width='stretch',
+                            height=min(600, 50 * len(away_display_df) + 38)
+                        )
+                    else:
+                        st.info(f"No player data available for {away_team_name}")
+                    
+                    st.divider()
+                    
+                    # Home Team
+                    st.markdown(f"""
+                        <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0 10px 0;">
+                            <img src="https://cdn.nba.com/logos/nba/{home_team_id}/primary/L/logo.svg" style="height: 60px; width: auto;">
+                            <span style="font-size: 24px; font-weight: bold;">{home_team_name}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Filter clutch data to home team
+                    home_clutch_data = clutch_data_all_players[clutch_data_all_players['TEAM_ID'].astype(int) == home_team_id].copy()
+                    home_roster_df = functions.process_clutch_data_to_roster(home_clutch_data, players_df, home_team_id)
+                    
+                    if home_roster_df is not None and len(home_roster_df) > 0:
+                        # Filter to display columns only
+                        home_display_df = home_roster_df[[col for col in display_columns if col in home_roster_df.columns]].copy()
+                        
+                        # For Clutch scope, we'll need to fetch clutch season averages differently
+                        # For now, use empty dict (will be handled in styling function)
+                        home_player_season_averages = {}
+                        # TODO: Implement clutch season averages calculation if needed
+                        
+                        # Apply styling
+                        styled_home_df = style_player_averages_heatmap(home_display_df, home_player_season_averages)
+                        
+                        st.dataframe(
+                            styled_home_df,
+                            column_config=column_config,
+                            hide_index=True,
+                            width='stretch',
+                            height=min(600, 50 * len(home_display_df) + 38)
+                        )
+                    else:
+                        st.info(f"No player data available for {home_team_name}")
+                else:
+                    st.warning("Unable to load clutch data. Please try again.")
     
     with tab4:
         # ============================================================

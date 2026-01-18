@@ -7,86 +7,25 @@ import streamlit as st
 import os
 import sys
 
-# Add path to import prediction_features for Supabase caching
+# Add path to import prediction_features
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'new-streamlit-app', 'player-app'))
 try:
     import prediction_features as pf
-    import supabase_cache as scache
-    import supabase_data_reader as db_reader
-    # Debug: Check if Supabase is configured
-    if scache:
-        from supabase_config import is_supabase_configured
-        supabase_configured = is_supabase_configured()
-        print(f"[DEBUG] Supabase module loaded: {scache is not None}")
-        print(f"[DEBUG] Supabase configured: {supabase_configured}")
-        if not supabase_configured:
-            print("[DEBUG] WARNING: Supabase credentials not found in environment variables!")
-            print("[DEBUG] Set SUPABASE_URL and SUPABASE_KEY in .env file")
-    else:
-        print("[DEBUG] WARNING: scache is None - Supabase caching disabled!")
-        print("[DEBUG] This means Supabase cache will NOT be used - all data will be fetched from API")
-except ImportError as e:
-    print(f"[DEBUG] Import error: {e}")
-    import traceback
-    traceback.print_exc()
-    db_reader = None
+except ImportError:
     pf = None
-    scache = None
 
 current_season = '2025-26'
 season_type = 'Regular Season'
 # opponent_id = 1610612760
 
 # ============================================================
-# CACHED TEAM STATS FUNCTIONS (using Supabase cache)
+# CACHED TEAM STATS FUNCTIONS
 # ============================================================
 
-# Removed @st.cache_data - using Supabase cache instead for persistent caching across restarts
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_cached_team_advanced_stats(season: str = current_season, last_n_games: int = None):
-    """Get team advanced stats with Supabase caching"""
-    cache_key = 'team_advanced'
-    kwargs = {}
-    if last_n_games:
-        kwargs['last_n_games'] = last_n_games
-    
-    # Try database first (populated by scheduled Edge Functions)
-    if db_reader is not None:
-        try:
-            db_data = db_reader.get_team_stats_from_db(season, 'Advanced', last_n_games, None)
-            if db_data is not None and len(db_data) > 0:
-                print(f"[DB READ] Team advanced stats from database: {len(db_data)} teams")
-                # Add ranking columns if not present
-                if 'OFF_RATING_RANK' not in db_data.columns:
-                    db_data['OFF_RATING_RANK'] = db_data['OFF_RATING'].rank(ascending=False, method='first').astype(int)
-                    db_data['DEF_RATING_RANK'] = db_data['DEF_RATING'].rank(ascending=True, method='first').astype(int)
-                    db_data['NET_RATING_RANK'] = db_data['NET_RATING'].rank(ascending=False, method='first').astype(int)
-                    db_data['PACE_RANK'] = db_data['PACE'].rank(ascending=False, method='first').astype(int)
-                    db_data['AST_PCT_RANK'] = db_data['AST_PCT'].rank(ascending=False, method='first').astype(int)
-                    db_data['TM_TOV_PCT_RANK'] = db_data['TM_TOV_PCT'].rank(ascending=True, method='first').astype(int)
-                    db_data['AST_TO_RANK'] = db_data['AST_TO'].rank(ascending=False, method='first').astype(int)
-                    db_data['DREB_PCT_RANK'] = db_data['DREB_PCT'].rank(ascending=False, method='first').astype(int)
-                    db_data['OREB_PCT_RANK'] = db_data['OREB_PCT'].rank(ascending=False, method='first').astype(int)
-                    db_data['REB_PCT_RANK'] = db_data['REB_PCT'].rank(ascending=False, method='first').astype(int)
-                return db_data
-        except Exception as e:
-            print(f"Error reading team advanced stats from database: {e}, falling back to API")
-    
-    # Try Supabase cache as fallback
-    if scache is not None:
-        try:
-            print(f"[DEBUG] Checking cache for: {cache_key}, season: {season}, kwargs: {kwargs}")
-            cached_data = scache.get_cached_bulk_data(cache_key, season, ttl_hours=1, **kwargs)
-            if cached_data is not None:
-                print(f"[DEBUG] Cache hit for {cache_key}, returning cached data")
-                return cached_data
-            else:
-                print(f"[DEBUG] Cache miss for {cache_key}, fetching from API")
-        except Exception as e:
-            print(f"Error fetching cached team advanced stats: {e}, falling back to API call")
-            import traceback
-            traceback.print_exc()
-    
-    # Database and cache miss - fetch from API (safety net)
+    """Get team advanced stats"""
+    # Fetch from API
     try:
         params = {
             'league_id_nullable': '00',
@@ -113,57 +52,16 @@ def get_cached_team_advanced_stats(season: str = current_season, last_n_games: i
         df['OREB_PCT_RANK'] = df['OREB_PCT'].rank(ascending=False, method='first').astype(int)
         df['REB_PCT_RANK'] = df['REB_PCT'].rank(ascending=False, method='first').astype(int)
         
-        # Store in Supabase cache
-        if scache is not None:
-            try:
-                scache.set_cached_bulk_data(cache_key, season, df, ttl_hours=1, **kwargs)
-            except Exception as e:
-                print(f"Error storing team advanced stats in cache: {e}")
-        
         return df
     except Exception as e:
         print(f"Error fetching team advanced stats: {e}")
         return pd.DataFrame()
 
 
-# Removed @st.cache_data - using Supabase cache instead
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_cached_team_misc_stats(season: str = current_season, last_n_games: int = None):
-    """Get team misc stats with Supabase caching"""
-    cache_key = 'team_misc'
-    kwargs = {}
-    if last_n_games:
-        kwargs['last_n_games'] = last_n_games
-    
-    # Try database first (populated by scheduled Edge Functions)
-    if db_reader is not None:
-        try:
-            db_data = db_reader.get_team_stats_from_db(season, 'Misc', last_n_games, None)
-            if db_data is not None and len(db_data) > 0:
-                print(f"[DB READ] Team misc stats from database: {len(db_data)} teams")
-                # Add differentials and rankings if not present
-                if 'PTS_PAINT_DIFF' not in db_data.columns:
-                    db_data['PTS_PAINT_DIFF'] = db_data['PTS_PAINT'] - db_data['OPP_PTS_PAINT']
-                    db_data['PTS_PAINT_DIFF_RANK'] = db_data['PTS_PAINT_DIFF'].rank(ascending=False, method='first')
-                    db_data['PTS_2ND_CHANCE_DIFF'] = db_data['PTS_2ND_CHANCE'] - db_data['OPP_PTS_2ND_CHANCE']
-                    db_data['PTS_2ND_CHANCE_DIFF_RANK'] = db_data['PTS_2ND_CHANCE_DIFF'].rank(ascending=False, method='first')
-                    db_data['PTS_FB_DIFF'] = db_data['PTS_FB'] - db_data['OPP_PTS_FB']
-                    db_data['PTS_FB_DIFF_RANK'] = db_data['PTS_FB_DIFF'].rank(ascending=False, method='first')
-                    db_data['PTS_OFF_TOV_DIFF'] = db_data['PTS_OFF_TOV'] - db_data['OPP_PTS_OFF_TOV']
-                    db_data['PTS_OFF_TOV_DIFF_RANK'] = db_data['PTS_OFF_TOV_DIFF'].rank(ascending=False, method='first')
-                return db_data
-        except Exception as e:
-            print(f"Error reading team misc stats from database: {e}, falling back to API")
-    
-    # Try Supabase cache as fallback
-    if scache is not None:
-        try:
-            cached_data = scache.get_cached_bulk_data(cache_key, season, ttl_hours=1, **kwargs)
-            if cached_data is not None:
-                return cached_data
-        except Exception as e:
-            print(f"Error fetching cached team misc stats: {e}, falling back to API call")
-    
-    # Database and cache miss - fetch from API (safety net)
+    """Get team misc stats"""
+    # Fetch from API
     try:
         params = {
             'league_id_nullable': '00',
@@ -197,55 +95,16 @@ def get_cached_team_misc_stats(season: str = current_season, last_n_games: int =
         df['PTS_OFF_TOV_RANK'] = df['PTS_OFF_TOV'].rank(ascending=False, method='first').astype(int)
         df['OPP_PTS_OFF_TOV_RANK'] = df['OPP_PTS_OFF_TOV'].rank(ascending=True, method='first').astype(int)
         
-        # Store in Supabase cache
-        if scache is not None:
-            try:
-                scache.set_cached_bulk_data(cache_key, season, df, ttl_hours=1, **kwargs)
-            except Exception as e:
-                print(f"Error storing team misc stats in cache: {e}")
-        
         return df
     except Exception as e:
         print(f"Error fetching team misc stats: {e}")
         return pd.DataFrame()
 
 
-# Removed @st.cache_data - using Supabase cache instead
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_cached_team_traditional_stats(season: str = current_season, last_n_games: int = None, group_quantity: str = None):
-    """Get team traditional stats with Supabase caching"""
-    cache_key = 'team_traditional'
-    kwargs = {}
-    if last_n_games:
-        kwargs['last_n_games'] = last_n_games
-    if group_quantity:
-        kwargs['group_quantity'] = group_quantity
-    
-    # Try database first (populated by scheduled Edge Functions)
-    if db_reader is not None:
-        try:
-            db_data = db_reader.get_team_stats_from_db(season, 'Traditional', last_n_games, group_quantity)
-            if db_data is not None and len(db_data) > 0:
-                print(f"[DB READ] Team traditional stats from database: {len(db_data)} teams")
-                # Add ranking columns if not present
-                if 'AST_RANK' not in db_data.columns:
-                    db_data['AST_RANK'] = db_data['AST'].rank(ascending=False, method='first').astype(int)
-                    db_data['TOV_RANK'] = db_data['TOV'].rank(ascending=True, method='first').astype(int)
-                    if group_quantity:
-                        db_data['PTS_RANK'] = db_data['PTS'].rank(ascending=False, method='first').astype(int)
-                return db_data
-        except Exception as e:
-            print(f"Error reading team traditional stats from database: {e}, falling back to API")
-    
-    # Try Supabase cache as fallback
-    if scache is not None:
-        try:
-            cached_data = scache.get_cached_bulk_data(cache_key, season, ttl_hours=1, **kwargs)
-            if cached_data is not None:
-                return cached_data
-        except Exception as e:
-            print(f"Error fetching cached team traditional stats: {e}, falling back to API call")
-    
-    # Database and cache miss - fetch from API (safety net)
+    """Get team traditional stats"""
+    # Fetch from API
     try:
         params = {
             'league_id_nullable': '00',
@@ -268,50 +127,16 @@ def get_cached_team_traditional_stats(season: str = current_season, last_n_games
         if group_quantity:  # Starters/Bench
             df['PTS_RANK'] = df['PTS'].rank(ascending=False, method='first').astype(int)
         
-        # Store in Supabase cache
-        if scache is not None:
-            try:
-                scache.set_cached_bulk_data(cache_key, season, df, ttl_hours=1, **kwargs)
-            except Exception as e:
-                print(f"Error storing team traditional stats in cache: {e}")
-        
         return df
     except Exception as e:
         print(f"Error fetching team traditional stats: {e}")
         return pd.DataFrame()
 
 
-# Removed @st.cache_data - using Supabase cache instead
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_cached_team_four_factors_stats(season: str = current_season, last_n_games: int = None):
-    """Get team four factors stats with Supabase caching"""
-    cache_key = 'team_four_factors'
-    kwargs = {}
-    if last_n_games:
-        kwargs['last_n_games'] = last_n_games
-    
-    # Try database first (populated by scheduled Edge Functions)
-    if db_reader is not None:
-        try:
-            db_data = db_reader.get_team_stats_from_db(season, 'Four Factors', last_n_games, None)
-            if db_data is not None and len(db_data) > 0:
-                print(f"[DB READ] Team four factors stats from database: {len(db_data)} teams")
-                # Add ranking columns if not present
-                if 'OPP_TOV_PCT_RANK' not in db_data.columns:
-                    db_data['OPP_TOV_PCT_RANK'] = db_data['OPP_TOV_PCT'].rank(ascending=False, method='first').astype(int)
-                return db_data
-        except Exception as e:
-            print(f"Error reading team four factors stats from database: {e}, falling back to API")
-    
-    # Try Supabase cache as fallback
-    if scache is not None:
-        try:
-            cached_data = scache.get_cached_bulk_data(cache_key, season, ttl_hours=1, **kwargs)
-            if cached_data is not None:
-                return cached_data
-        except Exception as e:
-            print(f"Error fetching cached team four factors stats: {e}, falling back to API call")
-    
-    # Database and cache miss - fetch from API (safety net)
+    """Get team four factors stats"""
+    # Fetch from API
     try:
         params = {
             'league_id_nullable': '00',
@@ -328,13 +153,6 @@ def get_cached_team_four_factors_stats(season: str = current_season, last_n_game
         
         # Add ranking columns
         df['OPP_TOV_PCT_RANK'] = df['OPP_TOV_PCT'].rank(ascending=False, method='first').astype(int)
-        
-        # Store in Supabase cache
-        if scache is not None:
-            try:
-                scache.set_cached_bulk_data(cache_key, season, df, ttl_hours=1, **kwargs)
-            except Exception as e:
-                print(f"Error storing team four factors stats in cache: {e}")
         
         return df
     except Exception as e:
@@ -397,11 +215,11 @@ nba_logo = 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.pn
 
 # Function to get standings with clutch data
 # Removed @st.cache_data - using Supabase cache instead
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_standings_with_clutch(season='2025-26'):
     """
     Fetch NBA standings and merge with team clutch records.
     Clutch is defined as last 5 minutes of game with score within 5 points.
-    Uses Supabase cache when available.
     
     Args:
         season: Season string (e.g., '2025-26')
@@ -409,26 +227,7 @@ def get_standings_with_clutch(season='2025-26'):
     Returns:
         DataFrame with standings data including a 'Clutch' column (W-L format)
     """
-    # Try database first (populated by scheduled Edge Functions)
-    if db_reader is not None:
-        try:
-            db_data = db_reader.get_standings_from_db(season)
-            if db_data is not None and len(db_data) > 0:
-                print(f"[DB READ] Standings from database: {len(db_data)} teams")
-                return db_data
-        except Exception as e:
-            print(f"Error reading standings from database: {e}, falling back to API")
-    
-    # Try Supabase cache as fallback
-    if scache is not None:
-        try:
-            cached_data = scache.get_cached_bulk_data('standings_clutch', season, ttl_hours=1)
-            if cached_data is not None:
-                return cached_data
-        except Exception as e:
-            print(f"Error fetching cached standings: {e}, falling back to API call")
-    
-    # Database and cache miss - fetch from API (safety net)
+    # Fetch from API
     try:
         # Fetch regular standings
         standings_df = nba_api.stats.endpoints.LeagueStandings(
@@ -471,13 +270,6 @@ def get_standings_with_clutch(season='2025-26'):
         except Exception as e:
             # If clutch data fetch fails, just add empty Clutch column
             standings_df['Clutch'] = "N/A"
-        
-        # Store in Supabase cache
-        if scache is not None and len(standings_df) > 0:
-            try:
-                scache.set_cached_bulk_data('standings_clutch', season, standings_df, ttl_hours=1)
-            except Exception as e:
-                print(f"Error storing standings in cache: {e}")
         
         return standings_df
         
@@ -1309,40 +1101,10 @@ else:
     # No need to set them again here
     pass
 
-# Removed @st.cache_data - using Supabase cache instead
+@st.cache_data(ttl=21600, show_spinner=False)
 def get_cached_pbpstats_totals(data_type: str = "Team", season: str = current_season):
-    """Get pbpstats totals data with Supabase caching"""
-    cache_key = f"pbpstats_{data_type.lower()}"
-    
-    # Try database first (populated by scheduled Edge Functions)
-    stat_type = 'team' if data_type.lower() == 'team' else 'opponent'
-    if db_reader is not None:
-        try:
-            db_data = db_reader.get_pbpstats_from_db(season, stat_type)
-            if db_data is not None and len(db_data) > 0:
-                print(f"[DB READ] pbpstats ({stat_type}) from database: {len(db_data)} teams")
-                return {
-                    "league_stats": {},
-                    "team_stats": db_data
-                }
-        except Exception as e:
-            print(f"Error reading pbpstats from database: {e}, falling back to API")
-    
-    # Try Supabase cache as fallback
-    if scache is not None:
-        try:
-            cached_data = scache.get_cached_bulk_data(cache_key, season, ttl_hours=6)
-            if cached_data is not None:
-                # Parse cached DataFrame back to dict format
-                if isinstance(cached_data, pd.DataFrame) and len(cached_data) > 0:
-                    return {
-                        "league_stats": {},
-                        "team_stats": cached_data
-                    }
-        except Exception as e:
-            print(f"Error fetching cached pbpstats data: {e}, falling back to API call")
-    
-    # Database and cache miss - fetch from API (safety net)
+    """Get pbpstats totals data"""
+    # Fetch from API
     try:
         url = "https://api.pbpstats.com/get-totals/nba"
         params = {
@@ -1356,13 +1118,6 @@ def get_cached_pbpstats_totals(data_type: str = "Team", season: str = current_se
         league_stats_dict = response_json.get("single_row_table_data", {})
         team_stats_dict = response_json.get("multi_row_table_data", [])
         team_stats_df = pd.DataFrame(team_stats_dict)
-        
-        # Store in Supabase cache
-        if scache is not None and len(team_stats_df) > 0:
-            try:
-                scache.set_cached_bulk_data(cache_key, season, team_stats_df, ttl_hours=6)
-            except Exception as e:
-                print(f"Error storing pbpstats data in cache: {e}")
         
         return {
             "league_stats": league_stats_dict,
@@ -1980,28 +1735,10 @@ la_c3_acc = round(team_stats_diff['Corner3Accuracy'].mean(), 3)
 
 league_id = '00'  # NBA league ID
 
+@st.cache_data(ttl=21600, show_spinner=False)
 def get_players_dataframe():
-    """Get players dataframe from PlayerIndex endpoint for the current season (uses database first, then cache, then API)"""
-    # Try database first (populated by scheduled Edge Functions)
-    if db_reader is not None:
-        try:
-            db_data = db_reader.get_player_index_from_db(current_season)
-            if db_data is not None and len(db_data) > 0:
-                print(f"[DB READ] Player index from database: {len(db_data)} players")
-                return db_data
-        except Exception as e:
-            print(f"Error reading player index from database: {e}, falling back to API")
-    
-    # Try Supabase cache as fallback
-    if scache is not None:
-        try:
-            cached_data = scache.get_cached_bulk_data('player_index', current_season, ttl_hours=6)
-            if cached_data is not None:
-                return cached_data
-        except Exception as e:
-            print(f"Error fetching cached player index: {e}, falling back to API call")
-    
-    # Database and cache miss - fetch from API (safety net)
+    """Get players dataframe from PlayerIndex endpoint for the current season"""
+    # Fetch from API
     try:
         player_index = nba_api.stats.endpoints.PlayerIndex(
             league_id=league_id,
@@ -2009,12 +1746,6 @@ def get_players_dataframe():
         )
         players_df = player_index.get_data_frames()[0]
         if len(players_df) > 0 and 'PERSON_ID' in players_df.columns:
-            # Store in Supabase cache
-            if scache is not None:
-                try:
-                    scache.set_cached_bulk_data('player_index', current_season, players_df, ttl_hours=6)
-                except Exception as e:
-                    print(f"Error storing player index in cache: {e}")
             return players_df
     except Exception:
         pass
@@ -2026,12 +1757,6 @@ def get_players_dataframe():
         )
         players_df = player_index.get_data_frames()[0]
         if len(players_df) > 0 and 'PERSON_ID' in players_df.columns:
-            # Store in Supabase cache
-            if scache is not None:
-                try:
-                    scache.set_cached_bulk_data('player_index', current_season, players_df, ttl_hours=6)
-                except Exception as e:
-                    print(f"Error storing player index in cache: {e}")
             return players_df
     except Exception:
         pass
@@ -2292,39 +2017,19 @@ def get_team_clutch_stats(team_id: int, season: str = '2025-26', players_df: pd.
     if len(team_players) == 0:
         return pd.DataFrame()
     
-    # Try Supabase cache first (cache all players, then filter to team)
-    cache_key = f"player_clutch_{per_mode_detailed}"
-    clutch_data = None
-    
-    if scache is not None:
-        try:
-            cached_data = scache.get_cached_bulk_data(cache_key, season, ttl_hours=1)
-            if cached_data is not None:
-                clutch_data = cached_data
-        except Exception as e:
-            print(f"Error fetching cached clutch stats: {e}, falling back to API call")
-    
-    # Fetch from API if cache miss
-    if clutch_data is None:
-        try:
-            clutch_data = nba_api.stats.endpoints.LeagueDashPlayerClutch(
-                season=season,
-                season_type_all_star='Regular Season',
-                per_mode_detailed=per_mode_detailed,
-                clutch_time='Last 5 Minutes',
-                ahead_behind='Ahead or Behind',
-                point_diff=5
-            ).get_data_frames()[0]
-            
-            # Store in Supabase cache (cache all players, not just team)
-            if scache is not None and len(clutch_data) > 0:
-                try:
-                    scache.set_cached_bulk_data(cache_key, season, clutch_data, ttl_hours=1)
-                except Exception as e:
-                    print(f"Error storing clutch stats in cache: {e}")
-        except Exception as e:
-            print(f"Error fetching clutch stats: {e}")
-            return pd.DataFrame()
+    # Fetch from API
+    try:
+        clutch_data = nba_api.stats.endpoints.LeagueDashPlayerClutch(
+            season=season,
+            season_type_all_star='Regular Season',
+            per_mode_detailed=per_mode_detailed,
+            clutch_time='Last 5 Minutes',
+            ahead_behind='Ahead or Behind',
+            point_diff=5
+        ).get_data_frames()[0]
+    except Exception as e:
+        print(f"Error fetching clutch stats: {e}")
+        return pd.DataFrame()
     
     # Process data regardless of whether it came from cache or API
     if clutch_data is None or len(clutch_data) == 0:
@@ -2334,6 +2039,109 @@ def get_team_clutch_stats(team_id: int, season: str = '2025-26', players_df: pd.
     clutch_data = clutch_data[clutch_data['TEAM_ID'].astype(int) == team_id].copy()
     
     if len(clutch_data) == 0:
+        return pd.DataFrame()
+    
+    roster_stats = []
+    
+    for _, row in clutch_data.iterrows():
+        player_id = int(row['PLAYER_ID'])
+        
+        # Get player info from players_df
+        player_info = team_players[team_players['PERSON_ID'] == player_id]
+        if len(player_info) == 0:
+            continue
+        
+        player_name = f"{player_info['PLAYER_FIRST_NAME'].iloc[0]} {player_info['PLAYER_LAST_NAME'].iloc[0]}"
+        position = player_info.get('POSITION', '').iloc[0] if 'POSITION' in player_info.columns else ''
+        
+        # Extract stats from clutch data
+        games_played = int(row.get('GP', 0))
+        min_avg = round(row.get('MIN', 0.0), 1)
+        pts_avg = round(row.get('PTS', 0.0), 1)
+        reb_avg = round(row.get('REB', 0.0), 1)
+        ast_avg = round(row.get('AST', 0.0), 1)
+        pra_avg = round(pts_avg + reb_avg + ast_avg, 1)
+        stl_avg = round(row.get('STL', 0.0), 1)
+        blk_avg = round(row.get('BLK', 0.0), 1)
+        tov_avg = round(row.get('TOV', 0.0), 1)
+        
+        # Field Goal stats
+        fgm_avg = round(row.get('FGM', 0.0), 1)
+        fga_avg = round(row.get('FGA', 0.0), 1)
+        fg_pct = round(row.get('FG_PCT', 0.0) * 100, 1) if pd.notna(row.get('FG_PCT')) else 0.0
+        
+        # 3-Point stats
+        fg3m_avg = round(row.get('FG3M', 0.0), 1)
+        fg3a_avg = round(row.get('FG3A', 0.0), 1)
+        fg3_pct = round(row.get('FG3_PCT', 0.0) * 100, 1) if pd.notna(row.get('FG3_PCT')) else 0.0
+        
+        # Free Throw stats
+        ftm_avg = round(row.get('FTM', 0.0), 1)
+        fta_avg = round(row.get('FTA', 0.0), 1)
+        ft_pct = round(row.get('FT_PCT', 0.0) * 100, 1) if pd.notna(row.get('FT_PCT')) else 0.0
+        
+        # Calculate FPTS (fantasy points)
+        fpts_avg = round(pts_avg + reb_avg * 1.2 + ast_avg * 1.5 + stl_avg * 3 + blk_avg * 3 - tov_avg, 1)
+        
+        # Headshot URL
+        headshot_url = f'https://cdn.nba.com/headshots/nba/latest/1040x760/{player_id}.png'
+        
+        roster_stats.append({
+            'headshot': headshot_url,
+            'Player': player_name,
+            'Pos': position,
+            'GP': games_played,
+            'MIN': min_avg,
+            'PTS': pts_avg,
+            'REB': reb_avg,
+            'AST': ast_avg,
+            'PRA': pra_avg,
+            'STL': stl_avg,
+            'BLK': blk_avg,
+            'TOV': tov_avg,
+            'FGM': fgm_avg,
+            'FPTS': fpts_avg,
+            'FGA': fga_avg,
+            'FG%': fg_pct,
+            '3PM': fg3m_avg,
+            '3PA': fg3a_avg,
+            '3P%': fg3_pct,
+            'FTM': ftm_avg,
+            'FTA': fta_avg,
+            'FT%': ft_pct,
+            '_player_id': player_id,  # Hidden column for sorting
+        })
+    
+    if not roster_stats:
+        return pd.DataFrame()
+    
+    # Create DataFrame and sort by minutes (descending)
+    df = pd.DataFrame(roster_stats)
+    df = df.sort_values(by='MIN', ascending=False)
+    
+    return df
+
+
+def process_clutch_data_to_roster(clutch_data: pd.DataFrame, players_df: pd.DataFrame, team_id: int):
+    """
+    Process clutch data DataFrame into roster format.
+    This is a helper function to extract the processing logic from get_team_clutch_stats.
+    
+    Args:
+        clutch_data: DataFrame with clutch stats (already filtered to team)
+        players_df: DataFrame with player information
+        team_id: Team ID for filtering players
+    
+    Returns:
+        DataFrame with formatted roster stats
+    """
+    if clutch_data is None or len(clutch_data) == 0:
+        return pd.DataFrame()
+    
+    # Filter players by team
+    team_players = players_df[players_df['TEAM_ID'].astype(int) == team_id].copy()
+    
+    if len(team_players) == 0:
         return pd.DataFrame()
     
     roster_stats = []

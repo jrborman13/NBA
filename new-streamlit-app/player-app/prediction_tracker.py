@@ -14,9 +14,17 @@ import os
 import csv
 import logging
 
-from supabase_config import get_supabase_client, is_supabase_configured
+# Supabase imports removed - using CSV file fallback only
+# from supabase_config import get_supabase_client, is_supabase_configured
 
 logger = logging.getLogger(__name__)
+
+# Helper functions to avoid Supabase
+def is_supabase_configured():
+    return False
+
+def get_supabase_client():
+    return None
 
 # File paths (for backward compatibility)
 PREDICTIONS_FILE = "predictions_log.csv"

@@ -342,6 +342,15 @@ def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=
             manual_players = [s for s in team_statlines_for_norm if str(s.get('player_id')) in manual_player_ids]
             other_players = [s for s in team_statlines_for_norm if str(s.get('player_id')) not in manual_player_ids]
             
+            # IMPORTANT: Use manual_adjustments dict values, not statline MIN (which might be outdated)
+            # Update manual players' MIN from manual_adjustments dict
+            for statline in manual_players:
+                player_id_str = str(statline.get('player_id'))
+                if player_id_str in manual_adjustments:
+                    old_min = statline.get('MIN', 0)
+                    new_min = manual_adjustments[player_id_str]
+                    statline['MIN'] = new_min
+            
             # IMPORTANT: Exclude manually adjusted players who are set to 0 minutes
             # They should not get any minutes redistributed to them
             manual_players_active = [s for s in manual_players if s.get('MIN', 0) > 0.01]
@@ -357,6 +366,7 @@ def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=
                 if statline.get('MIN', 0) <= 0.01:
                     statline['MIN'] = 0.0
             
+            
             # Scale only non-manual players
             if other_players and remaining_for_others > 0:
                 other_total = sum(s['MIN'] for s in other_players)
@@ -364,6 +374,10 @@ def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=
                     scale_factor = remaining_for_others / other_total
                     for statline in other_players:
                         statline['MIN'] *= scale_factor
+            elif other_players and remaining_for_others <= 0:
+                # Set all other players to 0 if manual adjustments exceed target
+                for statline in other_players:
+                    statline['MIN'] = 0.0
         else:
             # Original behavior: scale everyone proportionally
             scale_factor = target_minutes / total_minutes
@@ -373,12 +387,11 @@ def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=
         # Step 2: Apply role-based floors and targets
         # Stars (>=32 MPG baseline) should get closer to their baseline (33-38 range)
         # Starters (28-31 MPG baseline) should get closer to their baseline (28-35 range)
-        # BUT: Don't override manual adjustments set to 0
+        # BUT: Don't override manual adjustments (skip ALL manual adjustments, not just 0)
         for statline in stars:
-            # Skip if this player is manually adjusted to 0
+            # Skip if this player is manually adjusted (protect ALL manual adjustments)
             if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
-                if statline.get('MIN', 0) <= 0.01:
-                    continue
+                continue  # Skip ALL manual adjustments, not just 0
             baseline = statline['_role_baseline_min']
             # Stars: target their baseline, but ensure minimum 32 MPG
             target_min = max(32.0, baseline * 0.85)  # At least 85% of baseline, minimum 32
@@ -386,10 +399,9 @@ def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=
                 statline['MIN'] = target_min
         
         for statline in starters:
-            # Skip if this player is manually adjusted to 0
+            # Skip if this player is manually adjusted (protect ALL manual adjustments)
             if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
-                if statline.get('MIN', 0) <= 0.01:
-                    continue
+                continue  # Skip ALL manual adjustments, not just 0
             baseline = statline['_role_baseline_min']
             # Starters: target their baseline, but ensure minimum 26 MPG
             target_min = max(26.0, baseline * 0.85)  # At least 85% of baseline, minimum 26
@@ -416,11 +428,18 @@ def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=
                 scale_down_lower = 1.0 - (excess / reducible_from_lower)
                 for group in [deep_bench, bench, rotation]:
                     for statline in group:
+                        # Skip if this player is manually adjusted
+                        if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                            continue  # Protect manual adjustments
                         statline['MIN'] *= scale_down_lower
             else:
                 # Need to scale down everyone, but less aggressively for stars/starters
                 # Scale stars/starters by 95%, others by 100%
+                # BUT: Protect manual adjustments
                 for statline in stars + starters:
+                    # Skip if this player is manually adjusted
+                    if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                        continue  # Protect manual adjustments
                     statline['MIN'] *= 0.95  # Only reduce by 5%
                 
                 # Recalculate and scale others more
@@ -428,22 +447,49 @@ def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=
                 if remaining_excess < 0:
                     scale_down = target_minutes / sum(s['MIN'] for s in team_statlines_for_norm)
                     for statline in rotation + bench + deep_bench:
+                        # Skip if this player is manually adjusted
+                        if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                            continue  # Protect manual adjustments
                         statline['MIN'] *= scale_down
         
         # Step 4: Apply role-based caps
+        # BUT: Don't override manual adjustments (protect ALL manual adjustments from caps)
         for statline in stars:
+            # Skip if this player is manually adjusted (check both string and int keys)
+            player_id_str = str(statline.get('player_id'))
+            is_manual = False
+            if manual_adjustments:
+                if player_id_str in manual_adjustments:
+                    is_manual = True
+                elif int(player_id_str) in manual_adjustments:
+                    is_manual = True
+            
+            if is_manual:
+                continue  # Protect manual adjustments from caps
             if statline['MIN'] > 40.0:
                 statline['MIN'] = 40.0
         for statline in starters:
+            # Skip if this player is manually adjusted
+            if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                continue  # Protect manual adjustments from caps
             if statline['MIN'] > 38.0:
                 statline['MIN'] = 38.0
         for statline in rotation:
+            # Skip if this player is manually adjusted
+            if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                continue  # Protect manual adjustments from caps
             if statline['MIN'] > 32.0:
                 statline['MIN'] = 32.0
         for statline in bench:
+            # Skip if this player is manually adjusted
+            if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                continue  # Protect manual adjustments from caps
             if statline['MIN'] > 25.0:
                 statline['MIN'] = 25.0
         for statline in deep_bench:
+            # Skip if this player is manually adjusted
+            if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                continue  # Protect manual adjustments from caps
             if statline['MIN'] > 12.0:
                 statline['MIN'] = 12.0
         
@@ -494,9 +540,12 @@ def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=
                 if injured_mins > 0.01 and abs(remaining_minutes - distributed) > 0.01:
                     matching_group = role_to_group.get(role_name)
                     if matching_group:
-                        # Get available players in matching role who aren't at cap
+                        # Get available players in matching role who aren't at cap (excluding manual adjustments)
                         available_players = []
                         for statline in matching_group:
+                            # Skip if this player is manually adjusted
+                            if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                                continue  # Protect manual adjustments
                             baseline = statline['_role_baseline_min']
                             cap = 40.0 if baseline >= 32 else (38.0 if baseline >= 28 else (32.0 if baseline >= 22 else (25.0 if baseline >= 15 else 12.0)))
                             if statline['MIN'] < cap - 0.01:
@@ -504,10 +553,16 @@ def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=
                         
                         if available_players:
                             # Distribute injured minutes to matching role (up to the amount available)
+                            # available_players already excludes manual adjustments
+                            available_players_filtered = available_players
+                            
                             mins_to_distribute = min(injured_mins, remaining_minutes - distributed)
-                            group_total = sum(s['MIN'] for s in available_players)
+                            group_total = sum(s['MIN'] for s in available_players_filtered)
                             if group_total > 0:
-                                for statline in available_players:
+                                for statline in available_players_filtered:
+                                    # Skip if this player is manually adjusted
+                                    if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                                        continue  # Protect manual adjustments
                                     baseline = statline['_role_baseline_min']
                                     cap = 40.0 if baseline >= 32 else (38.0 if baseline >= 28 else (32.0 if baseline >= 22 else (25.0 if baseline >= 15 else 12.0)))
                                     additional = mins_to_distribute * (statline['MIN'] / group_total)
@@ -522,9 +577,12 @@ def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=
                     if abs(remaining_minutes - distributed) < 0.01:
                         break
                     
-                    # Get players in this group who aren't at their cap
+                    # Get players in this group who aren't at their cap (excluding manual adjustments)
                     available_players = []
                     for statline in group:
+                        # Skip if this player is manually adjusted
+                        if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                            continue  # Protect manual adjustments
                         baseline = statline['_role_baseline_min']
                         cap = 40.0 if baseline >= 32 else (38.0 if baseline >= 28 else (32.0 if baseline >= 22 else (25.0 if baseline >= 15 else 12.0)))
                         if statline['MIN'] < cap - 0.01:
@@ -538,6 +596,9 @@ def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=
                     if group_total > 0:
                         group_remaining = remaining_minutes - distributed
                         for statline in available_players:
+                            # Skip if this player is manually adjusted (double-check)
+                            if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                                continue  # Protect manual adjustments
                             baseline = statline['_role_baseline_min']
                             cap = 40.0 if baseline >= 32 else (38.0 if baseline >= 28 else (32.0 if baseline >= 22 else (25.0 if baseline >= 15 else 12.0)))
                             additional = group_remaining * (statline['MIN'] / group_total)
@@ -548,55 +609,104 @@ def normalize_team_minutes(statlines_list, target_minutes=240.0, out_player_ids=
         
         # Step 6: Final safety check - ensure exact total
         # Protect stars/starters from being scaled down too much
+        # BUT: Protect ALL manual adjustments from any scaling
         final_total = sum(s['MIN'] for s in team_statlines_for_norm)
         if abs(final_total - target_minutes) > 0.01:
-            # Final proportional scaling, but protect stars/starters
+            # Final proportional scaling, but protect stars/starters AND manual adjustments
             if final_total > target_minutes:
-                # Over target - scale down, but protect stars/starters
+                # Over target - scale down, but protect stars/starters AND manual adjustments
                 excess = final_total - target_minutes
-                # Try to reduce from lower-role players first
-                lower_role_total = sum(s['MIN'] for s in rotation + bench + deep_bench)
+                # Calculate totals excluding manual adjustments
+                lower_role_total = 0.0
+                for statline in rotation + bench + deep_bench:
+                    # Skip if this player is manually adjusted
+                    if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                        continue  # Protect manual adjustments
+                    lower_role_total += statline['MIN']
+                
                 if lower_role_total >= excess:
-                    scale_down = (lower_role_total - excess) / lower_role_total
+                    scale_down = (lower_role_total - excess) / lower_role_total if lower_role_total > 0 else 1.0
                     for statline in rotation + bench + deep_bench:
+                        # Skip if this player is manually adjusted
+                        if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                            continue  # Protect manual adjustments
                         statline['MIN'] *= scale_down
                 else:
-                    # Need to scale everyone, but less for stars/starters
-                    scale_factor = target_minutes / final_total
-                    for statline in stars + starters:
-                        # Only scale down stars/starters if they're still above their baseline
-                        baseline = statline['_role_baseline_min']
-                        new_min = statline['MIN'] * scale_factor
-                        # Don't go below 90% of baseline for stars/starters
-                        min_protected = baseline * 0.90
-                        statline['MIN'] = max(new_min, min_protected)
+                    # Need to scale everyone, but less for stars/starters AND protect manual adjustments
+                    # Calculate totals excluding manual adjustments
+                    non_manual_total = 0.0
+                    for statline in team_statlines_for_norm:
+                        if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                            continue  # Exclude manual adjustments from total
+                        non_manual_total += statline['MIN']
                     
-                    # Recalculate and scale others to make up difference
+                    manual_total = final_total - non_manual_total
+                    remaining_target = target_minutes - manual_total
+                    
+                    if non_manual_total > 0 and remaining_target > 0:
+                        scale_factor = remaining_target / non_manual_total
+                        for statline in stars + starters:
+                            # Skip if this player is manually adjusted
+                            if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                                continue  # Protect manual adjustments
+                            # Only scale down stars/starters if they're still above their baseline
+                            baseline = statline['_role_baseline_min']
+                            new_min = statline['MIN'] * scale_factor
+                            # Don't go below 90% of baseline for stars/starters
+                            min_protected = baseline * 0.90
+                            statline['MIN'] = max(new_min, min_protected)
+                        
+                        # Recalculate and scale others to make up difference
                     current_total = sum(s['MIN'] for s in team_statlines_for_norm)
                     remaining = target_minutes - current_total
                     if abs(remaining) > 0.01:
-                        other_total = sum(s['MIN'] for s in rotation + bench + deep_bench)
+                        # Calculate other_total excluding manual adjustments
+                        other_total = 0.0
+                        for statline in rotation + bench + deep_bench:
+                            # Skip if this player is manually adjusted
+                            if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                                continue  # Protect manual adjustments
+                            other_total += statline['MIN']
+                        
                         if other_total > 0:
                             scale_others = (other_total + remaining) / other_total
                             for statline in rotation + bench + deep_bench:
+                                # Skip if this player is manually adjusted
+                                if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                                    continue  # Protect manual adjustments
                                 statline['MIN'] *= scale_others
             else:
                 # Under target - scale up proportionally
-                final_scale = target_minutes / final_total
+                # BUT: Protect manual adjustments
+                # Calculate totals excluding manual adjustments
+                non_manual_total = 0.0
                 for statline in team_statlines_for_norm:
-                    statline['MIN'] *= final_scale
-                    # Reapply caps after scaling
-                    baseline = statline['_role_baseline_min']
-                    if baseline >= 32:
-                        statline['MIN'] = min(statline['MIN'], 40.0)
-                    elif baseline >= 28:
-                        statline['MIN'] = min(statline['MIN'], 38.0)
-                    elif baseline >= 22:
-                        statline['MIN'] = min(statline['MIN'], 32.0)
-                    elif baseline >= 15:
-                        statline['MIN'] = min(statline['MIN'], 25.0)
-                    else:
-                        statline['MIN'] = min(statline['MIN'], 12.0)
+                    if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                        continue  # Exclude manual adjustments from total
+                    non_manual_total += statline['MIN']
+                
+                manual_total = final_total - non_manual_total
+                remaining_target = target_minutes - manual_total
+                
+                if non_manual_total > 0 and remaining_target > 0:
+                    final_scale = remaining_target / non_manual_total
+                    for statline in team_statlines_for_norm:
+                        # Skip if this player is manually adjusted
+                        if manual_adjustments and str(statline.get('player_id')) in manual_adjustments:
+                            continue  # Protect manual adjustments
+                        statline['MIN'] *= final_scale
+                        # Reapply caps after scaling (but manual adjustments already skipped)
+                        baseline = statline['_role_baseline_min']
+                        if baseline >= 32:
+                            statline['MIN'] = min(statline['MIN'], 40.0)
+                        elif baseline >= 28:
+                            statline['MIN'] = min(statline['MIN'], 38.0)
+                        elif baseline >= 22:
+                            statline['MIN'] = min(statline['MIN'], 32.0)
+                        elif baseline >= 15:
+                            statline['MIN'] = min(statline['MIN'], 25.0)
+                        else:
+                            statline['MIN'] = min(statline['MIN'], 12.0)
         
         # Step 7: Final validation - ensure we have exactly 10 or fewer active players
         # and total equals exactly 240
@@ -811,37 +921,95 @@ with st.sidebar:
 @st.cache_data
 def get_cached_players_dataframe():
     """Cache players dataframe from PlayerIndex endpoint"""
-    return pf.get_players_dataframe()
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:812", "message": "get_cached_players_dataframe entry", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
+    result = pf.get_players_dataframe()
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:815", "message": "get_cached_players_dataframe exit", "data": {"player_count": len(result) if result is not None else 0}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
+    return result
 
 @st.cache_data
 def get_cached_player_list():
     """Cache player list from PlayerIndex endpoint"""
-    return pf.get_player_list()
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:817", "message": "get_cached_player_list entry", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
+    result = pf.get_player_list()
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:820", "message": "get_cached_player_list exit", "data": {"list_count": len(result) if result is not None else 0}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
+    return result
 
 @st.cache_data
 def get_player_name_map(player_ids_list, players_df):
     """Cache player names using the players dataframe"""
-    return {pid: pf.get_player_name(pid, players_df) for pid in player_ids_list}
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:822", "message": "get_player_name_map entry", "data": {"player_ids_count": len(player_ids_list) if player_ids_list else 0}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
+    result = {pid: pf.get_player_name(pid, players_df) for pid in player_ids_list}
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:825", "message": "get_player_name_map exit", "data": {"map_size": len(result)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
+    return result
 
 @st.cache_data
 def get_cached_player_stats():
     """Get player stats including average minutes for sorting"""
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:827", "message": "get_cached_player_stats entry", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
     try:
         import nba_api.stats.endpoints as endpoints
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:831", "message": "Before LeagueDashPlayerStats API call", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         player_stats = endpoints.LeagueDashPlayerStats(
             season=pf_features.CURRENT_SEASON,
             league_id_nullable='00',
             per_mode_detailed='PerGame',
             season_type_all_star='Regular Season'
         ).get_data_frames()[0]
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:838", "message": "After LeagueDashPlayerStats API call", "data": {"stats_count": len(player_stats) if player_stats is not None else 0}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         # Convert PLAYER_ID to int for consistent key type
         minutes_dict = {}
         for _, row in player_stats.iterrows():
             player_id = int(row['PLAYER_ID'])
             minutes = float(row['MIN']) if pd.notna(row['MIN']) else 0.0
             minutes_dict[player_id] = minutes
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:845", "message": "get_cached_player_stats exit success", "data": {"dict_size": len(minutes_dict)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         return minutes_dict
     except Exception as e:
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:847", "message": "get_cached_player_stats exception", "data": {"error": str(e)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         print(f"Error fetching player stats: {e}")
         return {}
 
@@ -869,15 +1037,30 @@ def get_cached_player_shooting_data():
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_matchups_for_date(selected_date):
     """Fetch NBA matchups for a given date from the API"""
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "B", "location": "3_Predictions.py:870", "message": "get_matchups_for_date entry", "data": {"selected_date": str(selected_date)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
     try:
         import pytz
         from datetime import datetime
         
         # Get schedule data
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "B", "location": "3_Predictions.py:877", "message": "Before ScheduleLeagueV2 API call", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         league_schedule = nba_api.stats.endpoints.ScheduleLeagueV2(
             league_id='00',
             season='2025-26'
         ).get_data_frames()[0]
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "B", "location": "3_Predictions.py:881", "message": "After ScheduleLeagueV2 API call", "data": {"schedule_count": len(league_schedule) if league_schedule is not None else 0}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         
         league_schedule['dateGame'] = pd.to_datetime(league_schedule['gameDate'])
         league_schedule['matchup'] = league_schedule['awayTeam_teamTricode'] + ' @ ' + league_schedule['homeTeam_teamTricode']
@@ -933,30 +1116,96 @@ def get_matchups_for_date(selected_date):
                     'game_time': game_time_str,
                     'game_date': game_date_raw
                 })
+            # #region agent log
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                import json
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "B", "location": "3_Predictions.py:936", "message": "get_matchups_for_date exit success", "data": {"matchup_count": len(matchups)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+            # #endregion
             return matchups, None  # Return matchups and error (None)
         else:
+            # #region agent log
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                import json
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "B", "location": "3_Predictions.py:938", "message": "get_matchups_for_date exit no games", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+            # #endregion
             return [], None  # No games on this date
     except Exception as e:
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "B", "location": "3_Predictions.py:940", "message": "get_matchups_for_date exception", "data": {"error": str(e)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         return [], str(e)  # Return empty list and error message
 
 
 # Get cached players dataframe and player list
+# #region agent log
+with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+    import json
+    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:944", "message": "Page load: Before get_cached_players_dataframe", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+# #endregion
 players_df = get_cached_players_dataframe()
+# #region agent log
+with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+    import json
+    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:947", "message": "Page load: After get_cached_players_dataframe", "data": {"has_df": players_df is not None}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+# #endregion
 
 # Get cached player stats (including average minutes) for sorting
+# #region agent log
+with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+    import json
+    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:950", "message": "Page load: Before get_cached_player_stats", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+# #endregion
 player_minutes_map = get_cached_player_stats()
+# #region agent log
+with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+    import json
+    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:953", "message": "Page load: After get_cached_player_stats", "data": {"has_map": player_minutes_map is not None}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+# #endregion
 
 # Cached function to fetch injury report for a specific date
 @st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_cached_injury_report_for_date(selected_date):
     """Fetch and cache injury report for a specific date"""
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:951", "message": "get_cached_injury_report_for_date entry", "data": {"selected_date": str(selected_date)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
     try:
-        injury_df, status_msg = ir.fetch_injuries_for_date(report_date=selected_date)
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:954", "message": "Before fetch_injuries_for_date call", "data": {"selected_date": str(selected_date), "using_today": str(date.today())}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
+        # Always use today's date for injury reports (PDF includes tomorrow's games too)
+        injury_df, status_msg = ir.fetch_injuries_for_date(report_date=date.today())
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:958", "message": "After fetch_injuries_for_date call", "data": {"has_df": injury_df is not None, "df_len": len(injury_df) if injury_df is not None else 0}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         if injury_df is not None and len(injury_df) > 0:
+            # #region agent log
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                import json
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:961", "message": "get_cached_injury_report_for_date exit success", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+            # #endregion
             return injury_df, status_msg, None
         else:
+            # #region agent log
+            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                import json
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:964", "message": "get_cached_injury_report_for_date exit no injuries", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+            # #endregion
             return pd.DataFrame(), status_msg, "No injuries found"
     except Exception as e:
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:967", "message": "get_cached_injury_report_for_date exception", "data": {"error": str(e)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         return pd.DataFrame(), "", str(e)
 
 # Validate players_df
@@ -969,8 +1218,28 @@ if 'PERSON_ID' not in players_df.columns:
     st.error("Please clear the Streamlit cache (☰ → Settings → Clear cache) and restart the app.")
     st.stop()
 
+# #region agent log
+with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+    import json
+    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:1002", "message": "Page load: Before get_cached_player_list", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+# #endregion
 player_ids_list = get_cached_player_list()
+# #region agent log
+with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+    import json
+    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:1005", "message": "Page load: After get_cached_player_list", "data": {"list_count": len(player_ids_list) if player_ids_list else 0}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+# #endregion
+# #region agent log
+with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+    import json
+    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:1006", "message": "Page load: Before get_player_name_map", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+# #endregion
 player_name_map = get_player_name_map(player_ids_list, players_df)
+# #region agent log
+with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+    import json
+    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "3_Predictions.py:1009", "message": "Page load: After get_player_name_map", "data": {"map_size": len(player_name_map) if player_name_map else 0}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+# #endregion
 
 # Matchup filter section
 col_date, col_matchup = st.columns([0.3, 0.7])
@@ -985,7 +1254,17 @@ with col_date:
 
 with col_matchup:
     # Get matchups for selected date
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "B", "location": "3_Predictions.py:988", "message": "Before get_matchups_for_date", "data": {"selected_date": str(selected_date)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
     matchups, matchup_error = get_matchups_for_date(selected_date)
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "B", "location": "3_Predictions.py:991", "message": "After get_matchups_for_date", "data": {"matchup_count": len(matchups) if matchups else 0, "has_error": bool(matchup_error)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
     
     # Show error if API call failed
     if matchup_error:
@@ -1012,7 +1291,17 @@ with col_matchup:
 
 # Fetch injury report for the selected date
 # This needs to happen after date selection but before injury section
+# #region agent log
+with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+    import json
+    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:1015", "message": "Before get_cached_injury_report_for_date", "data": {"selected_date": str(selected_date)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+# #endregion
 injury_report_df, injury_report_url, injury_load_error = get_cached_injury_report_for_date(selected_date)
+# #region agent log
+with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+    import json
+    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:1018", "message": "After get_cached_injury_report_for_date", "data": {"has_injury_df": injury_report_df is not None, "injury_count": len(injury_report_df) if injury_report_df is not None else 0, "has_error": bool(injury_load_error)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+# #endregion
 
 # Clear processed matchups cache when date changes (so injuries get re-processed)
 if 'last_injury_date' not in st.session_state or st.session_state.last_injury_date != selected_date:
@@ -1076,9 +1365,19 @@ if 'last_injury_date_predictions' not in st.session_state or st.session_state.la
 
 # Check if matchup is selected
 if selected_matchup_str and selected_matchup_str != "All Players" and selected_matchup_str != "All Matchups":
+    # #region agent log
+    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "3_Predictions.py:1078", "message": "Matchup selected", "data": {"selected_matchup_str": selected_matchup_str, "matchup_count": len(matchups) if matchups else 0}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+    # #endregion
     selected_matchup = next((m for m in matchups if m['matchup'] == selected_matchup_str), None)
     
     if selected_matchup:
+        # #region agent log
+        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+            import json
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "3_Predictions.py:1081", "message": "Matchup found, processing", "data": {"away_team": selected_matchup.get('away_team'), "home_team": selected_matchup.get('home_team')}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+        # #endregion
         matchup_away_team_id = selected_matchup['away_team_id']
         matchup_home_team_id = selected_matchup['home_team_id']
         matchup_away_team_abbr = selected_matchup['away_team']
@@ -1111,19 +1410,67 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
         
             # Process injuries for this matchup (only once per matchup)
             if matchup_key not in st.session_state.processed_matchups_predictions:
+                # #region agent log
+                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                    import json
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:1301", "message": "Processing injuries for matchup", "data": {"matchup_key": matchup_key}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+                # #endregion
                 away_out = []
                 home_out = []
                 all_matchup_injuries = {'away': [], 'home': []}
                 questionable_probable = {'away': [], 'home': []}
                 
-                if injury_report_df is not None and len(injury_report_df) > 0:
+                # #region agent log
+                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                    import json
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:1312", "message": "Before checking injury_report_df", "data": {"has_df": injury_report_df is not None}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+                # #endregion
+                has_injuries = False
+                if injury_report_df is not None:
+                    # #region agent log
+                    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                        import json
+                        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:1317", "message": "injury_report_df is not None, checking length", "data": {}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+                    # #endregion
+                    try:
+                        df_len = len(injury_report_df)
+                        # #region agent log
+                        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                            import json
+                            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:1322", "message": "Got injury_report_df length", "data": {"df_len": df_len}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+                        # #endregion
+                        has_injuries = df_len > 0
+                    except Exception as e:
+                        # #region agent log
+                        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                            import json
+                            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:1327", "message": "Error getting injury_report_df length", "data": {"error": str(e)}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+                        # #endregion
+                        has_injuries = False
+                
+                # #region agent log
+                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                    import json
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:1331", "message": "After checking injury_report_df condition", "data": {"has_injuries": has_injuries}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+                # #endregion
+                if has_injuries:
                     # Get injuries for this specific matchup
+                    # #region agent log
+                    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                        import json
+                        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:1121", "message": "Before get_injuries_for_matchup", "data": {"away_team": matchup_away_team_abbr, "home_team": matchup_home_team_abbr}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+                    # #endregion
                     matchup_injuries = ir.get_injuries_for_matchup(
                         injury_report_df,
                         matchup_away_team_abbr,
                         matchup_home_team_abbr,
                         players_df
                     )
+                    # #region agent log
+                    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                        import json
+                        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "3_Predictions.py:1129", "message": "After get_injuries_for_matchup", "data": {"away_count": len(matchup_injuries.get('away', [])), "home_count": len(matchup_injuries.get('home', []))}, "timestamp": int(__import__('time').time() * 1000)}) + '\n')
+                    # #endregion
                     
                     # Separate OUT/DOUBTFUL from QUESTIONABLE/PROBABLE
                     away_questionable = []
@@ -1519,6 +1866,13 @@ Estimated Cost: {preview['estimated_cost']}
                         progress_bar.progress(current / total, text=f"({current}/{total}) {player_name}...")
                     
                     # Generate predictions for all players
+                    import time
+                    # #region agent log
+                    gen_start = time.time()
+                    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                        import json
+                        f.write(json.dumps({"sessionId": "debug-session", "runId": "perf-analysis", "hypothesisId": "PERF", "location": "3_Predictions.py:1764", "message": "Before generate_predictions_for_game", "data": {"player_count": len(players_to_predict), "away_team": matchup_away_team_abbr, "home_team": matchup_home_team_abbr}, "timestamp": int(time.time() * 1000)}) + '\n')
+                    # #endregion
                     all_predictions = pm.generate_predictions_for_game(
                         player_ids=players_to_predict,
                         player_names=player_names_map,
@@ -1530,6 +1884,12 @@ Estimated Cost: {preview['estimated_cost']}
                         game_date=game_date_str_bvp,
                         progress_callback=update_progress
                     )
+                    gen_total_time = time.time() - gen_start
+                    # #region agent log
+                    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                        import json
+                        f.write(json.dumps({"sessionId": "debug-session", "runId": "perf-analysis", "hypothesisId": "PERF", "location": "3_Predictions.py:1778", "message": "After generate_predictions_for_game", "data": {"prediction_count": len(all_predictions) if all_predictions else 0, "total_time_ms": gen_total_time * 1000, "avg_time_per_player_ms": (gen_total_time / len(players_to_predict) * 1000) if players_to_predict else 0}, "timestamp": int(time.time() * 1000)}) + '\n')
+                    # #endregion
                     
                     progress_bar.empty()
                     
@@ -1809,6 +2169,13 @@ Estimated Cost: {preview['estimated_cost']}
                         }
                         statlines_list.append(statline)
                     
+                    # Store original MIN values BEFORE normalization for comparison
+                    # This ensures we can detect when user resets to original vs when normalization matches manual adjustment
+                    original_mins_key = f"{game_cache_key_bvp}_original_mins"
+                    if original_mins_key not in st.session_state:
+                        # Store original MIN values (before any normalization or manual adjustments)
+                        st.session_state[original_mins_key] = {statline['player_id']: statline['MIN'] for statline in statlines_list}
+                    
                     # Get bulk game logs for recent activity check
                     bulk_game_logs = pf_features.get_bulk_player_game_logs()
                     
@@ -2039,6 +2406,9 @@ Estimated Cost: {preview['estimated_cost']}
                     # Use normalized statlines from session state (already calculated above)
                     statlines_list = st.session_state.get(normalized_statlines_key, [])
                     
+                    # Get original MIN values key (should already be stored before normalization)
+                    original_mins_key = f"{game_cache_key_bvp}_original_mins"
+                    
                     # Manual Minutes Adjustment Interface
                     with st.expander("⚙️ **Manual Minutes Adjustment**", expanded=False):
                         st.caption("Adjust individual player minutes. Stats will be scaled proportionally, and team totals will be normalized to 240 minutes.")
@@ -2080,21 +2450,33 @@ Estimated Cost: {preview['estimated_cost']}
                                 else:
                                     current_min = statline['MIN']
                                 
+                                # Allow up to 48 minutes (max possible in a game)
+                                # Use current_min but clamp to valid range to avoid errors
+                                clamped_value = max(0.0, min(48.0, float(current_min)))
+                                
+                                # #region agent log
+                                import json
+                                import time
+                                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                                    f.write(json.dumps({"sessionId": "debug-session", "runId": "predictions-debug", "hypothesisId": "A", "location": "3_Predictions.py:2333", "message": "Before number_input", "data": {"player": statline['Player'], "player_id": player_id_str, "current_min": current_min, "clamped_value": clamped_value, "statline_min": statline['MIN'], "has_manual_adj": player_id_str in st.session_state[manual_adjustments_key]}, "timestamp": int(time.time() * 1000)}) + '\n')
+                                # #endregion
+                                
                                 new_min = st.number_input(
                                     f"{statline['Player']}",
                                     min_value=0.0,
-                                    max_value=40.0,
-                                    value=float(current_min),
+                                    max_value=48.0,
+                                    value=clamped_value,
                                     step=0.5,
                                     key=player_key,
                                     format="%.1f"
                                 )
                                 
                                 # Store manual adjustment in session state (but don't apply until button click)
-                                # Only store if different from original value
-                                if abs(new_min - statline['MIN']) > 0.01:
+                                # Compare against ORIGINAL MIN (before manual adjustments), not normalized MIN
+                                original_min = st.session_state.get(original_mins_key, {}).get(player_id_str, statline['MIN'])
+                                if abs(new_min - original_min) > 0.01:
                                     st.session_state[manual_adjustments_key][player_id_str] = new_min
-                                elif player_id_str in st.session_state[manual_adjustments_key] and abs(new_min - statline['MIN']) <= 0.01:
+                                elif player_id_str in st.session_state[manual_adjustments_key] and abs(new_min - original_min) <= 0.01:
                                     # If user resets to original value, remove from manual adjustments
                                     del st.session_state[manual_adjustments_key][player_id_str]
                         
@@ -2124,21 +2506,33 @@ Estimated Cost: {preview['estimated_cost']}
                                 else:
                                     current_min = statline['MIN']
                                 
+                                # Allow up to 48 minutes (max possible in a game)
+                                # Use current_min but clamp to valid range to avoid errors
+                                clamped_value = max(0.0, min(48.0, float(current_min)))
+                                
+                                # #region agent log
+                                import json
+                                import time
+                                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                                    f.write(json.dumps({"sessionId": "debug-session", "runId": "predictions-debug", "hypothesisId": "A", "location": "3_Predictions.py:2333", "message": "Before number_input", "data": {"player": statline['Player'], "player_id": player_id_str, "current_min": current_min, "clamped_value": clamped_value, "statline_min": statline['MIN'], "has_manual_adj": player_id_str in st.session_state[manual_adjustments_key]}, "timestamp": int(time.time() * 1000)}) + '\n')
+                                # #endregion
+                                
                                 new_min = st.number_input(
                                     f"{statline['Player']}",
                                     min_value=0.0,
-                                    max_value=40.0,
-                                    value=float(current_min),
+                                    max_value=48.0,
+                                    value=clamped_value,
                                     step=0.5,
                                     key=player_key,
                                     format="%.1f"
                                 )
                                 
                                 # Store manual adjustment in session state (but don't apply until button click)
-                                # Only store if different from original value
-                                if abs(new_min - statline['MIN']) > 0.01:
+                                # Compare against ORIGINAL MIN (before manual adjustments), not normalized MIN
+                                original_min = st.session_state.get(original_mins_key, {}).get(player_id_str, statline['MIN'])
+                                if abs(new_min - original_min) > 0.01:
                                     st.session_state[manual_adjustments_key][player_id_str] = new_min
-                                elif player_id_str in st.session_state[manual_adjustments_key] and abs(new_min - statline['MIN']) <= 0.01:
+                                elif player_id_str in st.session_state[manual_adjustments_key] and abs(new_min - original_min) <= 0.01:
                                     # If user resets to original value, remove from manual adjustments
                                     del st.session_state[manual_adjustments_key][player_id_str]
                         
@@ -2148,6 +2542,11 @@ Estimated Cost: {preview['estimated_cost']}
                         
                         # Apply manual adjustments and recalculate button
                         if st.button("🔄 Recalculate Stats & Value Plays", key="recalc_stats"):
+                            # Clear best_plays cache so it recalculates with new minutes
+                            cached_best_plays_key = f"{game_cache_key_bvp}_best_plays"
+                            if cached_best_plays_key in st.session_state:
+                                del st.session_state[cached_best_plays_key]
+                            
                             # Get cached predictions for regenerating base stats
                             cached_game_predictions_recalc = st.session_state.predictions_game_cache.get(game_cache_key_bvp)
                             
@@ -2268,18 +2667,18 @@ Estimated Cost: {preview['estimated_cost']}
                                     if injury_item.get('player_id'):
                                         out_player_ids_recalc.add(str(injury_item['player_id']))
                             
-                            # Apply manual adjustments to statlines first
+                            # Manual adjustments were already applied to statlines_list_copy above (lines 2550-2554)
+                            # Now we just need to scale stats for manually adjusted players based on their new minutes
                             manual_adjustments = st.session_state[manual_adjustments_key]
                             for statline in statlines_list:
                                 player_id_str = statline['player_id']
                                 if player_id_str in manual_adjustments:
-                                    # Store original minutes for scaling stats
-                                    statline['_original_min'] = statline['MIN']
-                                    statline['MIN'] = manual_adjustments[player_id_str]
+                                    # Ensure MIN matches manual adjustment exactly (protect from any modifications)
+                                    new_minutes = manual_adjustments[player_id_str]
+                                    statline['MIN'] = new_minutes  # Force exact value from manual_adjustments dict
                                     
                                     # Scale stats for manually adjusted players
                                     old_minutes = statline.get('_original_min', statline.get('MIN', 0))
-                                    new_minutes = manual_adjustments[player_id_str]
                                     
                                     # If new minutes is 0 or very small, set all stats to 0
                                     if new_minutes <= 0.01:
@@ -2385,20 +2784,44 @@ Estimated Cost: {preview['estimated_cost']}
                             if manual_adjustments_key in st.session_state and st.session_state[manual_adjustments_key]:
                                 manual_adjustments_check = st.session_state[manual_adjustments_key]
                                 
-                                # Calculate totals for each team using CURRENT minutes (after manual adjustments applied)
+                                # Calculate totals for each team using manual adjustments if they exist, otherwise use current MIN
                                 away_total = 0.0
                                 home_total = 0.0
+                                away_manual_count = 0
+                                home_manual_count = 0
                                 
                                 for statline in statlines_list:
-                                    current_min = statline.get('MIN', 0)
+                                    player_id_str = statline.get('player_id')
+                                    # Use manual adjustment if exists, otherwise use current MIN from statline
+                                    if player_id_str in manual_adjustments_check:
+                                        current_min = manual_adjustments_check[player_id_str]
+                                        if statline.get('is_away', False):
+                                            away_manual_count += 1
+                                        else:
+                                            home_manual_count += 1
+                                    else:
+                                        current_min = statline.get('MIN', 0)
+                                    
                                     if statline.get('is_away', False):
                                         away_total += current_min
                                     else:
                                         home_total += current_min
                                 
+                                # #region agent log
+                                import json
+                                import time
+                                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                                    f.write(json.dumps({"sessionId": "debug-session", "runId": "predictions-debug", "hypothesisId": "B", "location": "3_Predictions.py:2644", "message": "Skip normalization check", "data": {"away_total": away_total, "home_total": home_total, "away_manual_count": away_manual_count, "home_manual_count": home_manual_count, "manual_adjustments": dict(list(manual_adjustments_check.items())[:5])}, "timestamp": int(time.time() * 1000)}) + '\n')
+                                # #endregion
+                                
                                 # If both teams sum to exactly 240, skip normalization entirely
                                 if abs(away_total - 240.0) < 0.01 and abs(home_total - 240.0) < 0.01:
                                     skip_normalization = True
+                                    
+                                    # #region agent log
+                                    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                                        f.write(json.dumps({"sessionId": "debug-session", "runId": "predictions-debug", "hypothesisId": "B", "location": "3_Predictions.py:2657", "message": "SKIPPING normalization - totals equal 240", "data": {"away_total": away_total, "home_total": home_total}, "timestamp": int(time.time() * 1000)}) + '\n')
+                                    # #endregion
                             
                             if not skip_normalization:
                                 # Normalize minutes to 240 per team (but protect manual adjustments)
@@ -2523,7 +2946,23 @@ Estimated Cost: {preview['estimated_cost']}
                                     breakdown={'normalized': statline['FPTS']}, factors={'source': 'normalized_statline'}
                                 )
                             
-                            # Recalculate Value Plays
+                            # Recalculate Value Plays with updated normalized_predictions
+                            # #region agent log
+                            import json
+                            import time
+                            trey_murphy_id = None
+                            trey_murphy_min = None
+                            trey_murphy_fpts = None
+                            for statline in statlines_list:
+                                if statline.get('Player') == 'Trey Murphy III':
+                                    trey_murphy_id = statline.get('player_id')
+                                    trey_murphy_min = statline.get('MIN')
+                                    trey_murphy_fpts = statline.get('FPTS')
+                                    break
+                            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                                f.write(json.dumps({"sessionId": "debug-session", "runId": "predictions-debug", "hypothesisId": "D", "location": "3_Predictions.py:2942", "message": "Before recalculating best_plays", "data": {"trey_murphy_id": trey_murphy_id, "trey_murphy_min": trey_murphy_min, "trey_murphy_fpts": trey_murphy_fpts, "normalized_predictions_count": len(normalized_predictions)}, "timestamp": int(time.time() * 1000)}) + '\n')
+                            # #endregion
+                            
                             best_plays = pm.find_best_value_plays(
                                 all_predictions=normalized_predictions,
                                 all_props=cached_game_props,
@@ -2532,6 +2971,137 @@ Estimated Cost: {preview['estimated_cost']}
                                 stat_filter=stat_options if stat_options else ['PTS', 'REB', 'AST', 'PRA'],
                                 injury_adjustments_map=None
                             )
+                            
+                            # #region agent log
+                            trey_murphy_play = None
+                            for play in best_plays:
+                                if play.get('player_name') == 'Trey Murphy III':
+                                    trey_murphy_play = play
+                                    break
+                            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                                f.write(json.dumps({"sessionId": "debug-session", "runId": "predictions-debug", "hypothesisId": "D", "location": "3_Predictions.py:2960", "message": "After recalculating best_plays", "data": {"trey_murphy_play": trey_murphy_play, "best_plays_count": len(best_plays)}, "timestamp": int(time.time() * 1000)}) + '\n')
+                            # #endregion
+                            
+                            # CRITICAL: Reapply manual adjustments AFTER normalization to ensure they're preserved
+                            # Normalization might have modified manual adjustment values, so restore them
+                            manual_adjustments_reapplied = False
+                            if manual_adjustments_key in st.session_state and st.session_state[manual_adjustments_key]:
+                                for statline in statlines_list:
+                                    player_id_str = statline.get('player_id')
+                                    if player_id_str in st.session_state[manual_adjustments_key]:
+                                        manual_min = st.session_state[manual_adjustments_key][player_id_str]
+                                        old_statline_min = statline.get('MIN', 0)
+                                        
+                                        # Only reapply if different (normalization might have changed it)
+                                        if abs(manual_min - old_statline_min) > 0.01:
+                                            statline['MIN'] = manual_min  # Force exact manual adjustment value
+                                            manual_adjustments_reapplied = True
+                                            # #region agent log
+                                            if statline.get('Player') in ['Trey Murphy III', 'Dorian Finney-Smith', 'Josh Okogie']:
+                                                import json
+                                                import time
+                                                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
+                                                    f.write(json.dumps({"sessionId": "debug-session", "runId": "predictions-debug", "hypothesisId": "G", "location": "3_Predictions.py:3008", "message": "Reapplying manual adjustment after normalization", "data": {"player": statline.get('Player'), "player_id": player_id_str, "manual_min": manual_min, "statline_min_before": old_statline_min}, "timestamp": int(time.time() * 1000)}) + '\n')
+                                            # #endregion
+                                            
+                                            # Recalculate stats for this player based on new minutes
+                                            # Use CURRENT normalized stats and minutes (not base_stats) for accurate scaling
+                                            old_minutes = old_statline_min  # Current normalized minutes before manual adjustment
+                                            new_minutes = manual_min
+                                            
+                                            if new_minutes > 0.01 and old_minutes > 0.01:
+                                                # Scale from CURRENT normalized stats (which already account for normalization)
+                                                # This ensures stats scale correctly relative to the current normalized state
+                                                scale_factor = new_minutes / old_minutes
+                                                statline['PTS'] = statline.get('PTS', 0.0) * scale_factor
+                                                statline['REB'] = statline.get('REB', 0.0) * scale_factor
+                                                statline['AST'] = statline.get('AST', 0.0) * scale_factor
+                                                statline['STL'] = statline.get('STL', 0.0) * scale_factor
+                                                statline['BLK'] = statline.get('BLK', 0.0) * scale_factor
+                                                statline['TOV'] = statline.get('TOV', 0.0) * scale_factor
+                                                statline['FG3M'] = statline.get('FG3M', 0.0) * scale_factor
+                                                statline['FTM'] = statline.get('FTM', 0.0) * scale_factor
+                                                
+                                                # Recalculate derived stats
+                                                statline['PRA'] = statline['PTS'] + statline['REB'] + statline['AST']
+                                                statline['RA'] = statline['REB'] + statline['AST']
+                                                statline['FPTS'] = (
+                                                    statline['PTS'] + 
+                                                    statline['REB'] * 1.2 + 
+                                                    statline['AST'] * 1.5 + 
+                                                    statline['STL'] * 3 + 
+                                                    statline['BLK'] * 3 - 
+                                                    statline['TOV']
+                                                )
+                            
+                            # If manual adjustments were reapplied, rebuild normalized_predictions and recalculate value plays
+                            if manual_adjustments_reapplied:
+                                # Rebuild normalized_predictions with updated statlines
+                                normalized_predictions = {}
+                                for statline in statlines_list:
+                                    player_id_str = statline['player_id']
+                                    if player_id_str not in normalized_predictions:
+                                        normalized_predictions[player_id_str] = {
+                                            'predictions': {},
+                                            'player_name': statline['Player'],
+                                            'team_abbr': statline['Team']
+                                        }
+                                    
+                                    from prediction_model import Prediction
+                                    normalized_predictions[player_id_str]['predictions']['PTS'] = Prediction(
+                                        stat='PTS', value=statline['PTS'], confidence='high',
+                                        breakdown={'normalized': statline['PTS']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['REB'] = Prediction(
+                                        stat='REB', value=statline['REB'], confidence='high',
+                                        breakdown={'normalized': statline['REB']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['AST'] = Prediction(
+                                        stat='AST', value=statline['AST'], confidence='high',
+                                        breakdown={'normalized': statline['AST']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['STL'] = Prediction(
+                                        stat='STL', value=statline['STL'], confidence='high',
+                                        breakdown={'normalized': statline['STL']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['BLK'] = Prediction(
+                                        stat='BLK', value=statline['BLK'], confidence='high',
+                                        breakdown={'normalized': statline['BLK']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['TOV'] = Prediction(
+                                        stat='TOV', value=statline['TOV'], confidence='high',
+                                        breakdown={'normalized': statline['TOV']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['FG3M'] = Prediction(
+                                        stat='FG3M', value=statline['FG3M'], confidence='high',
+                                        breakdown={'normalized': statline['FG3M']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['FTM'] = Prediction(
+                                        stat='FTM', value=statline['FTM'], confidence='high',
+                                        breakdown={'normalized': statline['FTM']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['PRA'] = Prediction(
+                                        stat='PRA', value=statline['PRA'], confidence='high',
+                                        breakdown={'normalized': statline['PRA']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['RA'] = Prediction(
+                                        stat='RA', value=statline['RA'], confidence='high',
+                                        breakdown={'normalized': statline['RA']}, factors={'source': 'normalized_statline'}
+                                    )
+                                    normalized_predictions[player_id_str]['predictions']['FPTS'] = Prediction(
+                                        stat='FPTS', value=statline['FPTS'], confidence='high',
+                                        breakdown={'normalized': statline['FPTS']}, factors={'source': 'normalized_statline'}
+                                    )
+                                
+                                # Recalculate value plays with updated normalized_predictions
+                                best_plays = pm.find_best_value_plays(
+                                    all_predictions=normalized_predictions,
+                                    all_props=cached_game_props,
+                                    min_edge_pct=float(min_edge),
+                                    confidence_filter=confidence_options if confidence_options else ['high', 'medium', 'low'],
+                                    stat_filter=stat_options if stat_options else ['PTS', 'REB', 'AST', 'PRA'],
+                                    injury_adjustments_map=None
+                                )
                             
                             # Update session state
                             st.session_state[normalized_statlines_key] = statlines_list

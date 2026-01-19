@@ -37,10 +37,6 @@ def get_team_onoff_summary(team_id: int, season: str = CURRENT_SEASON,
     Returns:
         DataFrame with on/off court data for all players on the team, or empty DataFrame on error
     """
-    # #region agent log
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "A", "location": "team_onoff.py:40", "message": "get_team_onoff_summary entry", "data": {"team_id": team_id, "season": season, "attempt": 0}, "timestamp": int(time.time() * 1000)}) + '\n')
-    # #endregion
     
     # Fetch from API
     for attempt in range(max_retries):
@@ -58,20 +54,11 @@ def get_team_onoff_summary(team_id: int, season: str = CURRENT_SEASON,
             # Get all dataframes from the endpoint
             data_frames = endpoint.get_data_frames()
             
-            # #region agent log
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "A", "location": "team_onoff.py:54", "message": "API response received", "data": {"num_dataframes": len(data_frames), "attempt": attempt}, "timestamp": int(time.time() * 1000)}) + '\n')
-            # #endregion
-            
             # Index 0: OverallTeamPlayerOnOffDetails (team-level, not player-level)
             # Index 1: PlayersOffCourtTeamPlayerOnOffDetails (player stats when OFF court)
             # Index 2: PlayersOnCourtTeamPlayerOnOffDetails (player stats when ON court)
             
             if len(data_frames) < 3:
-                # #region agent log
-                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "A", "location": "team_onoff.py:60", "message": "Insufficient dataframes", "data": {"num_dataframes": len(data_frames)}, "timestamp": int(time.time() * 1000)}) + '\n')
-                # #endregion
                 return pd.DataFrame()
             
             # The NBA API returns dataframes in a specific order, but we need to verify which is which
@@ -94,11 +81,6 @@ def get_team_onoff_summary(team_id: int, season: str = CURRENT_SEASON,
             avg_min1 = temp_df1[min_col1].mean() if min_col1 else 0
             avg_min2 = temp_df2[min_col2].mean() if min_col2 else 0
             
-            # #region agent log
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "F", "location": "team_onoff.py:77", "message": "Dataframes extracted - checking which is ON/OFF", "data": {"df1_rows": len(temp_df1), "df2_rows": len(temp_df2), "avg_min1": avg_min1, "avg_min2": avg_min2, "min_col1": min_col1, "min_col2": min_col2}, "timestamp": int(time.time() * 1000)}) + '\n')
-            # #endregion
-            
             # Assign based on which has higher minutes
             # IMPORTANT: Based on NBA API structure, data_frames[1] is PlayersOffCourt, data_frames[2] is PlayersOnCourt
             # But we verify by checking minutes: ON_COURT should have player's actual minutes (varies by player role)
@@ -112,34 +94,12 @@ def get_team_onoff_summary(team_id: int, season: str = CURRENT_SEASON,
                 # Based on user feedback, let's try: df1 = ON_COURT, df2 = OFF_COURT
                 players_on_court_df = temp_df1
                 players_off_court_df = temp_df2
-                # #region agent log
-                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "F", "location": "team_onoff.py:107", "message": "Assigned: df1=ON_COURT (higher min), df2=OFF_COURT (lower min) - REVERSED", "data": {"avg_min1": avg_min1, "avg_min2": avg_min2}, "timestamp": int(time.time() * 1000)}) + '\n')
-                # #endregion
             else:
                 # df2 has higher minutes - try assigning as ON_COURT
                 players_on_court_df = temp_df2
                 players_off_court_df = temp_df1
-                # #region agent log
-                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "F", "location": "team_onoff.py:117", "message": "Assigned: df2=ON_COURT (higher min), df1=OFF_COURT (lower min) - REVERSED", "data": {"avg_min1": avg_min1, "avg_min2": avg_min2}, "timestamp": int(time.time() * 1000)}) + '\n')
-                # #endregion
-            
-            # #region agent log
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "B", "location": "team_onoff.py:110", "message": "Dataframes after assignment", "data": {"off_court_rows": len(players_off_court_df), "on_court_rows": len(players_on_court_df), "off_court_cols": list(players_off_court_df.columns)[:10], "on_court_cols": list(players_on_court_df.columns)[:10]}, "timestamp": int(time.time() * 1000)}) + '\n')
-            # #endregion
-            
-            # #region agent log
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "B", "location": "team_onoff.py:100", "message": "Dataframes after swap check", "data": {"off_court_rows": len(players_off_court_df), "on_court_rows": len(players_on_court_df), "off_court_cols": list(players_off_court_df.columns)[:10], "on_court_cols": list(players_on_court_df.columns)[:10]}, "timestamp": int(time.time() * 1000)}) + '\n')
-            # #endregion
             
             if len(players_off_court_df) == 0 or len(players_on_court_df) == 0:
-                # #region agent log
-                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "A", "location": "team_onoff.py:68", "message": "Empty dataframes", "data": {"off_court_empty": len(players_off_court_df) == 0, "on_court_empty": len(players_on_court_df) == 0}, "timestamp": int(time.time() * 1000)}) + '\n')
-                # #endregion
                 return pd.DataFrame()
             
             # Merge on VS_PLAYER_ID (the player ID column)
@@ -153,13 +113,6 @@ def get_team_onoff_summary(team_id: int, season: str = CURRENT_SEASON,
             players_on_court_df = players_on_court_df.rename(columns=on_cols)
             players_off_court_df = players_off_court_df.rename(columns=off_cols)
             
-            # #region agent log
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                has_vs_player_id_on = 'VS_PLAYER_ID' in players_on_court_df.columns
-                has_vs_player_id_off = 'VS_PLAYER_ID' in players_off_court_df.columns
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "C", "location": "team_onoff.py:80", "message": "Before merge", "data": {"has_vs_player_id_on": has_vs_player_id_on, "has_vs_player_id_off": has_vs_player_id_off, "on_court_cols": list(players_on_court_df.columns), "off_court_cols": list(players_off_court_df.columns)}, "timestamp": int(time.time() * 1000)}) + '\n')
-            # #endregion
-            
             # Merge on VS_PLAYER_ID
             merged_df = pd.merge(
                 players_on_court_df,
@@ -168,18 +121,6 @@ def get_team_onoff_summary(team_id: int, season: str = CURRENT_SEASON,
                 how='inner',
                 suffixes=('', '_y')
             )
-            
-            # #region agent log
-            # Log sample values to verify ON/OFF assignment
-            sample_min_on = None
-            sample_min_off = None
-            if 'MIN_ON_COURT' in merged_df.columns and 'MIN_OFF_COURT' in merged_df.columns and len(merged_df) > 0:
-                sample_min_on = float(merged_df['MIN_ON_COURT'].iloc[0]) if pd.notna(merged_df['MIN_ON_COURT'].iloc[0]) else None
-                sample_min_off = float(merged_df['MIN_OFF_COURT'].iloc[0]) if pd.notna(merged_df['MIN_OFF_COURT'].iloc[0]) else None
-            
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "C", "location": "team_onoff.py:145", "message": "After merge - sample values", "data": {"merged_rows": len(merged_df), "sample_min_on": sample_min_on, "sample_min_off": sample_min_off, "has_min_on": "MIN_ON_COURT" in merged_df.columns, "has_min_off": "MIN_OFF_COURT" in merged_df.columns}, "timestamp": int(time.time() * 1000)}) + '\n')
-            # #endregion
             
             # Clean up duplicate columns from merge
             if 'VS_PLAYER_NAME_y' in merged_df.columns:
@@ -231,10 +172,6 @@ def process_onoff_data(onoff_df: pd.DataFrame, min_minutes: int = MIN_MINUTES_TH
     Returns:
         Processed DataFrame with calculated metrics and differentials
     """
-    # #region agent log
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "D", "location": "team_onoff.py:127", "message": "process_onoff_data entry", "data": {"input_rows": len(onoff_df) if onoff_df is not None else 0, "input_cols": list(onoff_df.columns)[:20] if onoff_df is not None and len(onoff_df) > 0 else [], "min_minutes": min_minutes}, "timestamp": int(time.time() * 1000)}) + '\n')
-    # #endregion
     
     if onoff_df is None or len(onoff_df) == 0:
         return pd.DataFrame()
@@ -272,15 +209,7 @@ def process_onoff_data(onoff_df: pd.DataFrame, min_minutes: int = MIN_MINUTES_TH
     if min_on_col:
         rows_before_filter = len(df)
         df = df[df[min_on_col] >= min_minutes].copy()
-        # #region agent log
-        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "D", "location": "team_onoff.py:157", "message": "After minutes filter", "data": {"rows_before": rows_before_filter, "rows_after": len(df), "min_on_col": min_on_col, "min_minutes": min_minutes}, "timestamp": int(time.time() * 1000)}) + '\n')
-        # #endregion
     else:
-        # #region agent log
-        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "B", "location": "team_onoff.py:162", "message": "min_on_col not found", "data": {"all_cols": list(df.columns)}, "timestamp": int(time.time() * 1000)}) + '\n')
-        # #endregion
     
     # Net Rating columns - prioritize exact matches, avoid RANK columns
     net_on_col = None
@@ -388,18 +317,6 @@ def process_onoff_data(onoff_df: pd.DataFrame, min_minutes: int = MIN_MINUTES_TH
         # Store original column names for display
         df['NET_RATING_ON_COURT'] = df[net_on_col]
         df['NET_RATING_OFF_COURT'] = df[net_off_col]
-        
-        # #region agent log
-        if len(df) > 0:
-            sample_idx = 0
-            sample_min_on_val = float(df['MIN_ON_COURT'].iloc[sample_idx]) if 'MIN_ON_COURT' in df.columns and pd.notna(df['MIN_ON_COURT'].iloc[sample_idx]) else None
-            sample_min_off_val = float(df['MIN_OFF_COURT'].iloc[sample_idx]) if 'MIN_OFF_COURT' in df.columns and pd.notna(df['MIN_OFF_COURT'].iloc[sample_idx]) else None
-            sample_net_on_val = float(df[net_on_col].iloc[sample_idx]) if pd.notna(df[net_on_col].iloc[sample_idx]) else None
-            sample_net_off_val = float(df[net_off_col].iloc[sample_idx]) if pd.notna(df[net_off_col].iloc[sample_idx]) else None
-            sample_diff_val = float(df['NET_RTG_DIFF'].iloc[sample_idx]) if pd.notna(df['NET_RTG_DIFF'].iloc[sample_idx]) else None
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "F", "location": "team_onoff.py:381", "message": "After diff calculation - sample values", "data": {"sample_min_on": sample_min_on_val, "sample_min_off": sample_min_off_val, "sample_net_on": sample_net_on_val, "sample_net_off": sample_net_off_val, "sample_diff": sample_diff_val, "net_on_col": net_on_col, "net_off_col": net_off_col}, "timestamp": int(time.time() * 1000)}) + '\n')
-        # #endregion
     
     if off_on_col and off_off_col:
         df['OFF_RTG_DIFF'] = df[off_on_col] - df[off_off_col]
@@ -424,11 +341,6 @@ def process_onoff_data(onoff_df: pd.DataFrame, min_minutes: int = MIN_MINUTES_TH
     if min_off_col:
         df['MIN_OFF_COURT'] = df[min_off_col]
     
-    # #region agent log
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "B", "location": "team_onoff.py:228", "message": "process_onoff_data exit", "data": {"output_rows": len(df), "found_cols": {"min_on": min_on_col, "min_off": min_off_col, "net_on": net_on_col, "net_off": net_off_col, "off_on": off_on_col, "off_off": off_off_col, "def_on": def_on_col, "def_off": def_off_col}}, "timestamp": int(time.time() * 1000)}) + '\n')
-    # #endregion
-    
     return df
 
 
@@ -451,10 +363,6 @@ def format_onoff_display_data(processed_df: pd.DataFrame, players_df: Optional[p
         
         # Add player names and headshots if players_df is provided
         if players_df is not None and len(players_df) > 0:
-            # #region agent log
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "team_onoff.py:378", "message": "format_onoff_display_data: Before player merge", "data": {"has_players_df": players_df is not None, "players_df_rows": len(players_df) if players_df is not None else 0, "players_df_cols": list(players_df.columns)[:20] if players_df is not None and len(players_df) > 0 else [], "df_has_player_id": 'PLAYER_ID' in df.columns, "players_df_has_person_id": 'PERSON_ID' in players_df.columns if players_df is not None else False}, "timestamp": int(time.time() * 1000)}) + '\n')
-            # #endregion
             
             # Merge player info
         if 'PLAYER_ID' in df.columns and 'PERSON_ID' in players_df.columns:
@@ -469,22 +377,12 @@ def format_onoff_display_data(processed_df: pd.DataFrame, players_df: Optional[p
                 if col in players_df.columns:
                     available_cols.append(col)
             
-            # #region agent log
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "team_onoff.py:395", "message": "format_onoff_display_data: Before merge", "data": {"available_cols": available_cols, "required_cols": required_cols, "all_players_df_cols": list(players_df.columns)}, "timestamp": int(time.time() * 1000)}) + '\n')
-            # #endregion
-            
             # Merge with only available columns
             if len(available_cols) > 0:
                 try:
                     # Double-check all columns exist before selecting - create a copy to avoid any reference issues
                     players_df_copy = players_df.copy()
                     final_cols = [col for col in available_cols if col in players_df_copy.columns]
-                    
-                    # #region agent log
-                    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "team_onoff.py:408", "message": "Before merge - final check", "data": {"available_cols": available_cols, "final_cols": final_cols, "players_df_cols": list(players_df_copy.columns)}, "timestamp": int(time.time() * 1000)}) + '\n')
-                    # #endregion
                     
                     if len(final_cols) > 0:
                         df = df.merge(
@@ -494,10 +392,6 @@ def format_onoff_display_data(processed_df: pd.DataFrame, players_df: Optional[p
                             how='left'
                         )
                 except (KeyError, IndexError, ValueError) as e:
-                    # #region agent log
-                    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "team_onoff.py:420", "message": "Merge error", "data": {"error": str(e), "error_type": type(e).__name__, "available_cols": available_cols, "players_df_cols": list(players_df.columns) if players_df is not None else []}, "timestamp": int(time.time() * 1000)}) + '\n')
-                    # #endregion
                     # Continue without player info merge if it fails
                     pass
             
@@ -574,18 +468,9 @@ def format_onoff_display_data(processed_df: pd.DataFrame, players_df: Optional[p
         if 'NET_RTG_DIFF' in result_df.columns:
             result_df = result_df.sort_values('NET_RTG_DIFF', ascending=False)
         
-        # #region agent log
-        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "team_onoff.py:510", "message": "format_onoff_display_data exit", "data": {"output_rows": len(result_df), "output_cols": list(result_df.columns)[:10]}, "timestamp": int(time.time() * 1000)}) + '\n')
-        # #endregion
-        
         return result_df
     
     except Exception as e:
-        # #region agent log
-        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "team_onoff.py:518", "message": "format_onoff_display_data: Exception caught", "data": {"error": str(e), "error_type": type(e).__name__}, "timestamp": int(time.time() * 1000)}) + '\n')
-        # #endregion
         # Return empty DataFrame on any error
         return pd.DataFrame()
 
@@ -605,31 +490,12 @@ def get_team_onoff_formatted(team_id: int, season: str = CURRENT_SEASON,
     Returns:
         Formatted DataFrame ready for display
     """
-    # #region agent log
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "team_onoff.py:338", "message": "get_team_onoff_formatted entry", "data": {"team_id": team_id, "season": season, "has_players_df": players_df is not None, "players_df_rows": len(players_df) if players_df is not None else 0, "min_minutes": min_minutes}, "timestamp": int(time.time() * 1000)}) + '\n')
-    # #endregion
     
     raw_data = get_team_onoff_summary(team_id, season)
     
-    # #region agent log
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "team_onoff.py:345", "message": "After get_team_onoff_summary", "data": {"raw_data_rows": len(raw_data), "raw_data_cols": list(raw_data.columns)[:15] if len(raw_data) > 0 else []}, "timestamp": int(time.time() * 1000)}) + '\n')
-    # #endregion
-    
     processed_data = process_onoff_data(raw_data, min_minutes)
     
-    # #region agent log
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "team_onoff.py:351", "message": "After process_onoff_data", "data": {"processed_data_rows": len(processed_data), "processed_data_cols": list(processed_data.columns)[:15] if len(processed_data) > 0 else []}, "timestamp": int(time.time() * 1000)}) + '\n')
-    # #endregion
-    
     formatted_data = format_onoff_display_data(processed_data, players_df)
-    
-    # #region agent log
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "team_onoff.py:357", "message": "get_team_onoff_formatted exit", "data": {"formatted_data_rows": len(formatted_data), "formatted_data_cols": list(formatted_data.columns) if len(formatted_data) > 0 else []}, "timestamp": int(time.time() * 1000)}) + '\n')
-    # #endregion
     
     return formatted_data
 

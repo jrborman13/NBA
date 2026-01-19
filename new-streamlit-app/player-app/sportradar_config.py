@@ -161,86 +161,18 @@ def fetch_sportradar_nba(endpoint: str, params: Optional[dict] = None, use_us_do
             "x-api-key": SPORTRADAR_NBA_API_KEY
         }
     
-    # #region agent log
-    try:
-        from pathlib import Path
-        import json
-        debug_log_path = Path(__file__).parent.parent.parent / '.cursor' / 'debug.log'
-        log_entry = {
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "URL",
-            "location": "sportradar_config.py:fetch_sportradar_nba",
-            "message": "Before API request",
-            "data": {"url": url, "endpoint": endpoint, "has_params": params is not None, "use_headers": use_headers},
-            "timestamp": int(__import__('datetime').datetime.now(__import__('datetime').UTC).timestamp() * 1000)
-        }
-        with open(debug_log_path, 'a') as f:
-            f.write(json.dumps(log_entry) + '\n')
-    except Exception:
-        pass
-    # #endregion
     
     response = requests.get(url, headers=headers, timeout=30)
     
-    # #region agent log
-    try:
-        log_entry = {
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "URL",
-            "location": "sportradar_config.py:fetch_sportradar_nba",
-            "message": "After API request",
-            "data": {"status_code": response.status_code, "url": url, "response_length": len(response.text)},
-            "timestamp": int(__import__('datetime').datetime.now(__import__('datetime').UTC).timestamp() * 1000)
-        }
-        with open(debug_log_path, 'a') as f:
-            f.write(json.dumps(log_entry) + '\n')
-    except Exception:
-        pass
-    # #endregion
     
     # Better error handling - show response details
     if response.status_code != 200:
         print(f"[SPORTRADAR] Error response status: {response.status_code}")
         print(f"[SPORTRADAR] Error response text: {response.text[:500]}")
         
-        # #region agent log
-        try:
-            log_entry = {
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "URL",
-                "location": "sportradar_config.py:fetch_sportradar_nba",
-                "message": "Error response received",
-                "data": {"status_code": response.status_code, "response_text": response.text[:500], "headers": dict(response.headers)},
-                "timestamp": int(__import__('datetime').datetime.now(__import__('datetime').UTC).timestamp() * 1000)
-            }
-            with open(debug_log_path, 'a') as f:
-                f.write(json.dumps(log_entry) + '\n')
-        except Exception:
-            pass
-        # #endregion
         
         response.raise_for_status()
     
-    # #region agent log
-    try:
-        response_json = response.json()
-        log_entry = {
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "RESPONSE",
-            "location": "sportradar_config.py:fetch_sportradar_nba",
-            "message": "Successful response received",
-            "data": {"status_code": response.status_code, "response_keys": list(response_json.keys()) if isinstance(response_json, dict) else "not_dict", "response_type": type(response_json).__name__, "response_preview": str(response_json)[:500]},
-            "timestamp": int(__import__('datetime').datetime.now(__import__('datetime').UTC).timestamp() * 1000)
-        }
-        with open(debug_log_path, 'a') as f:
-            f.write(json.dumps(log_entry) + '\n')
-    except Exception:
-        pass
-    # #endregion
     
     return response.json()
 

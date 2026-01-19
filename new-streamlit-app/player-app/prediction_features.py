@@ -883,11 +883,6 @@ def get_all_prediction_features(
         }
     
     features_total_time = time.time() - features_start
-    # #region agent log
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        import json
-        f.write(json.dumps({"sessionId": "debug-session", "runId": "perf-analysis", "hypothesisId": "PERF", "location": "prediction_features.py:885", "message": "Feature gathering completed", "data": {"player_id": player_id, "features_total_time_ms": features_total_time * 1000, "logs_time_ms": logs_time * 1000, "rolling_time_ms": rolling_time * 1000}, "timestamp": int(time.time() * 1000)}) + '\n')
-    # #endregion
     
     return features
 

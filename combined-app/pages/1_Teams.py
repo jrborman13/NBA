@@ -892,29 +892,6 @@ if selected_matchup:
         filter_time = time.time() - filter_start
         total_time = time.time() - start_time
         
-        # Log timing
-        log_path = Path("/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log")
-        try:
-            with open(log_path, 'a') as f:
-                log_entry = {
-                    "timestamp": time.time() * 1000,
-                    "location": "1_Teams.py:955",
-                    "message": "get_all_team_synergy_data timing",
-                    "data": {
-                        "team_id": team_id,
-                        "season": season,
-                        "bulk_time_ms": bulk_time * 1000,
-                        "filter_time_ms": filter_time * 1000,
-                        "total_time_ms": total_time * 1000
-                    },
-                    "sessionId": "debug-session",
-                    "runId": "timing",
-                    "hypothesisId": "A"
-                }
-                f.write(json.dumps(log_entry) + "\n")
-        except Exception:
-            pass
-        
         print(f"[TIMING] get_all_team_synergy_data: bulk={bulk_time*1000:.1f}ms, filter={filter_time*1000:.1f}ms, total={total_time*1000:.1f}ms")
         
         return result
@@ -1125,31 +1102,6 @@ if selected_matchup:
                 home_defense_df.at[idx, 'Freq Rank'] = freq_rank
         
         build_time = time.time() - build_start
-        
-        # Log timing
-        log_path = Path("/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log")
-        try:
-            with open(log_path, 'a') as f:
-                log_entry = {
-                    "timestamp": time.time() * 1000,
-                    "location": "1_Teams.py:1136",
-                    "message": "build_synergy_matchup_dataframes timing",
-                    "data": {
-                        "away_team_id": away_team_id,
-                        "home_team_id": home_team_id,
-                        "season": season,
-                        "away_fetch_time_ms": away_time * 1000,
-                        "home_fetch_time_ms": home_time * 1000,
-                        "build_time_ms": build_time * 1000,
-                        "total_time_ms": build_time * 1000
-                    },
-                    "sessionId": "debug-session",
-                    "runId": "timing",
-                    "hypothesisId": "B"
-                }
-                f.write(json.dumps(log_entry) + "\n")
-        except Exception:
-            pass
         
         print(f"[TIMING] build_synergy_matchup_dataframes: away={away_time*1000:.1f}ms, home={home_time*1000:.1f}ms, build={build_time*1000:.1f}ms, total={build_time*1000:.1f}ms")
         
@@ -3244,12 +3196,6 @@ if selected_matchup:
         st.markdown("### On/Off Court Summary")
         
         try:
-            # #region agent log
-            import json
-            import time
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "1_Teams.py:3247", "message": "Calling get_team_onoff_formatted", "data": {"away_team_id": int(away_team_id), "home_team_id": int(home_team_id), "has_players_df": players_df is not None, "players_df_rows": len(players_df) if players_df is not None else 0}, "timestamp": int(time.time() * 1000)}) + '\n')
-            # #endregion
             
             # Fetch on/off court data for both teams
             away_onoff_data = toff.get_team_onoff_formatted(
@@ -3265,11 +3211,6 @@ if selected_matchup:
                 players_df=players_df,
                 min_minutes=100
             )
-            
-            # #region agent log
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "onoff-debug", "hypothesisId": "E", "location": "1_Teams.py:3262", "message": "After get_team_onoff_formatted calls", "data": {"away_onoff_rows": len(away_onoff_data), "home_onoff_rows": len(home_onoff_data), "away_onoff_cols": list(away_onoff_data.columns) if len(away_onoff_data) > 0 else [], "home_onoff_cols": list(home_onoff_data.columns) if len(home_onoff_data) > 0 else []}, "timestamp": int(time.time() * 1000)}) + '\n')
-            # #endregion
             
             if len(away_onoff_data) > 0 or len(home_onoff_data) > 0:
                 # Helper function to create column config (shared for both teams)

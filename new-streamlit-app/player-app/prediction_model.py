@@ -774,6 +774,80 @@ class PlayerStatPredictor:
         predict_total_time = time.time() - predict_start
         
         return predictions
+    
+    def calculate_ceiling_floor(
+        self,
+        player_features: Dict,
+        predictions: Dict[str, Prediction]
+    ) -> Dict[str, float]:
+        """
+        Calculate ceiling, floor, and variance for FPTS based on historical game logs.
+        
+        Args:
+            player_features: Dict from get_all_prediction_features() (contains game_logs)
+            predictions: Dict of stat -> Prediction (to get median FPTS)
+        
+        Returns:
+            Dict with 'ceiling', 'floor', 'median', 'variance', 'std_dev'
+        """
+        game_logs = player_features.get('game_logs', pd.DataFrame())
+        
+        # Default values (use median prediction if no history)
+        median_fpts = predictions.get('FPTS', Prediction('FPTS', 0.0, 'low', {}, {})).value
+        ceiling_fpts = median_fpts * 1.3  # 30% above median as default ceiling
+        floor_fpts = median_fpts * 0.7    # 30% below median as default floor
+        variance = 0.0
+        std_dev = 0.0
+        
+        if len(game_logs) > 0:
+            # Calculate FPTS for each game using Underdog formula
+            # PTS*1 + REB*1.2 + AST*1.5 + STL*3 + BLK*3 - TOV*1
+            required_cols = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV']
+            if all(col in game_logs.columns for col in required_cols):
+                # Calculate FPTS for each game
+                game_logs = game_logs.copy()
+                game_logs['FPTS'] = (
+                    game_logs['PTS'].fillna(0) * 1.0 +
+                    game_logs['REB'].fillna(0) * 1.2 +
+                    game_logs['AST'].fillna(0) * 1.5 +
+                    game_logs['STL'].fillna(0) * 3.0 +
+                    game_logs['BLK'].fillna(0) * 3.0 -
+                    game_logs['TOV'].fillna(0) * 1.0
+                )
+                
+                # Use last 15 games for more recent variance (or all if less than 15)
+                recent_logs = game_logs.head(15)
+                fpts_values = recent_logs['FPTS'].dropna().tolist()
+                
+                if len(fpts_values) >= 5:  # Need at least 5 games for meaningful percentiles
+                    # Calculate percentiles
+                    floor_fpts = float(np.percentile(fpts_values, 25))  # 25th percentile
+                    median_fpts_hist = float(np.percentile(fpts_values, 50))  # 50th percentile
+                    ceiling_fpts = float(np.percentile(fpts_values, 75))  # 75th percentile
+                    
+                    # Calculate variance and standard deviation
+                    variance = float(np.var(fpts_values))
+                    std_dev = float(np.std(fpts_values))
+                    
+                    # Use historical median if available, otherwise use prediction
+                    # But prefer prediction median as it includes matchup adjustments
+                    median_fpts = predictions.get('FPTS', Prediction('FPTS', median_fpts_hist, 'low', {}, {})).value
+                elif len(fpts_values) >= 3:
+                    # With 3-4 games, use min/max/median
+                    floor_fpts = float(min(fpts_values))
+                    median_fpts_hist = float(np.median(fpts_values))
+                    ceiling_fpts = float(max(fpts_values))
+                    variance = float(np.var(fpts_values))
+                    std_dev = float(np.std(fpts_values))
+                    median_fpts = predictions.get('FPTS', Prediction('FPTS', median_fpts_hist, 'low', {}, {})).value
+        
+        return {
+            'ceiling': round(ceiling_fpts, 1),
+            'floor': round(floor_fpts, 1),
+            'median': round(median_fpts, 1),
+            'variance': round(variance, 2),
+            'std_dev': round(std_dev, 2)
+        }
 
 
 def generate_prediction(
@@ -788,7 +862,8 @@ def generate_prediction(
     bulk_drives_stats: pd.DataFrame = None,
     bulk_offensive_synergy: Dict[str, pd.DataFrame] = None,
     use_similar_players: bool = False,
-    projected_minutes: Optional[float] = None
+    projected_minutes: Optional[float] = None,
+    return_ceiling_floor: bool = False
 ) -> Dict[str, Prediction]:
     """
     Main entry point for generating predictions.
@@ -804,9 +879,10 @@ def generate_prediction(
         bulk_advanced_stats: Optional pre-fetched bulk advanced stats (for batch processing)
         bulk_drives_stats: Optional pre-fetched bulk drives stats (for batch processing)
         bulk_offensive_synergy: Optional pre-fetched bulk offensive synergy data (for batch processing)
+        return_ceiling_floor: If True, returns dict with 'predictions' and 'ceiling_floor' keys
     
     Returns:
-        Dict of stat -> Prediction
+        Dict of stat -> Prediction, or if return_ceiling_floor=True: Dict with 'predictions' and 'ceiling_floor'
     """
     # Gather all features
     player_features = features.get_all_prediction_features(
@@ -831,6 +907,25 @@ def generate_prediction(
     # Generate predictions
     predictor = PlayerStatPredictor()
     predictions = predictor.predict_all_stats(player_features)
+    
+    # Calculate ceiling/floor for FPTS
+    ceiling_floor = predictor.calculate_ceiling_floor(player_features, predictions)
+    
+    # Add ceiling/floor to predictions dict for easy access
+    # Store as metadata in FPTS prediction factors
+    if 'FPTS' in predictions:
+        fpts_pred = predictions['FPTS']
+        fpts_pred.factors['ceiling'] = str(ceiling_floor['ceiling'])
+        fpts_pred.factors['floor'] = str(ceiling_floor['floor'])
+        fpts_pred.factors['median'] = str(ceiling_floor['median'])
+        fpts_pred.factors['variance'] = str(ceiling_floor['variance'])
+        fpts_pred.factors['std_dev'] = str(ceiling_floor['std_dev'])
+    
+    if return_ceiling_floor:
+        return {
+            'predictions': predictions,
+            'ceiling_floor': ceiling_floor
+        }
     
     return predictions
 
@@ -914,6 +1009,7 @@ def generate_predictions_for_game(
     
     # OPTIMIZATION: Fetch ALL bulk data in a few API calls upfront
     # This replaces 100+ individual API calls with just a handful of bulk calls
+    bulk_fetch_start = time.time()
     
     bulk_game_logs = features.get_bulk_player_game_logs()
     bulk_game_logs_time = time.time() - bulk_fetch_start
@@ -965,7 +1061,8 @@ def generate_predictions_for_game(
         try:
             # Generate predictions for this player using bulk data
             # Skip similar players for batch predictions (too slow)
-            predictions = generate_prediction(
+            pred_start = time.time()
+            result = generate_prediction(
                 player_id=player_id,
                 player_team_id=int(player_team_id),
                 opponent_team_id=int(opponent_team_id),
@@ -976,8 +1073,12 @@ def generate_predictions_for_game(
                 bulk_advanced_stats=bulk_advanced_stats,
                 bulk_drives_stats=bulk_drives_stats,
                 bulk_offensive_synergy=bulk_offensive_synergy,
-                use_similar_players=False  # Skip for batch to improve performance
+                use_similar_players=False,  # Skip for batch to improve performance
+                return_ceiling_floor=True
             )
+            predictions = result['predictions']
+            ceiling_floor = result['ceiling_floor']
+            
             pred_time = time.time() - pred_start
             player_total_time = time.time() - player_start_time
             
@@ -988,7 +1089,8 @@ def generate_predictions_for_game(
                 'player_name': player_name,
                 'opponent_abbr': opponent_abbr,
                 'is_home': is_home,
-                'team_abbr': home_team_abbr if is_home else away_team_abbr
+                'team_abbr': home_team_abbr if is_home else away_team_abbr,
+                'ceiling_floor': ceiling_floor
             }
         except Exception as e:
             # Log error but continue with other players

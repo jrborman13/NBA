@@ -14,3 +14,6 @@ matplotlib
 unidecode
 supabase
 python-dotenv
+pulp
+fuzzywuzzy
+python-Levenshtein

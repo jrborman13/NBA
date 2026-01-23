@@ -61,43 +61,13 @@ def get_team_onoff_summary(team_id: int, season: str = CURRENT_SEASON,
             if len(data_frames) < 3:
                 return pd.DataFrame()
             
-            # The NBA API returns dataframes in a specific order, but we need to verify which is which
-            # by checking which has higher average minutes (ON_COURT should have more minutes)
-            temp_df1 = data_frames[1].copy()
-            temp_df2 = data_frames[2].copy()
-            
-            # Find MIN column in each dataframe
-            min_col1 = None
-            min_col2 = None
-            for col in temp_df1.columns:
-                if 'MIN' in col.upper() and 'RANK' not in col.upper():
-                    min_col1 = col
-                    break
-            for col in temp_df2.columns:
-                if 'MIN' in col.upper() and 'RANK' not in col.upper():
-                    min_col2 = col
-                    break
-            
-            avg_min1 = temp_df1[min_col1].mean() if min_col1 else 0
-            avg_min2 = temp_df2[min_col2].mean() if min_col2 else 0
-            
-            # Assign based on which has higher minutes
-            # IMPORTANT: Based on NBA API structure, data_frames[1] is PlayersOffCourt, data_frames[2] is PlayersOnCourt
-            # But we verify by checking minutes: ON_COURT should have player's actual minutes (varies by player role)
-            # OFF_COURT should have team minutes when player is off (typically higher for role players)
-            # However, the API might return them in reverse order, so we check and swap if needed
-            # For most role players: MIN_ON_COURT < MIN_OFF_COURT
-            # For star players: MIN_ON_COURT > MIN_OFF_COURT
-            # Since we can't rely on minutes alone, let's try the opposite assignment
-            if avg_min1 > avg_min2:
-                # df1 has higher minutes - try assigning as ON_COURT (for stars) or OFF_COURT (for role players)
-                # Based on user feedback, let's try: df1 = ON_COURT, df2 = OFF_COURT
-                players_on_court_df = temp_df1
-                players_off_court_df = temp_df2
-            else:
-                # df2 has higher minutes - try assigning as ON_COURT
-                players_on_court_df = temp_df2
-                players_off_court_df = temp_df1
+            # The NBA API returns dataframes in a specific order:
+            # Index 1: PlayersOffCourtTeamPlayerOnOffDetails (player stats when OFF court)
+            # Index 2: PlayersOnCourtTeamPlayerOnOffDetails (player stats when ON court)
+            # Based on user feedback that values are flipped, the API index labels don't match the actual data:
+            # Index 1 actually contains ON court data, Index 2 actually contains OFF court data
+            players_on_court_df = data_frames[1].copy()   # Index 1 contains ON court data (despite "OffCourt" label)
+            players_off_court_df = data_frames[2].copy()  # Index 2 contains OFF court data (despite "OnCourt" label)
             
             if len(players_off_court_df) == 0 or len(players_on_court_df) == 0:
                 return pd.DataFrame()
@@ -210,6 +180,7 @@ def process_onoff_data(onoff_df: pd.DataFrame, min_minutes: int = MIN_MINUTES_TH
         rows_before_filter = len(df)
         df = df[df[min_on_col] >= min_minutes].copy()
     else:
+        pass
     
     # Net Rating columns - prioritize exact matches, avoid RANK columns
     net_on_col = None
@@ -363,49 +334,48 @@ def format_onoff_display_data(processed_df: pd.DataFrame, players_df: Optional[p
         
         # Add player names and headshots if players_df is provided
         if players_df is not None and len(players_df) > 0:
-            
             # Merge player info
-        if 'PLAYER_ID' in df.columns and 'PERSON_ID' in players_df.columns:
-            # Convert IDs to same type for merging
-            df['PLAYER_ID_INT'] = df['PLAYER_ID'].astype(int)
-            players_df['PERSON_ID_INT'] = players_df['PERSON_ID'].astype(int)
-            
-            # Check which columns exist in players_df before selecting
-            available_cols = []
-            required_cols = ['PERSON_ID_INT', 'PLAYER_FIRST_NAME', 'PLAYER_LAST_NAME', 'HEADSHOT']
-            for col in required_cols:
-                if col in players_df.columns:
-                    available_cols.append(col)
-            
-            # Merge with only available columns
-            if len(available_cols) > 0:
-                try:
-                    # Double-check all columns exist before selecting - create a copy to avoid any reference issues
-                    players_df_copy = players_df.copy()
-                    final_cols = [col for col in available_cols if col in players_df_copy.columns]
-                    
-                    if len(final_cols) > 0:
-                        df = df.merge(
-                            players_df_copy[final_cols],
-                            left_on='PLAYER_ID_INT',
-                            right_on='PERSON_ID_INT',
-                            how='left'
-                        )
-                except (KeyError, IndexError, ValueError) as e:
-                    # Continue without player info merge if it fails
-                    pass
-            
-            # Create full name if columns exist
-            if 'PLAYER_FIRST_NAME' in df.columns and 'PLAYER_LAST_NAME' in df.columns:
-                df['PLAYER_NAME'] = df.apply(
-                    lambda row: f"{row.get('PLAYER_FIRST_NAME', '')} {row.get('PLAYER_LAST_NAME', '')}".strip()
-                    if pd.notna(row.get('PLAYER_FIRST_NAME')) else '',
-                    axis=1
-                )
-            
-            # Rename HEADSHOT to headshot for consistency
-            if 'HEADSHOT' in df.columns:
-                df['headshot'] = df['HEADSHOT']
+            if 'PLAYER_ID' in df.columns and 'PERSON_ID' in players_df.columns:
+                # Convert IDs to same type for merging
+                df['PLAYER_ID_INT'] = df['PLAYER_ID'].astype(int)
+                players_df['PERSON_ID_INT'] = players_df['PERSON_ID'].astype(int)
+                
+                # Check which columns exist in players_df before selecting
+                available_cols = []
+                required_cols = ['PERSON_ID_INT', 'PLAYER_FIRST_NAME', 'PLAYER_LAST_NAME', 'HEADSHOT']
+                for col in required_cols:
+                    if col in players_df.columns:
+                        available_cols.append(col)
+                
+                # Merge with only available columns
+                if len(available_cols) > 0:
+                    try:
+                        # Double-check all columns exist before selecting - create a copy to avoid any reference issues
+                        players_df_copy = players_df.copy()
+                        final_cols = [col for col in available_cols if col in players_df_copy.columns]
+                        
+                        if len(final_cols) > 0:
+                            df = df.merge(
+                                players_df_copy[final_cols],
+                                left_on='PLAYER_ID_INT',
+                                right_on='PERSON_ID_INT',
+                                how='left'
+                            )
+                    except (KeyError, IndexError, ValueError) as e:
+                        # Continue without player info merge if it fails
+                        pass
+                
+                # Create full name if columns exist
+                if 'PLAYER_FIRST_NAME' in df.columns and 'PLAYER_LAST_NAME' in df.columns:
+                    df['PLAYER_NAME'] = df.apply(
+                        lambda row: f"{row.get('PLAYER_FIRST_NAME', '')} {row.get('PLAYER_LAST_NAME', '')}".strip()
+                        if pd.notna(row.get('PLAYER_FIRST_NAME')) else '',
+                        axis=1
+                    )
+                
+                # Rename HEADSHOT to headshot for consistency
+                if 'HEADSHOT' in df.columns:
+                    df['headshot'] = df['HEADSHOT']
         
         # Select and order columns for display
         display_cols = []

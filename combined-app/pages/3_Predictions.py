@@ -1466,6 +1466,86 @@ if selected_matchup_str and selected_matchup_str != "All Players" and selected_m
             # Check if we have cached predictions for this game
             cached_game_predictions = st.session_state.predictions_game_cache.get(game_cache_key_bvp)
             
+            # If no cached predictions, check for CSV file from DraftKings Optimizer
+            if cached_game_predictions is None:
+                downloads_dir = os.path.expanduser("~/Downloads")
+                csv_file = os.path.join(
+                    downloads_dir,
+                    f"predicted_statlines_{matchup_away_team_abbr}_vs_{matchup_home_team_abbr}_{game_date_str_bvp}.csv"
+                )
+                
+                if os.path.exists(csv_file):
+                    try:
+                        # Load CSV file
+                        csv_df = pd.read_csv(csv_file)
+                        
+                        # Convert CSV to predictions format
+                        loaded_predictions = {}
+                        for _, row in csv_df.iterrows():
+                            player_name = row.get('Player', '')
+                            team_abbr = row.get('Team', '')
+                            
+                            # Find player ID by matching name
+                            player_match = players_df[
+                                (players_df['PLAYER_FIRST_NAME'] + ' ' + players_df['PLAYER_LAST_NAME'] == player_name) |
+                                (players_df['PLAYER_FIRST_NAME'] + ' ' + players_df['PLAYER_LAST_NAME'].str.replace(' ', '') == player_name)
+                            ]
+                            
+                            if len(player_match) > 0:
+                                player_id = str(player_match['PERSON_ID'].iloc[0])
+                                
+                                # Determine if home or away
+                                is_home = team_abbr == matchup_home_team_abbr
+                                opponent_abbr = matchup_home_team_abbr if not is_home else matchup_away_team_abbr
+                                
+                                # Create Prediction objects from CSV values
+                                predictions_dict = {}
+                                
+                                # Create Prediction objects for each stat
+                                stats_to_load = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'FG3M', 'FTM', 'PRA', 'FPTS']
+                                for stat in stats_to_load:
+                                    if stat in row and pd.notna(row[stat]):
+                                        value = float(row[stat])
+                                        predictions_dict[stat] = pm.Prediction(
+                                            stat=stat,
+                                            value=value,
+                                            confidence='medium',  # Default confidence for loaded predictions
+                                            breakdown={},
+                                            factors={'source': 'CSV file'}
+                                        )
+                                
+                                # Add ceiling/floor if available
+                                ceiling_floor = {}
+                                if 'FPTS_Ceiling' in row and pd.notna(row['FPTS_Ceiling']):
+                                    ceiling_floor['ceiling'] = float(row['FPTS_Ceiling'])
+                                if 'FPTS_Floor' in row and pd.notna(row['FPTS_Floor']):
+                                    ceiling_floor['floor'] = float(row['FPTS_Floor'])
+                                if 'FPTS_Median' in row and pd.notna(row['FPTS_Median']):
+                                    ceiling_floor['median'] = float(row['FPTS_Median'])
+                                if 'FPTS_Variance' in row and pd.notna(row['FPTS_Variance']):
+                                    ceiling_floor['variance'] = float(row['FPTS_Variance'])
+                                if 'FPTS_StdDev' in row and pd.notna(row['FPTS_StdDev']):
+                                    ceiling_floor['std_dev'] = float(row['FPTS_StdDev'])
+                                
+                                loaded_predictions[player_id] = {
+                                    'predictions': predictions_dict,
+                                    'player_name': player_name,
+                                    'opponent_abbr': opponent_abbr,
+                                    'is_home': is_home,
+                                    'team_abbr': team_abbr,
+                                    'ceiling_floor': ceiling_floor if ceiling_floor else None
+                                }
+                        
+                        if len(loaded_predictions) > 0:
+                            # Cache the loaded predictions
+                            st.session_state.predictions_game_cache[game_cache_key_bvp] = loaded_predictions
+                            cached_game_predictions = loaded_predictions
+                            st.info(f"📂 Loaded {len(loaded_predictions)} predictions from CSV file")
+                    except Exception as e:
+                        # If loading fails, just continue without cached predictions
+                        st.warning(f"⚠️ Could not load predictions from CSV: {e}")
+                        cached_game_predictions = None
+            
             # Initialize session state for API data (GAME-LEVEL CACHE)
             if 'odds_game_cache' not in st.session_state:
                 st.session_state.odds_game_cache = {}
@@ -1639,6 +1719,7 @@ Estimated Cost: {preview['estimated_cost']}
                     
                     # Generate predictions for all players
                     import time
+                    gen_start = time.time()
                     all_predictions = pm.generate_predictions_for_game(
                         player_ids=players_to_predict,
                         player_names=player_names_map,
@@ -1666,7 +1747,9 @@ Estimated Cost: {preview['estimated_cost']}
                 # Refresh button
                 if cached_game_predictions is not None:
                     if st.button("🔄 Regenerate Predictions", key="refresh_all_predictions"):
-                        del st.session_state.predictions_game_cache[game_cache_key_bvp]
+                        # Clear cached predictions (including CSV-loaded ones)
+                        if game_cache_key_bvp in st.session_state.predictions_game_cache:
+                            del st.session_state.predictions_game_cache[game_cache_key_bvp]
                         st.rerun()
             
             # If we have both predictions and props, show the best value plays

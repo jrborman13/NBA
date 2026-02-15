@@ -421,6 +421,8 @@ def safe_get_value(df, team_id, column, default=None, id_column=None):
     if id_column is None:
         if 'TEAM_ID' in df.columns:
             id_column = 'TEAM_ID'
+        elif 'TeamId' in df.columns:
+            id_column = 'TeamId'
         elif 'TeamID' in df.columns:
             id_column = 'TeamID'
         else:
@@ -1508,338 +1510,338 @@ shooting_diff_results['ATB3_FG%_RANK'] = shooting_diff_results['Arc3Accuracy'].f
 # Overall Field Goals
 # home_team_bench_scoring = data_trad_season_bench.loc[data_trad_season_bench['TEAM_ID'] == home_id, 'PTS'].values[0]
 ## FGM
-home_team_fgm = team_stats.loc[team_stats['TeamId'] == home_id, 'FGM_PG'].values[0]
-home_team_fgm_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'FGM_RANK'].values[0]
-home_team_opp_fgm = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FGM_PG'].values[0]
-home_team_opp_fgm_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FGM_RANK'].values[0]
-home_team_diff_fgm = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FGM_PG'].values[0], 1)
-home_team_diff_fgm_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FGM_RANK'].values[0]
+home_team_fgm = safe_get_value(team_stats, home_id, 'FGM_PG', 0.0, id_column='TeamId')
+home_team_fgm_rank = safe_get_value(team_stats, home_id, 'FGM_RANK', 0, id_column='TeamId')
+home_team_opp_fgm = safe_get_value(opp_team_stats, home_id, 'FGM_PG', 0.0, id_column='TeamId')
+home_team_opp_fgm_rank = safe_get_value(opp_team_stats, home_id, 'FGM_RANK', 0, id_column='TeamId')
+home_team_diff_fgm = round(safe_get_value(shooting_diff_results, home_id, 'FGM_PG', 0.0, id_column='TeamId'), 1)
+home_team_diff_fgm_rank = safe_get_value(shooting_diff_results, home_id, 'FGM_RANK', 0, id_column='TeamId')
 ## FGA
-home_team_fga = team_stats.loc[team_stats['TeamId'] == home_id, 'FGA_PG'].values[0]
-home_team_fga_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'FGA_RANK'].values[0]
-home_team_opp_fga = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FGA_PG'].values[0]
-home_team_opp_fga_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FGA_RANK'].values[0]
-home_team_diff_fga = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FGA_PG'].values[0], 1)
-home_team_diff_fga_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FGA_RANK'].values[0]
+home_team_fga = safe_get_value(team_stats, home_id, 'FGA_PG', 0.0, id_column='TeamId')
+home_team_fga_rank = safe_get_value(team_stats, home_id, 'FGA_RANK', 0, id_column='TeamId')
+home_team_opp_fga = safe_get_value(opp_team_stats, home_id, 'FGA_PG', 0.0, id_column='TeamId')
+home_team_opp_fga_rank = safe_get_value(opp_team_stats, home_id, 'FGA_RANK', 0, id_column='TeamId')
+home_team_diff_fga = round(safe_get_value(shooting_diff_results, home_id, 'FGA_PG', 0.0, id_column='TeamId'), 1)
+home_team_diff_fga_rank = safe_get_value(shooting_diff_results, home_id, 'FGA_RANK', 0, id_column='TeamId')
 ## FG%
-home_team_fg_pct = team_stats.loc[team_stats['TeamId'] == home_id, 'FG%'].values[0]
-home_team_fg_pct_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'FG%_RANK'].values[0]
-home_team_opp_fg_pct = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FG%'].values[0]
-home_team_opp_fg_pct_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FG%_RANK'].values[0]
-home_team_diff_fg_pct = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FG%'].values[0]
-home_team_diff_fg_pct_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FG%_RANK'].values[0]
+home_team_fg_pct = safe_get_value(team_stats, home_id, 'FG%', 0.0, id_column='TeamId')
+home_team_fg_pct_rank = safe_get_value(team_stats, home_id, 'FG%_RANK', 0, id_column='TeamId')
+home_team_opp_fg_pct = safe_get_value(opp_team_stats, home_id, 'FG%', 0.0, id_column='TeamId')
+home_team_opp_fg_pct_rank = safe_get_value(opp_team_stats, home_id, 'FG%_RANK', 0, id_column='TeamId')
+home_team_diff_fg_pct = safe_get_value(shooting_diff_results, home_id, 'FG%', 0.0, id_column='TeamId')
+home_team_diff_fg_pct_rank = safe_get_value(shooting_diff_results, home_id, 'FG%_RANK', 0, id_column='TeamId')
 # Overall 2-Point Shooting
 ## 2PT
-home_team_2pt = team_stats.loc[team_stats['TeamId'] == home_id, 'FG2M_PG'].values[0]
-home_team_2pt_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'FG2M_RANK'].values[0]
-home_team_opp_2pt = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FG2M_PG'].values[0]
-home_team_opp_2pt_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FG2M_RANK'].values[0]
-home_team_diff_2pt = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FG2M_PG'].values[0], 1)
-home_team_diff_2pt_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FG2M_RANK'].values[0]
+home_team_2pt = safe_get_value(team_stats, home_id, 'FG2M_PG', 0.0, id_column='TeamId')
+home_team_2pt_rank = safe_get_value(team_stats, home_id, 'FG2M_RANK', 0, id_column='TeamId')
+home_team_opp_2pt = safe_get_value(opp_team_stats, home_id, 'FG2M_PG', 0.0, id_column='TeamId')
+home_team_opp_2pt_rank = safe_get_value(opp_team_stats, home_id, 'FG2M_RANK', 0, id_column='TeamId')
+home_team_diff_2pt = round(safe_get_value(shooting_diff_results, home_id, 'FG2M_PG', 0.0, id_column='TeamId'), 1)
+home_team_diff_2pt_rank = safe_get_value(shooting_diff_results, home_id, 'FG2M_RANK', 0, id_column='TeamId')
 ## 2PA
-home_team_2pa = team_stats.loc[team_stats['TeamId'] == home_id, 'FG2A_PG'].values[0]
-home_team_2pa_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'FG2A_RANK'].values[0]
-home_team_opp_2pa = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FG2A_PG'].values[0]
-home_team_opp_2pa_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FG2A_RANK'].values[0]
-home_team_diff_2pa = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FG2A_PG'].values[0], 1)
-home_team_diff_2pa_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FG2A_RANK'].values[0]
+home_team_2pa = safe_get_value(team_stats, home_id, 'FG2A_PG', 0.0, id_column='TeamId')
+home_team_2pa_rank = safe_get_value(team_stats, home_id, 'FG2A_RANK', 0, id_column='TeamId')
+home_team_opp_2pa = safe_get_value(opp_team_stats, home_id, 'FG2A_PG', 0.0, id_column='TeamId')
+home_team_opp_2pa_rank = safe_get_value(opp_team_stats, home_id, 'FG2A_RANK', 0, id_column='TeamId')
+home_team_diff_2pa = round(safe_get_value(shooting_diff_results, home_id, 'FG2A_PG', 0.0, id_column='TeamId'), 1)
+home_team_diff_2pa_rank = safe_get_value(shooting_diff_results, home_id, 'FG2A_RANK', 0, id_column='TeamId')
 ## 2PT%
-home_team_2pt_pct = team_stats.loc[team_stats['TeamId'] == home_id, '2PT%'].values[0]
-home_team_2pt_pct_rank = team_stats.loc[team_stats['TeamId'] == home_id, '2PT%_RANK'].values[0]
-home_team_opp_2pt_pct = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, '2PT%'].values[0]
-home_team_opp_2pt_pct_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, '2PT%_RANK'].values[0]
-home_team_diff_2pt_pct = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, '2PT%'].values[0]
-home_team_diff_2pt_pct_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, '2PT%_RANK'].values[0]
+home_team_2pt_pct = safe_get_value(team_stats, home_id, '2PT%', 0.0, id_column='TeamId')
+home_team_2pt_pct_rank = safe_get_value(team_stats, home_id, '2PT%_RANK', 0, id_column='TeamId')
+home_team_opp_2pt_pct = safe_get_value(opp_team_stats, home_id, '2PT%', 0.0, id_column='TeamId')
+home_team_opp_2pt_pct_rank = safe_get_value(opp_team_stats, home_id, '2PT%_RANK', 0, id_column='TeamId')
+home_team_diff_2pt_pct = safe_get_value(shooting_diff_results, home_id, '2PT%', 0.0, id_column='TeamId')
+home_team_diff_2pt_pct_rank = safe_get_value(shooting_diff_results, home_id, '2PT%_RANK', 0, id_column='TeamId')
 # Overall 3-Point Shooting
 ## 3PT
-home_team_3pt = team_stats.loc[team_stats['TeamId'] == home_id, 'FG3M_PG'].values[0]
-home_team_3pt_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'FG3M_RANK'].values[0]
-home_team_opp_3pt = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FG3M_PG'].values[0]
-home_team_opp_3pt_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FG3M_RANK'].values[0]
-home_team_diff_3pt = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FG3M_PG'].values[0], 1)
-home_team_diff_3pt_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FG3M_RANK'].values[0]
+home_team_3pt = safe_get_value(team_stats, home_id, 'FG3M_PG', 0.0, id_column='TeamId')
+home_team_3pt_rank = safe_get_value(team_stats, home_id, 'FG3M_RANK', 0, id_column='TeamId')
+home_team_opp_3pt = safe_get_value(opp_team_stats, home_id, 'FG3M_PG', 0.0, id_column='TeamId')
+home_team_opp_3pt_rank = safe_get_value(opp_team_stats, home_id, 'FG3M_RANK', 0, id_column='TeamId')
+home_team_diff_3pt = round(safe_get_value(shooting_diff_results, home_id, 'FG3M_PG', 0.0, id_column='TeamId'), 1)
+home_team_diff_3pt_rank = safe_get_value(shooting_diff_results, home_id, 'FG3M_RANK', 0, id_column='TeamId')
 ## 3PA
-home_team_3pa = team_stats.loc[team_stats['TeamId'] == home_id, 'FG3A_PG'].values[0]
-home_team_3pa_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'FG3A_RANK'].values[0]
-home_team_opp_3pa = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FG3A_PG'].values[0]
-home_team_opp_3pa_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FG3A_RANK'].values[0]
-home_team_diff_3pa = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FG3A_PG'].values[0], 1)
-home_team_diff_3pa_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FG3A_RANK'].values[0]
+home_team_3pa = safe_get_value(team_stats, home_id, 'FG3A_PG', 0.0, id_column='TeamId')
+home_team_3pa_rank = safe_get_value(team_stats, home_id, 'FG3A_RANK', 0, id_column='TeamId')
+home_team_opp_3pa = safe_get_value(opp_team_stats, home_id, 'FG3A_PG', 0.0, id_column='TeamId')
+home_team_opp_3pa_rank = safe_get_value(opp_team_stats, home_id, 'FG3A_RANK', 0, id_column='TeamId')
+home_team_diff_3pa = round(safe_get_value(shooting_diff_results, home_id, 'FG3A_PG', 0.0, id_column='TeamId'), 1)
+home_team_diff_3pa_rank = safe_get_value(shooting_diff_results, home_id, 'FG3A_RANK', 0, id_column='TeamId')
 ## 3PT%
-home_team_3pt_pct = team_stats.loc[team_stats['TeamId'] == home_id, '3PT%'].values[0]
-home_team_3pt_pct_rank = team_stats.loc[team_stats['TeamId'] == home_id, '3PT%_RANK'].values[0]
-home_team_opp_3pt_pct = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, '3PT%'].values[0]
-home_team_opp_3pt_pct_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, '3PT%_RANK'].values[0]
-home_team_diff_3pt_pct = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, '3PT%'].values[0]
-home_team_diff_3pt_pct_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, '3PT%_RANK'].values[0]
+home_team_3pt_pct = safe_get_value(team_stats, home_id, '3PT%', 0.0, id_column='TeamId')
+home_team_3pt_pct_rank = safe_get_value(team_stats, home_id, '3PT%_RANK', 0, id_column='TeamId')
+home_team_opp_3pt_pct = safe_get_value(opp_team_stats, home_id, '3PT%', 0.0, id_column='TeamId')
+home_team_opp_3pt_pct_rank = safe_get_value(opp_team_stats, home_id, '3PT%_RANK', 0, id_column='TeamId')
+home_team_diff_3pt_pct = safe_get_value(shooting_diff_results, home_id, '3PT%', 0.0, id_column='TeamId')
+home_team_diff_3pt_pct_rank = safe_get_value(shooting_diff_results, home_id, '3PT%_RANK', 0, id_column='TeamId')
 # Overall Free Throw Shooting
 ## FTM
-home_team_ftm = team_stats.loc[team_stats['TeamId'] == home_id, 'FTM_PG'].values[0]
-home_team_ftm_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'FTM_RANK'].values[0]
-home_team_opp_ftm = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FTM_PG'].values[0]
-home_team_opp_ftm_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FTM_RANK'].values[0]
-home_team_diff_ftm = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FTM_PG'].values[0], 1)
-home_team_diff_ftm_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FTM_RANK'].values[0]
+home_team_ftm = safe_get_value(team_stats, home_id, 'FTM_PG', 0.0, id_column='TeamId')
+home_team_ftm_rank = safe_get_value(team_stats, home_id, 'FTM_RANK', 0, id_column='TeamId')
+home_team_opp_ftm = safe_get_value(opp_team_stats, home_id, 'FTM_PG', 0.0, id_column='TeamId')
+home_team_opp_ftm_rank = safe_get_value(opp_team_stats, home_id, 'FTM_RANK', 0, id_column='TeamId')
+home_team_diff_ftm = round(safe_get_value(shooting_diff_results, home_id, 'FTM_PG', 0.0, id_column='TeamId'), 1)
+home_team_diff_ftm_rank = safe_get_value(shooting_diff_results, home_id, 'FTM_RANK', 0, id_column='TeamId')
 ## FTA
-home_team_fta = team_stats.loc[team_stats['TeamId'] == home_id, 'FTA_PG'].values[0]
-home_team_fta_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'FTA_RANK'].values[0]
-home_team_opp_fta = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FTA_PG'].values[0]
-home_team_opp_fta_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FTA_RANK'].values[0]
-home_team_diff_fta = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FTA_PG'].values[0], 1)
-home_team_diff_fta_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FTA_RANK'].values[0]
+home_team_fta = safe_get_value(team_stats, home_id, 'FTA_PG', 0.0, id_column='TeamId')
+home_team_fta_rank = safe_get_value(team_stats, home_id, 'FTA_RANK', 0, id_column='TeamId')
+home_team_opp_fta = safe_get_value(opp_team_stats, home_id, 'FTA_PG', 0.0, id_column='TeamId')
+home_team_opp_fta_rank = safe_get_value(opp_team_stats, home_id, 'FTA_RANK', 0, id_column='TeamId')
+home_team_diff_fta = round(safe_get_value(shooting_diff_results, home_id, 'FTA_PG', 0.0, id_column='TeamId'), 1)
+home_team_diff_fta_rank = safe_get_value(shooting_diff_results, home_id, 'FTA_RANK', 0, id_column='TeamId')
 ## FT%
-home_team_ft_pct = team_stats.loc[team_stats['TeamId'] == home_id, 'FT%'].values[0]
-home_team_ft_pct_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'FT%_RANK'].values[0]
-home_team_opp_ft_pct = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FT%'].values[0]
-home_team_opp_ft_pct_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'FT%_RANK'].values[0]
-home_team_diff_ft_pct = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FT%'].values[0]
-home_team_diff_ft_pct_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'FT%_RANK'].values[0]
+home_team_ft_pct = safe_get_value(team_stats, home_id, 'FT%', 0.0, id_column='TeamId')
+home_team_ft_pct_rank = safe_get_value(team_stats, home_id, 'FT%_RANK', 0, id_column='TeamId')
+home_team_opp_ft_pct = safe_get_value(opp_team_stats, home_id, 'FT%', 0.0, id_column='TeamId')
+home_team_opp_ft_pct_rank = safe_get_value(opp_team_stats, home_id, 'FT%_RANK', 0, id_column='TeamId')
+home_team_diff_ft_pct = safe_get_value(shooting_diff_results, home_id, 'FT%', 0.0, id_column='TeamId')
+home_team_diff_ft_pct_rank = safe_get_value(shooting_diff_results, home_id, 'FT%_RANK', 0, id_column='TeamId')
 # RIM
 ## Rim Frequency
-home_team_rim_freq = team_stats.loc[team_stats['TeamId'] == home_id, 'AtRimFrequency'].values[0]
-home_team_rim_freq_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'RIM_FREQ_RANK'].values[0]
-home_team_opp_rim_freq = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'AtRimFrequency'].values[0]
-home_team_opp_rim_freq_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'RIM_FREQ_RANK'].values[0]
-home_team_diff_rim_freq = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'AtRimFrequency'].values[0]
-home_team_diff_rim_freq_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'RIM_FREQ_RANK'].values[0]
+home_team_rim_freq = safe_get_value(team_stats, home_id, 'AtRimFrequency', 0.0, id_column='TeamId')
+home_team_rim_freq_rank = safe_get_value(team_stats, home_id, 'RIM_FREQ_RANK', 0, id_column='TeamId')
+home_team_opp_rim_freq = safe_get_value(opp_team_stats, home_id, 'AtRimFrequency', 0.0, id_column='TeamId')
+home_team_opp_rim_freq_rank = safe_get_value(opp_team_stats, home_id, 'RIM_FREQ_RANK', 0, id_column='TeamId')
+home_team_diff_rim_freq = safe_get_value(shooting_diff_results, home_id, 'AtRimFrequency', 0.0, id_column='TeamId')
+home_team_diff_rim_freq_rank = safe_get_value(shooting_diff_results, home_id, 'RIM_FREQ_RANK', 0, id_column='TeamId')
 ## Rim Accuracy
-home_team_rim_acc = team_stats.loc[team_stats['TeamId'] == home_id, 'AtRimAccuracy'].values[0]
-home_team_rim_acc_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'RIM_FG%_RANK'].values[0]
-home_team_opp_rim_acc = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'AtRimAccuracy'].values[0]
-home_team_opp_rim_acc_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'RIM_FG%_RANK'].values[0]
-home_team_diff_rim_acc = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'AtRimAccuracy'].values[0]
-home_team_diff_rim_acc_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'RIM_FG%_RANK'].values[0]
+home_team_rim_acc = safe_get_value(team_stats, home_id, 'AtRimAccuracy', 0.0, id_column='TeamId')
+home_team_rim_acc_rank = safe_get_value(team_stats, home_id, 'RIM_FG%_RANK', 0, id_column='TeamId')
+home_team_opp_rim_acc = safe_get_value(opp_team_stats, home_id, 'AtRimAccuracy', 0.0, id_column='TeamId')
+home_team_opp_rim_acc_rank = safe_get_value(opp_team_stats, home_id, 'RIM_FG%_RANK', 0, id_column='TeamId')
+home_team_diff_rim_acc = safe_get_value(shooting_diff_results, home_id, 'AtRimAccuracy', 0.0, id_column='TeamId')
+home_team_diff_rim_acc_rank = safe_get_value(shooting_diff_results, home_id, 'RIM_FG%_RANK', 0, id_column='TeamId')
 
 # Short Mid-Range Shooting
 ## SMR Frequency
-home_team_smr_freq = team_stats.loc[team_stats['TeamId'] == home_id, 'ShortMidRangeFrequency'].values[0]
-home_team_smr_freq_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'SMR_FREQ_RANK'].values[0]
-home_team_opp_smr_freq = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'ShortMidRangeFrequency'].values[0]
-home_team_opp_smr_freq_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'SMR_FREQ_RANK'].values[0]
-home_team_diff_smr_freq = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'ShortMidRangeFrequency'].values[0]
-home_team_diff_smr_freq_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'SMR_FREQ_RANK'].values[0]
+home_team_smr_freq = safe_get_value(team_stats, home_id, 'ShortMidRangeFrequency', 0.0, id_column='TeamId')
+home_team_smr_freq_rank = safe_get_value(team_stats, home_id, 'SMR_FREQ_RANK', 0, id_column='TeamId')
+home_team_opp_smr_freq = safe_get_value(opp_team_stats, home_id, 'ShortMidRangeFrequency', 0.0, id_column='TeamId')
+home_team_opp_smr_freq_rank = safe_get_value(opp_team_stats, home_id, 'SMR_FREQ_RANK', 0, id_column='TeamId')
+home_team_diff_smr_freq = safe_get_value(shooting_diff_results, home_id, 'ShortMidRangeFrequency', 0.0, id_column='TeamId')
+home_team_diff_smr_freq_rank = safe_get_value(shooting_diff_results, home_id, 'SMR_FREQ_RANK', 0, id_column='TeamId')
 ## SMR Accuracy
-home_team_smr_acc = team_stats.loc[team_stats['TeamId'] == home_id, 'ShortMidRangeAccuracy'].values[0]
-home_team_smr_acc_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'SMR_FG%_RANK'].values[0]
-home_team_opp_smr_acc = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'ShortMidRangeAccuracy'].values[0]
-home_team_opp_smr_acc_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'SMR_FG%_RANK'].values[0]
-home_team_diff_smr_acc = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'ShortMidRangeAccuracy'].values[0]
-home_team_diff_smr_acc_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'SMR_FG%_RANK'].values[0]
+home_team_smr_acc = safe_get_value(team_stats, home_id, 'ShortMidRangeAccuracy', 0.0, id_column='TeamId')
+home_team_smr_acc_rank = safe_get_value(team_stats, home_id, 'SMR_FG%_RANK', 0, id_column='TeamId')
+home_team_opp_smr_acc = safe_get_value(opp_team_stats, home_id, 'ShortMidRangeAccuracy', 0.0, id_column='TeamId')
+home_team_opp_smr_acc_rank = safe_get_value(opp_team_stats, home_id, 'SMR_FG%_RANK', 0, id_column='TeamId')
+home_team_diff_smr_acc = safe_get_value(shooting_diff_results, home_id, 'ShortMidRangeAccuracy', 0.0, id_column='TeamId')
+home_team_diff_smr_acc_rank = safe_get_value(shooting_diff_results, home_id, 'SMR_FG%_RANK', 0, id_column='TeamId')
 
 # Long Mid-Range Shooting
 ## LMR Frequency
-home_team_lmr_freq = team_stats.loc[team_stats['TeamId'] == home_id, 'LongMidRangeFrequency'].values[0]
-home_team_lmr_freq_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'LMR_FREQ_RANK'].values[0]
-home_team_opp_lmr_freq = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'LongMidRangeFrequency'].values[0]
-home_team_opp_lmr_freq_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'LMR_FREQ_RANK'].values[0]
-home_team_diff_lmr_freq = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'LongMidRangeFrequency'].values[0]
-home_team_diff_lmr_freq_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'LMR_FREQ_RANK'].values[0]
+home_team_lmr_freq = safe_get_value(team_stats, home_id, 'LongMidRangeFrequency', 0.0, id_column='TeamId')
+home_team_lmr_freq_rank = safe_get_value(team_stats, home_id, 'LMR_FREQ_RANK', 0, id_column='TeamId')
+home_team_opp_lmr_freq = safe_get_value(opp_team_stats, home_id, 'LongMidRangeFrequency', 0.0, id_column='TeamId')
+home_team_opp_lmr_freq_rank = safe_get_value(opp_team_stats, home_id, 'LMR_FREQ_RANK', 0, id_column='TeamId')
+home_team_diff_lmr_freq = safe_get_value(shooting_diff_results, home_id, 'LongMidRangeFrequency', 0.0, id_column='TeamId')
+home_team_diff_lmr_freq_rank = safe_get_value(shooting_diff_results, home_id, 'LMR_FREQ_RANK', 0, id_column='TeamId')
 ## LMR Accuracy
-home_team_lmr_acc = team_stats.loc[team_stats['TeamId'] == home_id, 'LongMidRangeAccuracy'].values[0]
-home_team_lmr_acc_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'LMR_FG%_RANK'].values[0]
-home_team_opp_lmr_acc = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'LongMidRangeAccuracy'].values[0]
-home_team_opp_lmr_acc_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'LMR_FG%_RANK'].values[0]
-home_team_diff_lmr_acc = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'LongMidRangeAccuracy'].values[0]
-home_team_diff_lmr_acc_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'LMR_FG%_RANK'].values[0]
+home_team_lmr_acc = safe_get_value(team_stats, home_id, 'LongMidRangeAccuracy', 0.0, id_column='TeamId')
+home_team_lmr_acc_rank = safe_get_value(team_stats, home_id, 'LMR_FG%_RANK', 0, id_column='TeamId')
+home_team_opp_lmr_acc = safe_get_value(opp_team_stats, home_id, 'LongMidRangeAccuracy', 0.0, id_column='TeamId')
+home_team_opp_lmr_acc_rank = safe_get_value(opp_team_stats, home_id, 'LMR_FG%_RANK', 0, id_column='TeamId')
+home_team_diff_lmr_acc = safe_get_value(shooting_diff_results, home_id, 'LongMidRangeAccuracy', 0.0, id_column='TeamId')
+home_team_diff_lmr_acc_rank = safe_get_value(shooting_diff_results, home_id, 'LMR_FG%_RANK', 0, id_column='TeamId')
 # Corner 3-Point Shooting
 ## C3 Frequency
-home_team_c3_freq = team_stats.loc[team_stats['TeamId'] == home_id, 'Corner3Frequency'].values[0]
-home_team_c3_freq_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'C3_FREQ_RANK'].values[0]
-home_team_opp_c3_freq = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'Corner3Frequency'].values[0]
-home_team_opp_c3_freq_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'C3_FREQ_RANK'].values[0]
-home_team_diff_c3_freq = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'Corner3Frequency'].values[0]
-home_team_diff_c3_freq_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'C3_FREQ_RANK'].values[0]
+home_team_c3_freq = safe_get_value(team_stats, home_id, 'Corner3Frequency', 0.0, id_column='TeamId')
+home_team_c3_freq_rank = safe_get_value(team_stats, home_id, 'C3_FREQ_RANK', 0, id_column='TeamId')
+home_team_opp_c3_freq = safe_get_value(opp_team_stats, home_id, 'Corner3Frequency', 0.0, id_column='TeamId')
+home_team_opp_c3_freq_rank = safe_get_value(opp_team_stats, home_id, 'C3_FREQ_RANK', 0, id_column='TeamId')
+home_team_diff_c3_freq = safe_get_value(shooting_diff_results, home_id, 'Corner3Frequency', 0.0, id_column='TeamId')
+home_team_diff_c3_freq_rank = safe_get_value(shooting_diff_results, home_id, 'C3_FREQ_RANK', 0, id_column='TeamId')
 ## C3 Accuracy
-home_team_c3_acc = team_stats.loc[team_stats['TeamId'] == home_id, 'Corner3Accuracy'].values[0]
-home_team_c3_acc_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'C3_FG%_RANK'].values[0]
-home_team_opp_c3_acc = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'Corner3Accuracy'].values[0]
-home_team_opp_c3_acc_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'C3_FG%_RANK'].values[0]
-home_team_diff_c3_acc = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'Corner3Accuracy'].values[0]
-home_team_diff_c3_acc_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'C3_FG%_RANK'].values[0]
+home_team_c3_acc = safe_get_value(team_stats, home_id, 'Corner3Accuracy', 0.0, id_column='TeamId')
+home_team_c3_acc_rank = safe_get_value(team_stats, home_id, 'C3_FG%_RANK', 0, id_column='TeamId')
+home_team_opp_c3_acc = safe_get_value(opp_team_stats, home_id, 'Corner3Accuracy', 0.0, id_column='TeamId')
+home_team_opp_c3_acc_rank = safe_get_value(opp_team_stats, home_id, 'C3_FG%_RANK', 0, id_column='TeamId')
+home_team_diff_c3_acc = safe_get_value(shooting_diff_results, home_id, 'Corner3Accuracy', 0.0, id_column='TeamId')
+home_team_diff_c3_acc_rank = safe_get_value(shooting_diff_results, home_id, 'C3_FG%_RANK', 0, id_column='TeamId')
 # Above the Break 3-Point Shooting
 ## ATB3 Frequency
-home_team_atb3_freq = team_stats.loc[team_stats['TeamId'] == home_id, 'Arc3Frequency'].values[0]
-home_team_atb3_freq_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'ATB3_FREQ_RANK'].values[0]
-home_team_opp_atb3_freq = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'Arc3Frequency'].values[0]
-home_team_opp_atb3_freq_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'ATB3_FREQ_RANK'].values[0]
-home_team_diff_atb3_freq = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'Arc3Frequency'].values[0]
-home_team_diff_atb3_freq_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'ATB3_FREQ_RANK'].values[0]
+home_team_atb3_freq = safe_get_value(team_stats, home_id, 'Arc3Frequency', 0.0, id_column='TeamId')
+home_team_atb3_freq_rank = safe_get_value(team_stats, home_id, 'ATB3_FREQ_RANK', 0, id_column='TeamId')
+home_team_opp_atb3_freq = safe_get_value(opp_team_stats, home_id, 'Arc3Frequency', 0.0, id_column='TeamId')
+home_team_opp_atb3_freq_rank = safe_get_value(opp_team_stats, home_id, 'ATB3_FREQ_RANK', 0, id_column='TeamId')
+home_team_diff_atb3_freq = safe_get_value(shooting_diff_results, home_id, 'Arc3Frequency', 0.0, id_column='TeamId')
+home_team_diff_atb3_freq_rank = safe_get_value(shooting_diff_results, home_id, 'ATB3_FREQ_RANK', 0, id_column='TeamId')
 ## ATB3 Accuracy
-home_team_atb3_acc = team_stats.loc[team_stats['TeamId'] == home_id, 'Arc3Accuracy'].values[0]
-home_team_atb3_acc_rank = team_stats.loc[team_stats['TeamId'] == home_id, 'ATB3_FG%_RANK'].values[0]
-home_team_opp_atb3_acc = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'Arc3Accuracy'].values[0]
-home_team_opp_atb3_acc_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == home_id, 'ATB3_FG%_RANK'].values[0]
-home_team_diff_atb3_acc = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'Arc3Accuracy'].values[0]
-home_team_diff_atb3_acc_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == home_id, 'ATB3_FG%_RANK'].values[0]
+home_team_atb3_acc = safe_get_value(team_stats, home_id, 'Arc3Accuracy', 0.0, id_column='TeamId')
+home_team_atb3_acc_rank = safe_get_value(team_stats, home_id, 'ATB3_FG%_RANK', 0, id_column='TeamId')
+home_team_opp_atb3_acc = safe_get_value(opp_team_stats, home_id, 'Arc3Accuracy', 0.0, id_column='TeamId')
+home_team_opp_atb3_acc_rank = safe_get_value(opp_team_stats, home_id, 'ATB3_FG%_RANK', 0, id_column='TeamId')
+home_team_diff_atb3_acc = safe_get_value(shooting_diff_results, home_id, 'Arc3Accuracy', 0.0, id_column='TeamId')
+home_team_diff_atb3_acc_rank = safe_get_value(shooting_diff_results, home_id, 'ATB3_FG%_RANK', 0, id_column='TeamId')
 
 ## AWAY TEAM SHOOTING STATS
 
 # Overall Field Goals
 # away_team_bench_scoring = data_trad_season_bench.loc[data_trad_season_bench['TEAM_ID'] == away_id, 'PTS'].values[0]
 ## FGM
-away_team_fgm = team_stats.loc[team_stats['TeamId'] == away_id, 'FGM_PG'].values[0]
-away_team_fgm_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'FGM_RANK'].values[0]
-away_team_opp_fgm = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FGM_PG'].values[0]
-away_team_opp_fgm_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FGM_RANK'].values[0]
-away_team_diff_fgm = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FGM_PG'].values[0], 1)
-away_team_diff_fgm_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FGM_RANK'].values[0]
+away_team_fgm = safe_get_value(team_stats, away_id, 'FGM_PG', 0.0, id_column='TeamId')
+away_team_fgm_rank = safe_get_value(team_stats, away_id, 'FGM_RANK', 0, id_column='TeamId')
+away_team_opp_fgm = safe_get_value(opp_team_stats, away_id, 'FGM_PG', 0.0, id_column='TeamId')
+away_team_opp_fgm_rank = safe_get_value(opp_team_stats, away_id, 'FGM_RANK', 0, id_column='TeamId')
+away_team_diff_fgm = round(safe_get_value(shooting_diff_results, away_id, 'FGM_PG', 0.0, id_column='TeamId'), 1)
+away_team_diff_fgm_rank = safe_get_value(shooting_diff_results, away_id, 'FGM_RANK', 0, id_column='TeamId')
 ## FGA
-away_team_fga = team_stats.loc[team_stats['TeamId'] == away_id, 'FGA_PG'].values[0]
-away_team_fga_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'FGA_RANK'].values[0]
-away_team_opp_fga = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FGA_PG'].values[0]
-away_team_opp_fga_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FGA_RANK'].values[0]
-away_team_diff_fga = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FGA_PG'].values[0], 1)
-away_team_diff_fga_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FGA_RANK'].values[0]
+away_team_fga = safe_get_value(team_stats, away_id, 'FGA_PG', 0.0, id_column='TeamId')
+away_team_fga_rank = safe_get_value(team_stats, away_id, 'FGA_RANK', 0, id_column='TeamId')
+away_team_opp_fga = safe_get_value(opp_team_stats, away_id, 'FGA_PG', 0.0, id_column='TeamId')
+away_team_opp_fga_rank = safe_get_value(opp_team_stats, away_id, 'FGA_RANK', 0, id_column='TeamId')
+away_team_diff_fga = round(safe_get_value(shooting_diff_results, away_id, 'FGA_PG', 0.0, id_column='TeamId'), 1)
+away_team_diff_fga_rank = safe_get_value(shooting_diff_results, away_id, 'FGA_RANK', 0, id_column='TeamId')
 ## FG%
-away_team_fg_pct = team_stats.loc[team_stats['TeamId'] == away_id, 'FG%'].values[0]
-away_team_fg_pct_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'FG%_RANK'].values[0]
-away_team_opp_fg_pct = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FG%'].values[0]
-away_team_opp_fg_pct_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FG%_RANK'].values[0]
-away_team_diff_fg_pct = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FG%'].values[0]
-away_team_diff_fg_pct_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FG%_RANK'].values[0]
+away_team_fg_pct = safe_get_value(team_stats, away_id, 'FG%', 0.0, id_column='TeamId')
+away_team_fg_pct_rank = safe_get_value(team_stats, away_id, 'FG%_RANK', 0, id_column='TeamId')
+away_team_opp_fg_pct = safe_get_value(opp_team_stats, away_id, 'FG%', 0.0, id_column='TeamId')
+away_team_opp_fg_pct_rank = safe_get_value(opp_team_stats, away_id, 'FG%_RANK', 0, id_column='TeamId')
+away_team_diff_fg_pct = safe_get_value(shooting_diff_results, away_id, 'FG%', 0.0, id_column='TeamId')
+away_team_diff_fg_pct_rank = safe_get_value(shooting_diff_results, away_id, 'FG%_RANK', 0, id_column='TeamId')
 # Overall 2-Point Shooting
 ## 2PT
-away_team_2pt = team_stats.loc[team_stats['TeamId'] == away_id, 'FG2M_PG'].values[0]
-away_team_2pt_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'FG2M_RANK'].values[0]
-away_team_opp_2pt = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FG2M_PG'].values[0]
-away_team_opp_2pt_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FG2M_RANK'].values[0]
-away_team_diff_2pt = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FG2M_PG'].values[0], 1)
-away_team_diff_2pt_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FG2M_RANK'].values[0]
+away_team_2pt = safe_get_value(team_stats, away_id, 'FG2M_PG', 0.0, id_column='TeamId')
+away_team_2pt_rank = safe_get_value(team_stats, away_id, 'FG2M_RANK', 0, id_column='TeamId')
+away_team_opp_2pt = safe_get_value(opp_team_stats, away_id, 'FG2M_PG', 0.0, id_column='TeamId')
+away_team_opp_2pt_rank = safe_get_value(opp_team_stats, away_id, 'FG2M_RANK', 0, id_column='TeamId')
+away_team_diff_2pt = round(safe_get_value(shooting_diff_results, away_id, 'FG2M_PG', 0.0, id_column='TeamId'), 1)
+away_team_diff_2pt_rank = safe_get_value(shooting_diff_results, away_id, 'FG2M_RANK', 0, id_column='TeamId')
 ## 2PA
-away_team_2pa = team_stats.loc[team_stats['TeamId'] == away_id, 'FG2A_PG'].values[0]
-away_team_2pa_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'FG2A_RANK'].values[0]
-away_team_opp_2pa = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FG2A_PG'].values[0]
-away_team_opp_2pa_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FG2A_RANK'].values[0]
-away_team_diff_2pa = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FG2A_PG'].values[0], 1)
-away_team_diff_2pa_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FG2A_RANK'].values[0]
+away_team_2pa = safe_get_value(team_stats, away_id, 'FG2A_PG', 0.0, id_column='TeamId')
+away_team_2pa_rank = safe_get_value(team_stats, away_id, 'FG2A_RANK', 0, id_column='TeamId')
+away_team_opp_2pa = safe_get_value(opp_team_stats, away_id, 'FG2A_PG', 0.0, id_column='TeamId')
+away_team_opp_2pa_rank = safe_get_value(opp_team_stats, away_id, 'FG2A_RANK', 0, id_column='TeamId')
+away_team_diff_2pa = round(safe_get_value(shooting_diff_results, away_id, 'FG2A_PG', 0.0, id_column='TeamId'), 1)
+away_team_diff_2pa_rank = safe_get_value(shooting_diff_results, away_id, 'FG2A_RANK', 0, id_column='TeamId')
 ## 2PT%
-away_team_2pt_pct = team_stats.loc[team_stats['TeamId'] == away_id, '2PT%'].values[0]
-away_team_2pt_pct_rank = team_stats.loc[team_stats['TeamId'] == away_id, '2PT%_RANK'].values[0]
-away_team_opp_2pt_pct = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, '2PT%'].values[0]
-away_team_opp_2pt_pct_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, '2PT%_RANK'].values[0]
-away_team_diff_2pt_pct = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, '2PT%'].values[0]
-away_team_diff_2pt_pct_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, '2PT%_RANK'].values[0]
+away_team_2pt_pct = safe_get_value(team_stats, away_id, '2PT%', 0.0, id_column='TeamId')
+away_team_2pt_pct_rank = safe_get_value(team_stats, away_id, '2PT%_RANK', 0, id_column='TeamId')
+away_team_opp_2pt_pct = safe_get_value(opp_team_stats, away_id, '2PT%', 0.0, id_column='TeamId')
+away_team_opp_2pt_pct_rank = safe_get_value(opp_team_stats, away_id, '2PT%_RANK', 0, id_column='TeamId')
+away_team_diff_2pt_pct = safe_get_value(shooting_diff_results, away_id, '2PT%', 0.0, id_column='TeamId')
+away_team_diff_2pt_pct_rank = safe_get_value(shooting_diff_results, away_id, '2PT%_RANK', 0, id_column='TeamId')
 # Overall 3-Point Shooting
 ## 3PT
-away_team_3pt = team_stats.loc[team_stats['TeamId'] == away_id, 'FG3M_PG'].values[0]
-away_team_3pt_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'FG3M_RANK'].values[0]
-away_team_opp_3pt = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FG3M_PG'].values[0]
-away_team_opp_3pt_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FG3M_RANK'].values[0]
-away_team_diff_3pt = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FG3M_PG'].values[0], 1)
-away_team_diff_3pt_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FG3M_RANK'].values[0]
+away_team_3pt = safe_get_value(team_stats, away_id, 'FG3M_PG', 0.0, id_column='TeamId')
+away_team_3pt_rank = safe_get_value(team_stats, away_id, 'FG3M_RANK', 0, id_column='TeamId')
+away_team_opp_3pt = safe_get_value(opp_team_stats, away_id, 'FG3M_PG', 0.0, id_column='TeamId')
+away_team_opp_3pt_rank = safe_get_value(opp_team_stats, away_id, 'FG3M_RANK', 0, id_column='TeamId')
+away_team_diff_3pt = round(safe_get_value(shooting_diff_results, away_id, 'FG3M_PG', 0.0, id_column='TeamId'), 1)
+away_team_diff_3pt_rank = safe_get_value(shooting_diff_results, away_id, 'FG3M_RANK', 0, id_column='TeamId')
 ## 3PA
-away_team_3pa = team_stats.loc[team_stats['TeamId'] == away_id, 'FG3A_PG'].values[0]
-away_team_3pa_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'FG3A_RANK'].values[0]
-away_team_opp_3pa = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FG3A_PG'].values[0]
-away_team_opp_3pa_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FG3A_RANK'].values[0]
-away_team_diff_3pa = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FG3A_PG'].values[0], 1)
-away_team_diff_3pa_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FG3A_RANK'].values[0]
+away_team_3pa = safe_get_value(team_stats, away_id, 'FG3A_PG', 0.0, id_column='TeamId')
+away_team_3pa_rank = safe_get_value(team_stats, away_id, 'FG3A_RANK', 0, id_column='TeamId')
+away_team_opp_3pa = safe_get_value(opp_team_stats, away_id, 'FG3A_PG', 0.0, id_column='TeamId')
+away_team_opp_3pa_rank = safe_get_value(opp_team_stats, away_id, 'FG3A_RANK', 0, id_column='TeamId')
+away_team_diff_3pa = round(safe_get_value(shooting_diff_results, away_id, 'FG3A_PG', 0.0, id_column='TeamId'), 1)
+away_team_diff_3pa_rank = safe_get_value(shooting_diff_results, away_id, 'FG3A_RANK', 0, id_column='TeamId')
 ## 3PT%
-away_team_3pt_pct = team_stats.loc[team_stats['TeamId'] == away_id, '3PT%'].values[0]
-away_team_3pt_pct_rank = team_stats.loc[team_stats['TeamId'] == away_id, '3PT%_RANK'].values[0]
-away_team_opp_3pt_pct = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, '3PT%'].values[0]
-away_team_opp_3pt_pct_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, '3PT%_RANK'].values[0]
-away_team_diff_3pt_pct = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, '3PT%'].values[0]
-away_team_diff_3pt_pct_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, '3PT%_RANK'].values[0]
+away_team_3pt_pct = safe_get_value(team_stats, away_id, '3PT%', 0.0, id_column='TeamId')
+away_team_3pt_pct_rank = safe_get_value(team_stats, away_id, '3PT%_RANK', 0, id_column='TeamId')
+away_team_opp_3pt_pct = safe_get_value(opp_team_stats, away_id, '3PT%', 0.0, id_column='TeamId')
+away_team_opp_3pt_pct_rank = safe_get_value(opp_team_stats, away_id, '3PT%_RANK', 0, id_column='TeamId')
+away_team_diff_3pt_pct = safe_get_value(shooting_diff_results, away_id, '3PT%', 0.0, id_column='TeamId')
+away_team_diff_3pt_pct_rank = safe_get_value(shooting_diff_results, away_id, '3PT%_RANK', 0, id_column='TeamId')
 # Overall Free Throw Shooting
 ## FTM
-away_team_ftm = team_stats.loc[team_stats['TeamId'] == away_id, 'FTM_PG'].values[0]
-away_team_ftm_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'FTM_RANK'].values[0]
-away_team_opp_ftm = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FTM_PG'].values[0]
-away_team_opp_ftm_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FTM_RANK'].values[0]
-away_team_diff_ftm = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FTM_PG'].values[0], 1)
-away_team_diff_ftm_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FTM_RANK'].values[0]
+away_team_ftm = safe_get_value(team_stats, away_id, 'FTM_PG', 0.0, id_column='TeamId')
+away_team_ftm_rank = safe_get_value(team_stats, away_id, 'FTM_RANK', 0, id_column='TeamId')
+away_team_opp_ftm = safe_get_value(opp_team_stats, away_id, 'FTM_PG', 0.0, id_column='TeamId')
+away_team_opp_ftm_rank = safe_get_value(opp_team_stats, away_id, 'FTM_RANK', 0, id_column='TeamId')
+away_team_diff_ftm = round(safe_get_value(shooting_diff_results, away_id, 'FTM_PG', 0.0, id_column='TeamId'), 1)
+away_team_diff_ftm_rank = safe_get_value(shooting_diff_results, away_id, 'FTM_RANK', 0, id_column='TeamId')
 ## FTA
-away_team_fta = team_stats.loc[team_stats['TeamId'] == away_id, 'FTA_PG'].values[0]
-away_team_fta_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'FTA_RANK'].values[0]
-away_team_opp_fta = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FTA_PG'].values[0]
-away_team_opp_fta_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FTA_RANK'].values[0]
-away_team_diff_fta = round(shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FTA_PG'].values[0], 1)
-away_team_diff_fta_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FTA_RANK'].values[0]
+away_team_fta = safe_get_value(team_stats, away_id, 'FTA_PG', 0.0, id_column='TeamId')
+away_team_fta_rank = safe_get_value(team_stats, away_id, 'FTA_RANK', 0, id_column='TeamId')
+away_team_opp_fta = safe_get_value(opp_team_stats, away_id, 'FTA_PG', 0.0, id_column='TeamId')
+away_team_opp_fta_rank = safe_get_value(opp_team_stats, away_id, 'FTA_RANK', 0, id_column='TeamId')
+away_team_diff_fta = round(safe_get_value(shooting_diff_results, away_id, 'FTA_PG', 0.0, id_column='TeamId'), 1)
+away_team_diff_fta_rank = safe_get_value(shooting_diff_results, away_id, 'FTA_RANK', 0, id_column='TeamId')
 ## FT%
-away_team_ft_pct = team_stats.loc[team_stats['TeamId'] == away_id, 'FT%'].values[0]
-away_team_ft_pct_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'FT%_RANK'].values[0]
-away_team_opp_ft_pct = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FT%'].values[0]
-away_team_opp_ft_pct_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'FT%_RANK'].values[0]
-away_team_diff_ft_pct = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FT%'].values[0]
-away_team_diff_ft_pct_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'FT%_RANK'].values[0]
+away_team_ft_pct = safe_get_value(team_stats, away_id, 'FT%', 0.0, id_column='TeamId')
+away_team_ft_pct_rank = safe_get_value(team_stats, away_id, 'FT%_RANK', 0, id_column='TeamId')
+away_team_opp_ft_pct = safe_get_value(opp_team_stats, away_id, 'FT%', 0.0, id_column='TeamId')
+away_team_opp_ft_pct_rank = safe_get_value(opp_team_stats, away_id, 'FT%_RANK', 0, id_column='TeamId')
+away_team_diff_ft_pct = safe_get_value(shooting_diff_results, away_id, 'FT%', 0.0, id_column='TeamId')
+away_team_diff_ft_pct_rank = safe_get_value(shooting_diff_results, away_id, 'FT%_RANK', 0, id_column='TeamId')
 # RIM
 ## Rim Frequency
-away_team_rim_freq = team_stats.loc[team_stats['TeamId'] == away_id, 'AtRimFrequency'].values[0]
-away_team_rim_freq_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'RIM_FREQ_RANK'].values[0]
-away_team_opp_rim_freq = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'AtRimFrequency'].values[0]
-away_team_opp_rim_freq_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'RIM_FREQ_RANK'].values[0]
-away_team_diff_rim_freq = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'AtRimFrequency'].values[0]
-away_team_diff_rim_freq_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'RIM_FREQ_RANK'].values[0]
+away_team_rim_freq = safe_get_value(team_stats, away_id, 'AtRimFrequency', 0.0, id_column='TeamId')
+away_team_rim_freq_rank = safe_get_value(team_stats, away_id, 'RIM_FREQ_RANK', 0, id_column='TeamId')
+away_team_opp_rim_freq = safe_get_value(opp_team_stats, away_id, 'AtRimFrequency', 0.0, id_column='TeamId')
+away_team_opp_rim_freq_rank = safe_get_value(opp_team_stats, away_id, 'RIM_FREQ_RANK', 0, id_column='TeamId')
+away_team_diff_rim_freq = safe_get_value(shooting_diff_results, away_id, 'AtRimFrequency', 0.0, id_column='TeamId')
+away_team_diff_rim_freq_rank = safe_get_value(shooting_diff_results, away_id, 'RIM_FREQ_RANK', 0, id_column='TeamId')
 ## Rim Accuracy
-away_team_rim_acc = team_stats.loc[team_stats['TeamId'] == away_id, 'AtRimAccuracy'].values[0]
-away_team_rim_acc_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'RIM_FG%_RANK'].values[0]
-away_team_opp_rim_acc = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'AtRimAccuracy'].values[0]
-away_team_opp_rim_acc_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'RIM_FG%_RANK'].values[0]
-away_team_diff_rim_acc = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'AtRimAccuracy'].values[0]
-away_team_diff_rim_acc_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'RIM_FG%_RANK'].values[0]
+away_team_rim_acc = safe_get_value(team_stats, away_id, 'AtRimAccuracy', 0.0, id_column='TeamId')
+away_team_rim_acc_rank = safe_get_value(team_stats, away_id, 'RIM_FG%_RANK', 0, id_column='TeamId')
+away_team_opp_rim_acc = safe_get_value(opp_team_stats, away_id, 'AtRimAccuracy', 0.0, id_column='TeamId')
+away_team_opp_rim_acc_rank = safe_get_value(opp_team_stats, away_id, 'RIM_FG%_RANK', 0, id_column='TeamId')
+away_team_diff_rim_acc = safe_get_value(shooting_diff_results, away_id, 'AtRimAccuracy', 0.0, id_column='TeamId')
+away_team_diff_rim_acc_rank = safe_get_value(shooting_diff_results, away_id, 'RIM_FG%_RANK', 0, id_column='TeamId')
 
 # Short Mid-Range Shooting
 ## SMR Frequency
-away_team_smr_freq = team_stats.loc[team_stats['TeamId'] == away_id, 'ShortMidRangeFrequency'].values[0]
-away_team_smr_freq_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'SMR_FREQ_RANK'].values[0]
-away_team_opp_smr_freq = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'ShortMidRangeFrequency'].values[0]
-away_team_opp_smr_freq_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'SMR_FREQ_RANK'].values[0]
-away_team_diff_smr_freq = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'ShortMidRangeFrequency'].values[0]
-away_team_diff_smr_freq_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'SMR_FREQ_RANK'].values[0]
+away_team_smr_freq = safe_get_value(team_stats, away_id, 'ShortMidRangeFrequency', 0.0, id_column='TeamId')
+away_team_smr_freq_rank = safe_get_value(team_stats, away_id, 'SMR_FREQ_RANK', 0, id_column='TeamId')
+away_team_opp_smr_freq = safe_get_value(opp_team_stats, away_id, 'ShortMidRangeFrequency', 0.0, id_column='TeamId')
+away_team_opp_smr_freq_rank = safe_get_value(opp_team_stats, away_id, 'SMR_FREQ_RANK', 0, id_column='TeamId')
+away_team_diff_smr_freq = safe_get_value(shooting_diff_results, away_id, 'ShortMidRangeFrequency', 0.0, id_column='TeamId')
+away_team_diff_smr_freq_rank = safe_get_value(shooting_diff_results, away_id, 'SMR_FREQ_RANK', 0, id_column='TeamId')
 ## SMR Accuracy
-away_team_smr_acc = team_stats.loc[team_stats['TeamId'] == away_id, 'ShortMidRangeAccuracy'].values[0]
-away_team_smr_acc_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'SMR_FG%_RANK'].values[0]
-away_team_opp_smr_acc = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'ShortMidRangeAccuracy'].values[0]
-away_team_opp_smr_acc_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'SMR_FG%_RANK'].values[0]
-away_team_diff_smr_acc = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'ShortMidRangeAccuracy'].values[0]
-away_team_diff_smr_acc_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'SMR_FG%_RANK'].values[0]
+away_team_smr_acc = safe_get_value(team_stats, away_id, 'ShortMidRangeAccuracy', 0.0, id_column='TeamId')
+away_team_smr_acc_rank = safe_get_value(team_stats, away_id, 'SMR_FG%_RANK', 0, id_column='TeamId')
+away_team_opp_smr_acc = safe_get_value(opp_team_stats, away_id, 'ShortMidRangeAccuracy', 0.0, id_column='TeamId')
+away_team_opp_smr_acc_rank = safe_get_value(opp_team_stats, away_id, 'SMR_FG%_RANK', 0, id_column='TeamId')
+away_team_diff_smr_acc = safe_get_value(shooting_diff_results, away_id, 'ShortMidRangeAccuracy', 0.0, id_column='TeamId')
+away_team_diff_smr_acc_rank = safe_get_value(shooting_diff_results, away_id, 'SMR_FG%_RANK', 0, id_column='TeamId')
 
 # Long Mid-Range Shooting
 ## LMR Frequency
-away_team_lmr_freq = team_stats.loc[team_stats['TeamId'] == away_id, 'LongMidRangeFrequency'].values[0]
-away_team_lmr_freq_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'LMR_FREQ_RANK'].values[0]
-away_team_opp_lmr_freq = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'LongMidRangeFrequency'].values[0]
-away_team_opp_lmr_freq_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'LMR_FREQ_RANK'].values[0]
-away_team_diff_lmr_freq = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'LongMidRangeFrequency'].values[0]
-away_team_diff_lmr_freq_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'LMR_FREQ_RANK'].values[0]
+away_team_lmr_freq = safe_get_value(team_stats, away_id, 'LongMidRangeFrequency', 0.0, id_column='TeamId')
+away_team_lmr_freq_rank = safe_get_value(team_stats, away_id, 'LMR_FREQ_RANK', 0, id_column='TeamId')
+away_team_opp_lmr_freq = safe_get_value(opp_team_stats, away_id, 'LongMidRangeFrequency', 0.0, id_column='TeamId')
+away_team_opp_lmr_freq_rank = safe_get_value(opp_team_stats, away_id, 'LMR_FREQ_RANK', 0, id_column='TeamId')
+away_team_diff_lmr_freq = safe_get_value(shooting_diff_results, away_id, 'LongMidRangeFrequency', 0.0, id_column='TeamId')
+away_team_diff_lmr_freq_rank = safe_get_value(shooting_diff_results, away_id, 'LMR_FREQ_RANK', 0, id_column='TeamId')
 ## LMR Accuracy
-away_team_lmr_acc = team_stats.loc[team_stats['TeamId'] == away_id, 'LongMidRangeAccuracy'].values[0]
-away_team_lmr_acc_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'LMR_FG%_RANK'].values[0]
-away_team_opp_lmr_acc = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'LongMidRangeAccuracy'].values[0]
-away_team_opp_lmr_acc_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'LMR_FG%_RANK'].values[0]
-away_team_diff_lmr_acc = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'LongMidRangeAccuracy'].values[0]
-away_team_diff_lmr_acc_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'LMR_FG%_RANK'].values[0]
+away_team_lmr_acc = safe_get_value(team_stats, away_id, 'LongMidRangeAccuracy', 0.0, id_column='TeamId')
+away_team_lmr_acc_rank = safe_get_value(team_stats, away_id, 'LMR_FG%_RANK', 0, id_column='TeamId')
+away_team_opp_lmr_acc = safe_get_value(opp_team_stats, away_id, 'LongMidRangeAccuracy', 0.0, id_column='TeamId')
+away_team_opp_lmr_acc_rank = safe_get_value(opp_team_stats, away_id, 'LMR_FG%_RANK', 0, id_column='TeamId')
+away_team_diff_lmr_acc = safe_get_value(shooting_diff_results, away_id, 'LongMidRangeAccuracy', 0.0, id_column='TeamId')
+away_team_diff_lmr_acc_rank = safe_get_value(shooting_diff_results, away_id, 'LMR_FG%_RANK', 0, id_column='TeamId')
 # Corner 3-Point Shooting
 ## C3 Frequency
-away_team_c3_freq = team_stats.loc[team_stats['TeamId'] == away_id, 'Corner3Frequency'].values[0]
-away_team_c3_freq_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'C3_FREQ_RANK'].values[0]
-away_team_opp_c3_freq = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'Corner3Frequency'].values[0]
-away_team_opp_c3_freq_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'C3_FREQ_RANK'].values[0]
-away_team_diff_c3_freq = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'Corner3Frequency'].values[0]
-away_team_diff_c3_freq_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'C3_FREQ_RANK'].values[0]
+away_team_c3_freq = safe_get_value(team_stats, away_id, 'Corner3Frequency', 0.0, id_column='TeamId')
+away_team_c3_freq_rank = safe_get_value(team_stats, away_id, 'C3_FREQ_RANK', 0, id_column='TeamId')
+away_team_opp_c3_freq = safe_get_value(opp_team_stats, away_id, 'Corner3Frequency', 0.0, id_column='TeamId')
+away_team_opp_c3_freq_rank = safe_get_value(opp_team_stats, away_id, 'C3_FREQ_RANK', 0, id_column='TeamId')
+away_team_diff_c3_freq = safe_get_value(shooting_diff_results, away_id, 'Corner3Frequency', 0.0, id_column='TeamId')
+away_team_diff_c3_freq_rank = safe_get_value(shooting_diff_results, away_id, 'C3_FREQ_RANK', 0, id_column='TeamId')
 ## C3 Accuracy
-away_team_c3_acc = team_stats.loc[team_stats['TeamId'] == away_id, 'Corner3Accuracy'].values[0]
-away_team_c3_acc_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'C3_FG%_RANK'].values[0]
-away_team_opp_c3_acc = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'Corner3Accuracy'].values[0]
-away_team_opp_c3_acc_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'C3_FG%_RANK'].values[0]
-away_team_diff_c3_acc = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'Corner3Accuracy'].values[0]
-away_team_diff_c3_acc_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'C3_FG%_RANK'].values[0]
+away_team_c3_acc = safe_get_value(team_stats, away_id, 'Corner3Accuracy', 0.0, id_column='TeamId')
+away_team_c3_acc_rank = safe_get_value(team_stats, away_id, 'C3_FG%_RANK', 0, id_column='TeamId')
+away_team_opp_c3_acc = safe_get_value(opp_team_stats, away_id, 'Corner3Accuracy', 0.0, id_column='TeamId')
+away_team_opp_c3_acc_rank = safe_get_value(opp_team_stats, away_id, 'C3_FG%_RANK', 0, id_column='TeamId')
+away_team_diff_c3_acc = safe_get_value(shooting_diff_results, away_id, 'Corner3Accuracy', 0.0, id_column='TeamId')
+away_team_diff_c3_acc_rank = safe_get_value(shooting_diff_results, away_id, 'C3_FG%_RANK', 0, id_column='TeamId')
 # Above the Break 3-Point Shooting
 ## ATB3 Frequency
-away_team_atb3_freq = team_stats.loc[team_stats['TeamId'] == away_id, 'Arc3Frequency'].values[0]
-away_team_atb3_freq_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'ATB3_FREQ_RANK'].values[0]
-away_team_opp_atb3_freq = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'Arc3Frequency'].values[0]
-away_team_opp_atb3_freq_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'ATB3_FREQ_RANK'].values[0]
-away_team_diff_atb3_freq = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'Arc3Frequency'].values[0]
-away_team_diff_atb3_freq_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'ATB3_FREQ_RANK'].values[0]
+away_team_atb3_freq = safe_get_value(team_stats, away_id, 'Arc3Frequency', 0.0, id_column='TeamId')
+away_team_atb3_freq_rank = safe_get_value(team_stats, away_id, 'ATB3_FREQ_RANK', 0, id_column='TeamId')
+away_team_opp_atb3_freq = safe_get_value(opp_team_stats, away_id, 'Arc3Frequency', 0.0, id_column='TeamId')
+away_team_opp_atb3_freq_rank = safe_get_value(opp_team_stats, away_id, 'ATB3_FREQ_RANK', 0, id_column='TeamId')
+away_team_diff_atb3_freq = safe_get_value(shooting_diff_results, away_id, 'Arc3Frequency', 0.0, id_column='TeamId')
+away_team_diff_atb3_freq_rank = safe_get_value(shooting_diff_results, away_id, 'ATB3_FREQ_RANK', 0, id_column='TeamId')
 ## ATB3 Accuracy
-away_team_atb3_acc = team_stats.loc[team_stats['TeamId'] == away_id, 'Arc3Accuracy'].values[0]
-away_team_atb3_acc_rank = team_stats.loc[team_stats['TeamId'] == away_id, 'ATB3_FG%_RANK'].values[0]
-away_team_opp_atb3_acc = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'Arc3Accuracy'].values[0]
-away_team_opp_atb3_acc_rank = opp_team_stats.loc[opp_team_stats['TeamId'] == away_id, 'ATB3_FG%_RANK'].values[0]
-away_team_diff_atb3_acc = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'Arc3Accuracy'].values[0]
-away_team_diff_atb3_acc_rank = shooting_diff_results.loc[shooting_diff_results['TeamId'] == away_id, 'ATB3_FG%_RANK'].values[0]
+away_team_atb3_acc = safe_get_value(team_stats, away_id, 'Arc3Accuracy', 0.0, id_column='TeamId')
+away_team_atb3_acc_rank = safe_get_value(team_stats, away_id, 'ATB3_FG%_RANK', 0, id_column='TeamId')
+away_team_opp_atb3_acc = safe_get_value(opp_team_stats, away_id, 'Arc3Accuracy', 0.0, id_column='TeamId')
+away_team_opp_atb3_acc_rank = safe_get_value(opp_team_stats, away_id, 'ATB3_FG%_RANK', 0, id_column='TeamId')
+away_team_diff_atb3_acc = safe_get_value(shooting_diff_results, away_id, 'Arc3Accuracy', 0.0, id_column='TeamId')
+away_team_diff_atb3_acc_rank = safe_get_value(shooting_diff_results, away_id, 'ATB3_FG%_RANK', 0, id_column='TeamId')
 
 ## LEAGUE AVERAGE SHOOTING STATS
 

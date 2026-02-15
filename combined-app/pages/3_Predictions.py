@@ -1744,12 +1744,137 @@ Estimated Cost: {preview['estimated_cost']}
                 if cached_game_predictions is not None and cached_game_props is not None:
                     st.info(f"📊 Predictions: {len(cached_game_predictions)} players | Lines: {len(cached_game_props)} players")
                 
-                # Refresh button
+                # Refresh button - actually regenerates predictions
                 if cached_game_predictions is not None:
                     if st.button("🔄 Regenerate Predictions", key="refresh_all_predictions"):
+                        # Check if game has already started
+                        from datetime import datetime
+                        import pytz
+                        now_utc = datetime.now(pytz.UTC)
+                        
+                        # Get game datetime from schedule
+                        game_datetime = None
+                        try:
+                            league_schedule = nba_api.stats.endpoints.ScheduleLeagueV2(
+                                league_id='00',
+                                season='2025-26'
+                            ).get_data_frames()[0]
+                            
+                            league_schedule['dateGame'] = pd.to_datetime(league_schedule['gameDate'])
+                            game_row = league_schedule[
+                                (league_schedule['dateGame'].dt.date == pd.to_datetime(game_date_str_bvp).date()) &
+                                (league_schedule['awayTeam_teamTricode'] == matchup_away_team_abbr) &
+                                (league_schedule['homeTeam_teamTricode'] == matchup_home_team_abbr)
+                            ]
+                            
+                            if len(game_row) > 0:
+                                game_datetime = pd.to_datetime(game_row.iloc[0]['gameDateTimeUTC'])
+                                if game_datetime.tzinfo is None:
+                                    game_datetime = pytz.UTC.localize(game_datetime.to_pydatetime())
+                                else:
+                                    game_datetime = game_datetime.to_pydatetime()
+                        except:
+                            pass
+                        
+                        # Check if game has already started
+                        if game_datetime is not None and game_datetime < now_utc:
+                            st.warning(f"⏭️  Game has already started or finished (tip-off: {game_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}). Cannot regenerate predictions.")
+                            st.stop()
+                        
+                        # Delete CSV file if it exists (so it doesn't get reloaded)
+                        downloads_dir = os.path.expanduser("~/Downloads")
+                        csv_file = os.path.join(
+                            downloads_dir,
+                            f"predicted_statlines_{matchup_away_team_abbr}_vs_{matchup_home_team_abbr}_{game_date_str_bvp}.csv"
+                        )
+                        if os.path.exists(csv_file):
+                            try:
+                                os.remove(csv_file)
+                            except Exception as e:
+                                st.warning(f"⚠️ Could not delete CSV file: {e}")
+                        
                         # Clear cached predictions (including CSV-loaded ones)
                         if game_cache_key_bvp in st.session_state.predictions_game_cache:
                             del st.session_state.predictions_game_cache[game_cache_key_bvp]
+                        
+                        # Also clear best plays cache if it exists
+                        cached_best_plays_key = f"{game_cache_key_bvp}_best_plays"
+                        if cached_best_plays_key in st.session_state:
+                            del st.session_state[cached_best_plays_key]
+                        
+                        # Now trigger regeneration by calling the same logic as "Generate All Predictions"
+                        # Cache injury data in session state to avoid duplicate calls
+                        if 'matchup_injuries_cache' not in st.session_state:
+                            st.session_state.matchup_injuries_cache = {}
+                        
+                        matchup_inj_key = f"{game_cache_key_bvp}_injuries"
+                        if matchup_inj_key not in st.session_state.matchup_injuries_cache:
+                            if injury_report_df is not None and len(injury_report_df) > 0:
+                                matchup_inj = ir.get_injuries_for_matchup(
+                                    injury_report_df,
+                                    matchup_away_team_abbr,
+                                    matchup_home_team_abbr,
+                                    players_df
+                                )
+                                st.session_state.matchup_injuries_cache[matchup_inj_key] = matchup_inj
+                            else:
+                                st.session_state.matchup_injuries_cache[matchup_inj_key] = {'away': [], 'home': []}
+                        else:
+                            matchup_inj = st.session_state.matchup_injuries_cache[matchup_inj_key]
+                        
+                        # Get list of players who are OUT or DOUBTFUL from stored selections
+                        predictions_injuries_key = f"predictions_injuries_{matchup_key}"
+                        stored_injuries = st.session_state.get(predictions_injuries_key, {'away_out': [], 'home_out': []})
+                        out_player_ids = set(stored_injuries.get('away_out', []) + stored_injuries.get('home_out', []))
+                        
+                        # Filter to players who are not injured
+                        players_to_predict = [
+                            pid for pid in filtered_player_ids_list 
+                            if pid not in out_player_ids
+                        ]
+                        
+                        if out_player_ids:
+                            st.info(f"⏭️ Skipping {len(out_player_ids)} players who are Out/Doubtful")
+                        
+                        # Build required data structures
+                        player_names_map = {pid: player_name_map.get(pid, f"Player {pid}") for pid in players_to_predict}
+                        player_team_ids_map = {}
+                        for pid in players_to_predict:
+                            player_row = players_df[players_df['PERSON_ID'].astype(str) == pid]
+                            if len(player_row) > 0:
+                                player_team_ids_map[pid] = int(player_row['TEAM_ID'].iloc[0])
+                        
+                        # Store in session state for later use
+                        if 'player_team_ids_map_cache' not in st.session_state:
+                            st.session_state.player_team_ids_map_cache = {}
+                        st.session_state.player_team_ids_map_cache[game_cache_key_bvp] = player_team_ids_map
+                        
+                        progress_bar = st.progress(0, text="Regenerating predictions...")
+                        
+                        def update_progress(current, total, player_name):
+                            progress_bar.progress(current / total, text=f"({current}/{total}) {player_name}...")
+                        
+                        # Generate predictions for all players
+                        import time
+                        gen_start = time.time()
+                        all_predictions = pm.generate_predictions_for_game(
+                            player_ids=players_to_predict,
+                            player_names=player_names_map,
+                            player_team_ids=player_team_ids_map,
+                            away_team_id=matchup_away_team_id,
+                            home_team_id=matchup_home_team_id,
+                            away_team_abbr=matchup_away_team_abbr,
+                            home_team_abbr=matchup_home_team_abbr,
+                            game_date=game_date_str_bvp,
+                            progress_callback=update_progress
+                        )
+                        gen_total_time = time.time() - gen_start
+                        
+                        progress_bar.empty()
+                        
+                        # Cache the predictions
+                        st.session_state.predictions_game_cache[game_cache_key_bvp] = all_predictions
+                        st.success(f"✅ Regenerated predictions for {len(all_predictions)} players!")
                         st.rerun()
             
             # If we have both predictions and props, show the best value plays

@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'new-stre
 
 import streamlit as st
 import streamlit_testing_functions as functions
+import player_functions as pf_players
 import injury_report as ir
 import datetime
 from datetime import date
@@ -164,8 +165,13 @@ if selected_matchup:
     # Load player data for matchup summary (reuse cache from Rosters tab)
     @st.cache_data(ttl=1800, show_spinner="Loading player data...")
     def load_summary_data():
-        players_df = functions.get_players_dataframe()
-        game_logs_df = functions.get_all_player_game_logs()
+        # Use player_functions.get_players_dataframe (same as other pages)
+        players_df = pf_players.get_players_dataframe()
+        
+        # Use prediction_features.get_bulk_player_game_logs (uses Supabase cache)
+        # This is the same function that streamlit_testing_functions.get_all_player_game_logs uses internally
+        game_logs_df = pf.get_bulk_player_game_logs()
+        
         return players_df, game_logs_df
     
     summary_players_df, summary_game_logs_df = load_summary_data()
@@ -1514,6 +1520,333 @@ if selected_matchup:
         except Exception as e2:
             st.error(f"Error loading synergy data (fallback also failed): {str(e2)}")
             st.info("Synergy data is currently unavailable. Please try again later.")
+    
+    # ============================================================
+    # QUARTER-BY-QUARTER RATINGS SECTION
+    # ============================================================
+    st.markdown("### 📊 Quarter-by-Quarter Ratings")
+    
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def get_quarter_ratings(season: str = '2025-26', period: int = None):
+        """Fetch team ratings for a specific quarter/period"""
+        try:
+            params = {
+                'league_id_nullable': '00',
+                'measure_type_detailed_defense': 'Advanced',
+                'pace_adjust': 'N',
+                'per_mode_detailed': 'PerGame',
+                'season': season,
+                'season_type_all_star': 'Regular Season'
+            }
+            if period:
+                params['period'] = period
+            
+            df = nba_api.stats.endpoints.LeagueDashTeamStats(**params).get_data_frames()[0]
+            
+            # Add ranking columns
+            df['OFF_RATING_RANK'] = df['OFF_RATING'].rank(ascending=False, method='first').astype(int)
+            df['DEF_RATING_RANK'] = df['DEF_RATING'].rank(ascending=True, method='first').astype(int)
+            df['NET_RATING_RANK'] = df['NET_RATING'].rank(ascending=False, method='first').astype(int)
+            
+            return df
+        except Exception as e:
+            print(f"Error fetching quarter {period} ratings: {e}")
+            import traceback
+            traceback.print_exc()
+            return pd.DataFrame()
+    
+    try:
+        # Fetch ratings for each quarter
+        with st.spinner("Loading quarter-by-quarter ratings..."):
+            q1_ratings = get_quarter_ratings(period=1)
+            q2_ratings = get_quarter_ratings(period=2)
+            q3_ratings = get_quarter_ratings(period=3)
+            q4_ratings = get_quarter_ratings(period=4)
+        
+        # Helper function to get team rating
+        def get_team_rating(df, team_id, rating_type):
+            """Get rating value for a team"""
+            if df.empty or team_id is None:
+                return None, None
+            team_data = df[df['TEAM_ID'] == team_id]
+            if len(team_data) == 0:
+                return None, None
+            rating_col = rating_type
+            rank_col = f"{rating_type}_RANK"
+            rating_val = team_data[rating_col].values[0] if rating_col in team_data.columns else None
+            rank_val = team_data[rank_col].values[0] if rank_col in team_data.columns else None
+            return rating_val, rank_val
+        
+        # Build dataframes for away and home teams
+        # Columns: Q1, Q2, Q3, Q4
+        # Rows: ORTG, ORTG RANK, DRTG, DRTG RANK, NET, NET RANK
+        
+        # Format values - ensure proper types
+        def fmt_val(val):
+            """Round rating values to 1 decimal place"""
+            if val is None:
+                return None
+            try:
+                return round(float(val), 1)
+            except (ValueError, TypeError):
+                return None
+        
+        def fmt_rank(val):
+            """Convert rank values to integers"""
+            if val is None:
+                return None
+            try:
+                return int(float(val))
+            except (ValueError, TypeError):
+                return None
+        
+        # Initialize data lists
+        away_rows = []
+        home_rows = []
+        
+        metrics = ['ORTG', 'ORTG RANK', 'DRTG', 'DRTG RANK', 'NET', 'NET RANK']
+        
+        # Collect data for each quarter
+        away_q1_data = []
+        away_q2_data = []
+        away_q3_data = []
+        away_q4_data = []
+        
+        home_q1_data = []
+        home_q2_data = []
+        home_q3_data = []
+        home_q4_data = []
+        
+        for q_num, q_df in [(1, q1_ratings), (2, q2_ratings), (3, q3_ratings), (4, q4_ratings)]:
+            # Away team
+            away_ortg, away_ortg_rank = get_team_rating(q_df, away_team_id, 'OFF_RATING')
+            away_drtg, away_drtg_rank = get_team_rating(q_df, away_team_id, 'DEF_RATING')
+            away_net, away_net_rank = get_team_rating(q_df, away_team_id, 'NET_RATING')
+            
+            # Home team
+            home_ortg, home_ortg_rank = get_team_rating(q_df, home_team_id, 'OFF_RATING')
+            home_drtg, home_drtg_rank = get_team_rating(q_df, home_team_id, 'DEF_RATING')
+            home_net, home_net_rank = get_team_rating(q_df, home_team_id, 'NET_RATING')
+            
+            # Store quarter data
+            if q_num == 1:
+                away_q1_data = [fmt_val(away_ortg), fmt_rank(away_ortg_rank), fmt_val(away_drtg), fmt_rank(away_drtg_rank), fmt_val(away_net), fmt_rank(away_net_rank)]
+                home_q1_data = [fmt_val(home_ortg), fmt_rank(home_ortg_rank), fmt_val(home_drtg), fmt_rank(home_drtg_rank), fmt_val(home_net), fmt_rank(home_net_rank)]
+            elif q_num == 2:
+                away_q2_data = [fmt_val(away_ortg), fmt_rank(away_ortg_rank), fmt_val(away_drtg), fmt_rank(away_drtg_rank), fmt_val(away_net), fmt_rank(away_net_rank)]
+                home_q2_data = [fmt_val(home_ortg), fmt_rank(home_ortg_rank), fmt_val(home_drtg), fmt_rank(home_drtg_rank), fmt_val(home_net), fmt_rank(home_net_rank)]
+            elif q_num == 3:
+                away_q3_data = [fmt_val(away_ortg), fmt_rank(away_ortg_rank), fmt_val(away_drtg), fmt_rank(away_drtg_rank), fmt_val(away_net), fmt_rank(away_net_rank)]
+                home_q3_data = [fmt_val(home_ortg), fmt_rank(home_ortg_rank), fmt_val(home_drtg), fmt_rank(home_drtg_rank), fmt_val(home_net), fmt_rank(home_net_rank)]
+            elif q_num == 4:
+                away_q4_data = [fmt_val(away_ortg), fmt_rank(away_ortg_rank), fmt_val(away_drtg), fmt_rank(away_drtg_rank), fmt_val(away_net), fmt_rank(away_net_rank)]
+                home_q4_data = [fmt_val(home_ortg), fmt_rank(home_ortg_rank), fmt_val(home_drtg), fmt_rank(home_drtg_rank), fmt_val(home_net), fmt_rank(home_net_rank)]
+        
+        # Build dataframes row by row
+        away_rows = []
+        home_rows = []
+        
+        for i, metric in enumerate(metrics):
+            away_rows.append({
+                'Metric': metric,
+                'Q1': away_q1_data[i] if i < len(away_q1_data) else None,
+                'Q2': away_q2_data[i] if i < len(away_q2_data) else None,
+                'Q3': away_q3_data[i] if i < len(away_q3_data) else None,
+                'Q4': away_q4_data[i] if i < len(away_q4_data) else None
+            })
+            home_rows.append({
+                'Metric': metric,
+                'Q1': home_q1_data[i] if i < len(home_q1_data) else None,
+                'Q2': home_q2_data[i] if i < len(home_q2_data) else None,
+                'Q3': home_q3_data[i] if i < len(home_q3_data) else None,
+                'Q4': home_q4_data[i] if i < len(home_q4_data) else None
+            })
+        
+        # Create dataframes
+        away_quarter_df = pd.DataFrame(away_rows)
+        home_quarter_df = pd.DataFrame(home_rows)
+        
+        # Format dataframes: ratings to 1 decimal, ranks to integers
+        def format_dataframe_for_display(df):
+            """Format dataframe: ratings to 1 decimal, ranks to integers"""
+            df_formatted = df.copy()
+            for idx, row in df_formatted.iterrows():
+                metric = row['Metric']
+                if 'RANK' in metric:
+                    # Convert rank columns to integers (store as int, pandas will handle display)
+                    for col in ['Q1', 'Q2', 'Q3', 'Q4']:
+                        val = row[col]
+                        if val is not None:
+                            try:
+                                # Store as integer - pandas will convert to float in mixed column
+                                # but we'll format for display
+                                int_val = int(float(val))
+                                df_formatted.at[idx, col] = int_val
+                            except (ValueError, TypeError):
+                                pass
+                else:
+                    # Ensure rating columns are rounded to 1 decimal
+                    for col in ['Q1', 'Q2', 'Q3', 'Q4']:
+                        val = row[col]
+                        if val is not None:
+                            try:
+                                df_formatted.at[idx, col] = round(float(val), 1)
+                            except (ValueError, TypeError):
+                                pass
+            return df_formatted
+        
+        # Format dataframes before styling
+        away_quarter_df = format_dataframe_for_display(away_quarter_df)
+        home_quarter_df = format_dataframe_for_display(home_quarter_df)
+        
+        # Helper function to get color for a rank value (same as synergy tables)
+        def get_rank_color(rank):
+            """Get background color based on rank (1-30 scale, same as synergy tables)"""
+            try:
+                rank_val = float(rank)
+                if pd.isna(rank_val) or rank_val == 0 or rank_val < 1:
+                    rank_val = 30
+                elif rank_val > 30:
+                    rank_val = 30
+            except (ValueError, TypeError):
+                rank_val = 30
+            
+            # Normalize rank to 0-1 scale (1st = 0.0, 30th = 1.0)
+            normalized = (rank_val - 1) / 29.0 if rank_val > 1 else 0.0
+            
+            # Color gradient: Green (rank 1) -> Yellow (neutral) -> Red (rank 30)
+            if normalized < 0.5:
+                # Green to Yellow (best to neutral)
+                r = int(255 * (normalized * 2))  # 0 -> 255
+                g = 255
+                b = 100
+            else:
+                # Yellow to Red (neutral to worst)
+                r = 255
+                g = int(255 * (1 - (normalized - 0.5) * 2))  # 255 -> 0
+                b = 100
+            
+            return f'background-color: rgba({r}, {g}, {b}, 0.3);'
+        
+        # Function to style columns based on NET RANK values
+        def style_quarter_columns(df):
+            """Style columns based on NET RANK row values"""
+            # Find the NET RANK row
+            net_rank_row_idx = None
+            for idx, row in df.iterrows():
+                if row['Metric'] == 'NET RANK':
+                    net_rank_row_idx = idx
+                    break
+            
+            if net_rank_row_idx is None:
+                return df.style  # No styling if NET RANK row not found
+            
+            # Get NET RANK values for each quarter (handle string values)
+            net_ranks = {}
+            for col in ['Q1', 'Q2', 'Q3', 'Q4']:
+                rank_val = df.at[net_rank_row_idx, col]
+                # Convert string to number if needed
+                try:
+                    if isinstance(rank_val, str):
+                        rank_val = float(rank_val)
+                    else:
+                        rank_val = float(rank_val)
+                except (ValueError, TypeError):
+                    rank_val = 30  # Default to worst rank
+                net_ranks[col] = rank_val
+            
+            # Create styling function that applies column colors
+            def style_by_column(series):
+                """Apply column color based on NET RANK"""
+                col_name = series.name
+                if col_name in net_ranks:
+                    rank = net_ranks[col_name]
+                    bg_color = get_rank_color(rank)
+                    # Return the same color for all cells in this column
+                    return [bg_color] * len(series)
+                return [''] * len(series)
+            
+            # Apply column-based styling
+            styled_df = df.style.apply(style_by_column, axis=0, subset=['Q1', 'Q2', 'Q3', 'Q4'])
+            
+            return styled_df
+        
+        # Format values as strings for display: ratings to 1 decimal, ranks as integers
+        def format_cell_value(val, is_rank=False):
+            """Format cell value for display"""
+            if val is None or pd.isna(val):
+                return ""
+            try:
+                if is_rank:
+                    return str(int(float(val)))
+                else:
+                    return f"{float(val):.1f}"
+            except (ValueError, TypeError):
+                return str(val) if val is not None else ""
+        
+        # Create formatted display dataframes (strings) but keep numeric for styling
+        away_display_df = away_quarter_df.copy()
+        home_display_df = home_quarter_df.copy()
+        
+        for idx, row in away_display_df.iterrows():
+            metric = row['Metric']
+            is_rank = 'RANK' in metric
+            for col in ['Q1', 'Q2', 'Q3', 'Q4']:
+                val = row[col]
+                away_display_df.at[idx, col] = format_cell_value(val, is_rank)
+        
+        for idx, row in home_display_df.iterrows():
+            metric = row['Metric']
+            is_rank = 'RANK' in metric
+            for col in ['Q1', 'Q2', 'Q3', 'Q4']:
+                val = row[col]
+                home_display_df.at[idx, col] = format_cell_value(val, is_rank)
+        
+        # Apply column-based styling based on NET RANK values
+        styled_away_quarter = style_quarter_columns(away_display_df) if len(away_display_df) > 0 else None
+        styled_home_quarter = style_quarter_columns(home_display_df) if len(home_display_df) > 0 else None
+        
+        # Column configuration - use TextColumn for formatted string values
+        quarter_column_config = {
+            "Metric": st.column_config.TextColumn("Metric", width=120),
+            "Q1": st.column_config.TextColumn("Q1", width=80),
+            "Q2": st.column_config.TextColumn("Q2", width=80),
+            "Q3": st.column_config.TextColumn("Q3", width=80),
+            "Q4": st.column_config.TextColumn("Q4", width=80),
+        }
+        
+        # Create two columns for side-by-side display
+        quarter_cols = st.columns(2)
+        
+        # Left column: Away team
+        with quarter_cols[0]:
+            st.markdown(f"#### {away_abbr}")
+            if styled_away_quarter is not None:
+                st.dataframe(
+                    styled_away_quarter,
+                    width='stretch',
+                    hide_index=True,
+                    column_config=quarter_column_config
+                )
+            else:
+                st.caption("No quarter-by-quarter ratings data available")
+        
+        # Right column: Home team
+        with quarter_cols[1]:
+            st.markdown(f"#### {home_abbr}")
+            if styled_home_quarter is not None:
+                st.dataframe(
+                    styled_home_quarter,
+                    width='stretch',
+                    hide_index=True,
+                    column_config=quarter_column_config
+                )
+            else:
+                st.caption("No quarter-by-quarter ratings data available")
+    
+    except Exception as e:
+        st.error(f"Error loading quarter-by-quarter ratings: {str(e)}")
+        st.info("Quarter-by-quarter ratings may not be available. Please try again later.")
     
     st.markdown("---")
     

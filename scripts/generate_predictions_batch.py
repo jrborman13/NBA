@@ -200,6 +200,8 @@ def generate_predictions_for_date(game_date: date, output_dir: str = None, exclu
             print(f"  ✓ {matchup_key}: {os.path.basename(file_path)}")
     
     # Process each game
+    now_utc = datetime.now(pytz.UTC)
+    
     for game_idx, matchup in enumerate(matchups, 1):
         print(f"\n{'=' * 60}")
         print(f"Game {game_idx}/{len(matchups)}: {matchup['matchup']}")
@@ -210,6 +212,22 @@ def generate_predictions_for_date(game_date: date, output_dir: str = None, exclu
         away_team_abbr = matchup['away_team']
         home_team_abbr = matchup['home_team']
         game_date_str = matchup['game_date']
+        game_datetime = matchup.get('game_datetime')
+        
+        # Check if game has already started or finished
+        if game_datetime is not None:
+            # Ensure game_datetime is timezone-aware
+            if isinstance(game_datetime, pd.Timestamp):
+                if game_datetime.tzinfo is None:
+                    game_datetime = pytz.UTC.localize(game_datetime.to_pydatetime())
+                else:
+                    game_datetime = game_datetime.to_pydatetime()
+            
+            # Skip games that have already started (tip-off time is in the past)
+            if game_datetime < now_utc:
+                print(f"⏭️  Game has already started or finished (tip-off: {game_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')})")
+                print(f"  Skipping prediction generation for this game.")
+                continue
         
         # Check if prediction file already exists
         matchup_key = f"{away_team_abbr} @ {home_team_abbr}"

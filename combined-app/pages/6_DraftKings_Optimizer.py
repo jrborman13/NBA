@@ -268,7 +268,17 @@ else:
         )
         if os.path.exists(prediction_file):
             existing_predictions[matchup['matchup']] = prediction_file
-    
+
+    # Cached injury/player data in shared scope so we can clear injury cache from both tabs
+    @st.cache_data(ttl=1800, show_spinner="Loading player data...")
+    def load_injury_player_data():
+        return pf.get_players_dataframe()
+
+    @st.cache_data(ttl=600, show_spinner="Fetching injury report...")
+    def fetch_injury_data(selected_date):
+        players_df = load_injury_player_data()
+        return ir.fetch_injuries_for_date(selected_date, players_df)
+
     # Create tabs for Predictions and Injury Report
     pred_tab, injury_tab = st.tabs(["📊 Predictions", "🏥 Injury Report"])
     
@@ -285,6 +295,7 @@ else:
                 st.info(f"ℹ️ No predictions found. Will generate for {len(matchups)} game(s)")
         
         with col2:
+            # Show generate button if predictions are missing
             if len(existing_predictions) < len(matchups):
                 if st.button("🔄 Generate Predictions", type="primary", width='stretch'):
                     try:
@@ -308,25 +319,84 @@ else:
                         with st.expander("Error Details"):
                             st.code(traceback.format_exc())
                         st.info("💡 Tips: Ensure you have internet connectivity and that the NBA API is accessible.")
+            
+            # Always show regenerate button (even when predictions exist)
+            st.caption("Uses the latest injury report and refreshes the injury tab after run.")
+            if st.button("🔄 Regenerate All Predictions", type="secondary", width='stretch'):
+                try:
+                    with st.spinner("Regenerating predictions for all games (this will overwrite existing files)..."):
+                        # Clear injury cache so regeneration uses fresh injuries and Injury tab shows same data after rerun
+                        fetch_injury_data.clear()
+                        # Delete existing prediction files first (but only for games that haven't started)
+                        from datetime import datetime
+                        now_utc = datetime.now(pytz.UTC)
+                        deleted_count = 0
+                        skipped_started_count = 0
+                        
+                        for matchup in matchups:
+                            game_datetime = matchup.get('game_datetime')
+                            
+                            # Check if game has already started or finished
+                            if game_datetime is not None:
+                                # Ensure game_datetime is timezone-aware
+                                if isinstance(game_datetime, pd.Timestamp):
+                                    if game_datetime.tzinfo is None:
+                                        game_datetime = pytz.UTC.localize(game_datetime.to_pydatetime())
+                                    else:
+                                        game_datetime = game_datetime.to_pydatetime()
+                                
+                                # Skip games that have already started
+                                if game_datetime < now_utc:
+                                    skipped_started_count += 1
+                                    continue
+                            
+                            prediction_file = os.path.join(
+                                downloads_dir,
+                                f"predicted_statlines_{matchup['away_team']}_vs_{matchup['home_team']}_{game_date_str}.csv"
+                            )
+                            if os.path.exists(prediction_file):
+                                try:
+                                    os.remove(prediction_file)
+                                    deleted_count += 1
+                                except Exception as e:
+                                    st.warning(f"⚠️ Could not delete {prediction_file}: {e}")
+                        
+                        if deleted_count > 0:
+                            st.info(f"🗑️ Deleted {deleted_count} existing prediction file(s)")
+                        if skipped_started_count > 0:
+                            st.info(f"⏭️  Skipped {skipped_started_count} game(s) that have already started or finished")
+                        
+                        # Generate new predictions
+                        exclude_injured = not include_injured
+                        output_files = generate_predictions_for_date(
+                            selected_date,
+                            output_dir=downloads_dir,
+                            exclude_injured=exclude_injured,
+                            optimize_lineups=False  # We'll optimize separately
+                        )
+                        
+                        if len(output_files) > 0:
+                            st.success(f"✅ Regenerated {len(output_files)} prediction file(s)")
+                            st.rerun()
+                        else:
+                            st.error("❌ No prediction files were generated. Check the console for errors.")
+                except Exception as e:
+                    st.error(f"❌ Error regenerating predictions: {e}")
+                    import traceback
+                    with st.expander("Error Details"):
+                        st.code(traceback.format_exc())
+                    st.info("💡 Tips: Ensure you have internet connectivity and that the NBA API is accessible.")
     
     with injury_tab:
         st.markdown("### Injury Report for Games")
-        
+        st.caption("Latest report (e.g. 6 PM ET) may differ from earlier; use Refresh to fetch now.")
+        if st.button("🔄 Refresh injury report", type="secondary", key="refresh_injury_report"):
+            fetch_injury_data.clear()
+            st.rerun()
+        st.markdown("")  # spacing
         try:
-            # Load player data for injury matching
-            @st.cache_data(ttl=1800, show_spinner="Loading player data...")
-            def load_injury_player_data():
-                return pf.get_players_dataframe()
-            
             players_df_injury = load_injury_player_data()
-            
-            # Fetch injury report
-            @st.cache_data(ttl=600, show_spinner="Fetching injury report...")
-            def fetch_injury_data():
-                return ir.fetch_injuries_for_date(selected_date)
-            
-            injury_df, injury_status = fetch_injury_data()
-            
+            injury_df, injury_status = fetch_injury_data(selected_date)
             if injury_df is not None and len(injury_df) > 0:
                 st.success(f"✅ {injury_status}")
                 
@@ -480,8 +550,8 @@ else:
                         boom_max_salary = st.slider(
                             "Max Salary",
                             min_value=3000,
-                            max_value=10000,
-                            value=10000,
+                            max_value=13000,
+                            value=13000,
                             step=500,
                             key="boom_max_salary"
                         )
@@ -562,8 +632,8 @@ else:
                         bust_max_salary = st.slider(
                             "Max Salary",
                             min_value=3000,
-                            max_value=10000,
-                            value=10000,
+                            max_value=13000,
+                            value=13000,
                             step=500,
                             key="bust_max_salary"
                         )
@@ -687,6 +757,7 @@ else:
                                     'dataframe': lineup_df,
                                     'file_path': None  # Generated in memory
                                 }
+                            
                             st.success(f"✅ Successfully optimized {len(optimized_lineups)} unique lineup(s) using players from {len(selected_waves)} wave(s)")
                             st.rerun()
                         else:
@@ -714,7 +785,8 @@ if len(st.session_state.optimized_lineups) > 0:
     st.header("📈 Optimized Lineups")
     
     # Create tabs for each lineup strategy
-    strategy_tabs = st.tabs(list(st.session_state.optimized_lineups.keys()))
+    lineup_keys = list(st.session_state.optimized_lineups.keys())
+    strategy_tabs = st.tabs(lineup_keys)
     
     for tab_idx, (strategy_name, result) in enumerate(st.session_state.optimized_lineups.items()):
         with strategy_tabs[tab_idx]:

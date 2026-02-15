@@ -863,7 +863,9 @@ def generate_prediction(
     bulk_offensive_synergy: Dict[str, pd.DataFrame] = None,
     use_similar_players: bool = False,
     projected_minutes: Optional[float] = None,
-    return_ceiling_floor: bool = False
+    return_ceiling_floor: bool = False,
+    precomputed_team_stats: Dict = None,
+    precomputed_league_avg: Dict = None
 ) -> Dict[str, Prediction]:
     """
     Main entry point for generating predictions.
@@ -896,7 +898,9 @@ def generate_prediction(
         bulk_advanced_stats=bulk_advanced_stats,
         bulk_drives_stats=bulk_drives_stats,
         bulk_offensive_synergy=bulk_offensive_synergy,
-        use_similar_players=use_similar_players
+        use_similar_players=use_similar_players,
+        precomputed_team_stats=precomputed_team_stats,
+        precomputed_league_avg=precomputed_league_avg
     )
     
     # Store player_id and projected_minutes in features for use in prediction
@@ -1031,6 +1035,52 @@ def generate_predictions_for_game(
     
     bulk_fetch_total = time.time() - bulk_fetch_start
     
+    # OPTIMIZATION: Pre-fetch team stats ONCE for both teams (instead of per-player)
+    # This eliminates redundant API calls - these stats are the same for all players on the same team
+    team_stats_start = time.time()
+    import prediction_features as features_module
+    
+    # OPTIMIZATION: Fetch ALL teams' stats in bulk (1 API call instead of 2+ per team)
+    bulk_team_stats = features_module.get_bulk_team_stats()
+    bulk_team_stats_L5 = features_module.get_bulk_team_stats_last_n(5)
+    
+    # Extract stats for away team from bulk data
+    away_team_row = bulk_team_stats[bulk_team_stats['TEAM_ID'] == away_team_id] if len(bulk_team_stats) > 0 else pd.DataFrame()
+    away_team_row_L5 = bulk_team_stats_L5[bulk_team_stats_L5['TEAM_ID'] == away_team_id] if len(bulk_team_stats_L5) > 0 else pd.DataFrame()
+    
+    away_team_stats = {
+        'pace': round(away_team_row['PACE'].iloc[0], 1) if len(away_team_row) > 0 and 'PACE' in away_team_row.columns else 100.0,
+        'def_rating': round(away_team_row['DEF_RATING'].iloc[0], 1) if len(away_team_row) > 0 and 'DEF_RATING' in away_team_row.columns else 110.0,
+        'def_rating_L5': round(away_team_row_L5['DEF_RATING'].iloc[0], 1) if len(away_team_row_L5) > 0 and 'DEF_RATING' in away_team_row_L5.columns else 110.0,
+        'ft_rate_stats': features_module.get_opponent_ft_rate(away_team_id),
+        'days_rest': features_module.calculate_days_rest(away_team_id, game_date)
+    }
+    
+    # Extract stats for home team from bulk data
+    home_team_row = bulk_team_stats[bulk_team_stats['TEAM_ID'] == home_team_id] if len(bulk_team_stats) > 0 else pd.DataFrame()
+    home_team_row_L5 = bulk_team_stats_L5[bulk_team_stats_L5['TEAM_ID'] == home_team_id] if len(bulk_team_stats_L5) > 0 else pd.DataFrame()
+    
+    home_team_stats = {
+        'pace': round(home_team_row['PACE'].iloc[0], 1) if len(home_team_row) > 0 and 'PACE' in home_team_row.columns else 100.0,
+        'def_rating': round(home_team_row['DEF_RATING'].iloc[0], 1) if len(home_team_row) > 0 and 'DEF_RATING' in home_team_row.columns else 110.0,
+        'def_rating_L5': round(home_team_row_L5['DEF_RATING'].iloc[0], 1) if len(home_team_row_L5) > 0 and 'DEF_RATING' in home_team_row_L5.columns else 110.0,
+        'ft_rate_stats': features_module.get_opponent_ft_rate(home_team_id),
+        'days_rest': features_module.calculate_days_rest(home_team_id, game_date)
+    }
+    
+    # Pre-fetch league averages ONCE (same for all players)
+    # Use bulk data if available, otherwise fallback to API call
+    if len(bulk_team_stats) > 0:
+        league_avg = {
+            'pace': round(bulk_team_stats['PACE'].mean(), 1),
+            'def_rating': round(bulk_team_stats['DEF_RATING'].mean(), 1),
+            'off_rating': round(bulk_team_stats['OFF_RATING'].mean(), 1) if 'OFF_RATING' in bulk_team_stats.columns else 110.0,
+        }
+    else:
+        league_avg = features_module.get_league_averages()
+    
+    team_stats_time = time.time() - team_stats_start
+    
     # Track per-player timing
     player_times = []
     
@@ -1047,10 +1097,16 @@ def generate_predictions_for_game(
             opponent_team_id = home_team_id
             opponent_abbr = home_team_abbr
             is_home = False
+            # Use pre-computed stats for away team (player's team) and home team (opponent)
+            player_team_stats = away_team_stats
+            opponent_team_stats = home_team_stats
         elif int(player_team_id) == int(home_team_id):
             opponent_team_id = away_team_id
             opponent_abbr = away_team_abbr
             is_home = True
+            # Use pre-computed stats for home team (player's team) and away team (opponent)
+            player_team_stats = home_team_stats
+            opponent_team_stats = away_team_stats
         else:
             continue  # Player not in this matchup
         
@@ -1074,7 +1130,12 @@ def generate_predictions_for_game(
                 bulk_drives_stats=bulk_drives_stats,
                 bulk_offensive_synergy=bulk_offensive_synergy,
                 use_similar_players=False,  # Skip for batch to improve performance
-                return_ceiling_floor=True
+                return_ceiling_floor=True,
+                precomputed_team_stats={
+                    'opponent': opponent_team_stats,
+                    'player_team': player_team_stats
+                },
+                precomputed_league_avg=league_avg
             )
             predictions = result['predictions']
             ceiling_floor = result['ceiling_floor']

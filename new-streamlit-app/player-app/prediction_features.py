@@ -492,6 +492,54 @@ def get_league_averages(season: str = CURRENT_SEASON) -> Dict[str, float]:
         return {'pace': 100.0, 'def_rating': 110.0, 'off_rating': 110.0}
 
 
+@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+def get_bulk_team_stats(season: str = CURRENT_SEASON) -> pd.DataFrame:
+    """
+    Fetch ALL teams' advanced stats (pace, def_rating, etc.) in ONE API call.
+    This replaces multiple individual API calls with a single bulk call.
+    
+    Returns:
+        DataFrame with all teams' stats, indexed by TEAM_ID
+    """
+    try:
+        league_stats = endpoints.LeagueDashTeamStats(
+            season=season,
+            measure_type_detailed_defense='Advanced',
+            per_mode_detailed='PerGame'
+        ).get_data_frames()[0]
+        
+        return league_stats
+    except Exception as e:
+        print(f"Error fetching bulk team stats: {e}")
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
+def get_bulk_team_stats_last_n(n_games: int = 5, season: str = CURRENT_SEASON) -> pd.DataFrame:
+    """
+    Fetch ALL teams' advanced stats for last N games in ONE API call.
+    This replaces multiple individual API calls with a single bulk call.
+    
+    Returns:
+        DataFrame with all teams' L5 stats, indexed by TEAM_ID
+    """
+    try:
+        league_stats = endpoints.LeagueDashTeamStats(
+            league_id_nullable='00',
+            measure_type_detailed_defense='Advanced',
+            pace_adjust='N',
+            per_mode_detailed='PerGame',
+            season=season,
+            season_type_all_star='Regular Season',
+            last_n_games=n_games
+        ).get_data_frames()[0]
+        
+        return league_stats
+    except Exception as e:
+        print(f"Error fetching bulk team stats L{n_games}: {e}")
+        return pd.DataFrame()
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_bulk_player_advanced_stats(season: str = CURRENT_SEASON) -> pd.DataFrame:
     """
@@ -619,7 +667,9 @@ def get_all_prediction_features(
     bulk_misc_stats: pd.DataFrame = None,
     bulk_drives_stats: pd.DataFrame = None,
     bulk_offensive_synergy: Dict[str, pd.DataFrame] = None,
-    use_similar_players: bool = False
+    use_similar_players: bool = False,
+    precomputed_team_stats: Dict = None,
+    precomputed_league_avg: Dict = None
 ) -> Dict:
     """
     Gather all features needed for prediction.
@@ -671,24 +721,46 @@ def get_all_prediction_features(
     features['vs_opponent'] = get_player_vs_opponent_history(game_logs, opponent_abbr)
     
     # Rest days (using team schedule for accuracy)
-    features['days_rest'] = calculate_days_rest(player_team_id, game_date)
+    # Use pre-computed if available, otherwise calculate
+    if precomputed_team_stats and 'player_team' in precomputed_team_stats:
+        features['days_rest'] = precomputed_team_stats['player_team'].get('days_rest', calculate_days_rest(player_team_id, game_date))
+    else:
+        features['days_rest'] = calculate_days_rest(player_team_id, game_date)
     features['is_back_to_back'] = utils.is_back_to_back(features['days_rest'])
     
-    # Opponent stats
-    opp_ft_rate_stats = get_opponent_ft_rate(opponent_team_id)
-    features['opponent'] = {
-        'team_id': opponent_team_id,
-        'abbr': opponent_abbr,
-        'pace': get_team_pace(opponent_team_id),
-        'def_rating': get_team_defensive_rating(opponent_team_id),
-        'def_rating_L5': get_team_defensive_rating_last_n(opponent_team_id, 5),
-        'ft_rate_allowed': opp_ft_rate_stats.get('opp_ft_rate', 25.0),
-        'ft_rate_allowed_rank': opp_ft_rate_stats.get('opp_ft_rate_rank', 15),
-    }
-    features['league_avg_ft_rate'] = opp_ft_rate_stats.get('league_avg_ft_rate', 25.0)
+    # Opponent stats - use pre-computed if available, otherwise fetch
+    if precomputed_team_stats and 'opponent' in precomputed_team_stats:
+        opp_stats = precomputed_team_stats['opponent']
+        opp_ft_rate_stats = opp_stats.get('ft_rate_stats', {})
+        features['opponent'] = {
+            'team_id': opponent_team_id,
+            'abbr': opponent_abbr,
+            'pace': opp_stats.get('pace', get_team_pace(opponent_team_id)),
+            'def_rating': opp_stats.get('def_rating', get_team_defensive_rating(opponent_team_id)),
+            'def_rating_L5': opp_stats.get('def_rating_L5', get_team_defensive_rating_last_n(opponent_team_id, 5)),
+            'ft_rate_allowed': opp_ft_rate_stats.get('opp_ft_rate', 25.0),
+            'ft_rate_allowed_rank': opp_ft_rate_stats.get('opp_ft_rate_rank', 15),
+        }
+        features['league_avg_ft_rate'] = opp_ft_rate_stats.get('league_avg_ft_rate', 25.0)
+    else:
+        # Fallback to individual API calls if pre-computed stats not provided
+        opp_ft_rate_stats = get_opponent_ft_rate(opponent_team_id)
+        features['opponent'] = {
+            'team_id': opponent_team_id,
+            'abbr': opponent_abbr,
+            'pace': get_team_pace(opponent_team_id),
+            'def_rating': get_team_defensive_rating(opponent_team_id),
+            'def_rating_L5': get_team_defensive_rating_last_n(opponent_team_id, 5),
+            'ft_rate_allowed': opp_ft_rate_stats.get('opp_ft_rate', 25.0),
+            'ft_rate_allowed_rank': opp_ft_rate_stats.get('opp_ft_rate_rank', 15),
+        }
+        features['league_avg_ft_rate'] = opp_ft_rate_stats.get('league_avg_ft_rate', 25.0)
     
-    # League averages for normalization
-    features['league_avg'] = get_league_averages()
+    # League averages for normalization - use pre-computed if available
+    if precomputed_league_avg:
+        features['league_avg'] = precomputed_league_avg
+    else:
+        features['league_avg'] = get_league_averages()
     
     # Player usage - use bulk if provided, otherwise fetch individually
     if bulk_advanced_stats is not None and len(bulk_advanced_stats) > 0:

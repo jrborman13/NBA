@@ -9,9 +9,21 @@ import numpy as np
 from pulp import LpMaximize, LpProblem, LpVariable, lpSum
 import os
 import sys
+import json
 import argparse
 from datetime import datetime
 from typing import Optional, Tuple, List, Dict
+
+# Debug log: write only when path exists and is writable (no-op on Streamlit Cloud)
+def _debug_log(log_entry: dict) -> None:
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        log_path = os.path.join(project_root, '.cursor', 'debug.log')
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, 'a') as f:
+            f.write(json.dumps(log_entry) + '\n')
+    except Exception:
+        pass
 
 # Try to import fuzzywuzzy, but make it optional
 try:
@@ -503,6 +515,27 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
         ceiling_col = 'FPTS_Ceiling'
         has_ceiling = True
     
+    # #region agent log
+    import json
+    log_entry = {
+        'sessionId': 'debug-session',
+        'runId': 'run1',
+        'hypothesisId': 'H',
+        'location': 'optimize_draftkings_nba_lineup.py:491',
+        'message': 'Starting optimize_multiple_lineups',
+        'data': {
+            'total_players': len(df),
+            'has_ceiling': has_ceiling,
+            'ceiling_col': ceiling_col,
+            'num_lineups_requested': num_lineups,
+            'max_overlap': max_overlap,
+            'columns_in_df': list(df.columns)
+        },
+        'timestamp': int(__import__('time').time() * 1000)
+    }
+    _debug_log(log_entry)
+    # #endregion
+    
     # Strategy definitions
     strategies = [
         {
@@ -539,6 +572,26 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
         if strategy.get('requires_ceiling') and not has_ceiling:
             # Fall back to value strategy
             strategy = {'name': 'Max Value', 'objective': 'value', 'weight': 1.0}
+        
+        # #region agent log
+        import json
+        log_entry = {
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'A',
+            'location': 'optimize_draftkings_nba_lineup.py:537',
+            'message': f'Attempting strategy {strategy_idx + 1}/{num_lineups}: {strategy["name"]}',
+            'data': {
+                'strategy_name': strategy['name'],
+                'strategy_idx': strategy_idx,
+                'num_lineups': num_lineups,
+                'lineups_generated_so_far': len(lineups),
+                'has_ceiling': has_ceiling
+            },
+            'timestamp': int(__import__('time').time() * 1000)
+        }
+        _debug_log(log_entry)
+        # #endregion
         
         try:
             # Set up optimization problem
@@ -580,14 +633,33 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
             prob += lpSum([vars[name] * player_data[name]["salary"] for name in players]) <= max_salary
             
             # Position constraints
+            # We need at least 1 player for each required position slot
+            # PG slot: needs at least 1 PG-eligible player
             prob += lpSum([vars[name] for name in players if player_data[name]["is_pg"]]) >= 1
+            # SG slot: needs at least 1 SG-eligible player
             prob += lpSum([vars[name] for name in players if player_data[name]["is_sg"]]) >= 1
-            prob += lpSum([vars[name] for name in players if player_data[name]["is_sf"]]) >= 1
+            # SF slot: needs at least 1 SF-eligible player
+            # IMPORTANT: We need at least 1 SF-eligible player that is NOT also SG-eligible
+            # OR we need at least 2 SF-eligible players total (one can be SG/SF)
+            # To be safe, let's require at least 2 SF-eligible players
+            prob += lpSum([vars[name] for name in players if player_data[name]["is_sf"]]) >= 2
+            # PF slot: needs at least 1 PF-eligible player
             prob += lpSum([vars[name] for name in players if player_data[name]["is_pf"]]) >= 1
+            # C slot: needs at least 1 C-eligible player
             prob += lpSum([vars[name] for name in players if player_data[name]["is_c"]]) >= 1
-            prob += lpSum([vars[name] for name in players if player_data[name]["is_g"]]) >= 3
-            prob += lpSum([vars[name] for name in players if player_data[name]["is_f"]]) >= 3
-            prob += lpSum([vars[name] for name in players if player_data[name]["is_util"]]) >= 1
+            # G slot: needs at least 1 G-eligible player (PG or SG)
+            # Since PG and SG slots also require G-eligible players, we need at least 5 total
+            # (1 for PG, 1 for SG, 1 for G slot, plus buffer for flexibility)
+            # G-eligible players might also be F-eligible and get used for F slot, so we need extra buffer
+            prob += lpSum([vars[name] for name in players if player_data[name]["is_g"]]) >= 5
+            # F slot: needs at least 1 F-eligible player (SF or PF)
+            # Since SF and PF slots also require F-eligible players, we need at least 5 total
+            # (1 for SF slot, 1 for PF slot, 1 for F slot, plus buffer for flexibility)
+            # We need extra F-eligible players because SF-eligible players might also be SG-eligible 
+            # and get used for SG slot, and we need flexibility in slot assignment
+            prob += lpSum([vars[name] for name in players if player_data[name]["is_f"]]) >= 5
+            # UTIL slot: can be any player (all players are UTIL-eligible)
+            # We need at least 1 player total, but this is already satisfied by the 8-player constraint
             
             # Punt strategy: enforce salary tier structure
             # 2-3 high salary stars (>= $8,000), 2-3 low salary role players (<= $6,000), 2-3 mid-tier (between $6,000 and $8,000)
@@ -608,25 +680,81 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                 prob += lpSum([vars[name] for name in mid_salary_players]) <= 3
             
             # Uniqueness constraints: ensure this lineup differs from previous ones
+            # Progressively relax constraints - allow more overlap with earlier lineups
+            uniqueness_constraints_added = 0
             for prev_lineup_idx, prev_selected in enumerate(selected_players_sets):
-                # Constraint: at most max_overlap players can overlap
-                prob += lpSum([vars[name] for name in prev_selected]) <= max_overlap
+                # For recent lineups (last 2), use strict overlap limit
+                # For older lineups, allow more overlap to prevent infeasibility
+                if len(selected_players_sets) - prev_lineup_idx <= 2:
+                    # Recent lineups: strict overlap limit
+                    overlap_limit = max_overlap
+                else:
+                    # Older lineups: allow more overlap (max_overlap + 1)
+                    overlap_limit = max_overlap + 1
+                
+                # Constraint: at most overlap_limit players can overlap
+                prob += lpSum([vars[name] for name in prev_selected]) <= overlap_limit
+                uniqueness_constraints_added += 1
+            
+            # #region agent log
+            log_entry = {
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'I',
+                'location': 'optimize_draftkings_nba_lineup.py:629',
+                'message': f'Constraints set for {strategy["name"]}',
+                'data': {
+                    'strategy_name': strategy['name'],
+                    'lineups_generated_so_far': len(lineups),
+                    'uniqueness_constraints_added': uniqueness_constraints_added,
+                    'excluded_by_exposure': len(excluded_by_exposure) if 'excluded_by_exposure' in locals() else 0,
+                    'max_overlap': max_overlap,
+                    'using_progressive_relaxation': True
+                },
+                'timestamp': int(__import__('time').time() * 1000)
+            }
+            _debug_log(log_entry)
+            # #endregion
             
             # Player exposure constraint: no player can appear in more than 3 lineups total
-            max_exposure = 3
-            for player_name in players:
-                current_exposure = player_exposure_count.get(player_name, 0)
-                if current_exposure >= max_exposure:
-                    # Player has already reached max exposure, exclude from this lineup
-                    prob += vars[player_name] == 0
+            # BUT: Only apply this constraint if we've already generated at least one lineup
+            # For the first lineup, all players are available
+            excluded_by_exposure = []
+            if len(selected_players_sets) > 0:
+                max_exposure = 3
+                for player_name in players:
+                    current_exposure = player_exposure_count.get(player_name, 0)
+                    if current_exposure >= max_exposure:
+                        # Player has already reached max exposure, exclude from this lineup
+                        prob += vars[player_name] == 0
+                        excluded_by_exposure.append(player_name)
             
             # Solve
             prob.solve()
             
+            # #region agent log
+            log_entry = {
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'B',
+                'location': 'optimize_draftkings_nba_lineup.py:648',
+                'message': f'Initial solve status for {strategy["name"]}',
+                'data': {
+                    'strategy_name': strategy['name'],
+                    'status': prob.status,
+                    'status_name': ['Not Solved', 'Optimal', 'Unbounded', 'Undefined'][prob.status] if prob.status < 4 else 'Unknown',
+                    'lineups_generated_so_far': len(lineups),
+                    'excluded_by_exposure_count': len(excluded_by_exposure)
+                },
+                'timestamp': int(__import__('time').time() * 1000)
+            }
+            _debug_log(log_entry)
+            # #endregion
+            
             if prob.status != 1:
-                # If infeasible, try without uniqueness constraints (but keep exposure constraints)
+                # If infeasible, try with relaxed uniqueness constraints (but keep exposure constraints)
                 if len(selected_players_sets) > 0:
-                    # Remove uniqueness constraints and retry
+                    # Retry with relaxed uniqueness constraints (allow more overlap)
                     prob = LpProblem(f"Optimize_NBA_Lineup_{strategy['name']}_retry", LpMaximize)
                     vars = LpVariable.dicts("Select", players, cat="Binary")
                     
@@ -651,12 +779,18 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                     prob += lpSum([vars[name] * player_data[name]["salary"] for name in players]) <= max_salary
                     prob += lpSum([vars[name] for name in players if player_data[name]["is_pg"]]) >= 1
                     prob += lpSum([vars[name] for name in players if player_data[name]["is_sg"]]) >= 1
-                    prob += lpSum([vars[name] for name in players if player_data[name]["is_sf"]]) >= 1
+                    prob += lpSum([vars[name] for name in players if player_data[name]["is_sf"]]) >= 2
                     prob += lpSum([vars[name] for name in players if player_data[name]["is_pf"]]) >= 1
                     prob += lpSum([vars[name] for name in players if player_data[name]["is_c"]]) >= 1
-                    prob += lpSum([vars[name] for name in players if player_data[name]["is_g"]]) >= 3
-                    prob += lpSum([vars[name] for name in players if player_data[name]["is_f"]]) >= 3
+                    prob += lpSum([vars[name] for name in players if player_data[name]["is_g"]]) >= 5
+                    prob += lpSum([vars[name] for name in players if player_data[name]["is_f"]]) >= 5
                     prob += lpSum([vars[name] for name in players if player_data[name]["is_util"]]) >= 1
+                    
+                    # Relaxed uniqueness constraints: allow more overlap (max_overlap + 2)
+                    # This helps when strict constraints make it impossible to generate more lineups
+                    relaxed_overlap = max_overlap + 2
+                    for prev_selected in selected_players_sets:
+                        prob += lpSum([vars[name] for name in prev_selected]) <= relaxed_overlap
                     
                     # Punt strategy: enforce salary tier structure
                     if strategy['objective'] == 'punt':
@@ -676,17 +810,57 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                         prob += lpSum([vars[name] for name in mid_salary_players]) <= 3
                     
                     # Player exposure constraint: no player can appear in more than 3 lineups total
-                    max_exposure = 3
-                    for player_name in players:
-                        current_exposure = player_exposure_count.get(player_name, 0)
-                        if current_exposure >= max_exposure:
-                            # Player has already reached max exposure, exclude from this lineup
-                            prob += vars[player_name] == 0
+                    # BUT: Only apply this constraint if we've already generated at least one lineup
+                    if len(selected_players_sets) > 0:
+                        max_exposure = 3
+                        for player_name in players:
+                            current_exposure = player_exposure_count.get(player_name, 0)
+                            if current_exposure >= max_exposure:
+                                # Player has already reached max exposure, exclude from this lineup
+                                prob += vars[player_name] == 0
                     
                     prob.solve()
+                    
+                    # #region agent log
+                    log_entry = {
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'C',
+                        'location': 'optimize_draftkings_nba_lineup.py:712',
+                        'message': f'Retry solve status for {strategy["name"]} (with relaxed constraints)',
+                        'data': {
+                            'strategy_name': strategy['name'],
+                            'status': prob.status,
+                            'status_name': ['Not Solved', 'Optimal', 'Unbounded', 'Undefined'][prob.status] if prob.status < 4 else 'Unknown',
+                            'lineups_generated_so_far': len(lineups),
+                            'relaxed_overlap_limit': relaxed_overlap if 'relaxed_overlap' in locals() else None
+                        },
+                        'timestamp': int(__import__('time').time() * 1000)
+                    }
+                    _debug_log(log_entry)
+                    # #endregion
             
             if prob.status != 1:
-                print(f"Warning: Strategy '{strategy['name']}' failed to find solution")
+                print(f"Warning: Strategy '{strategy['name']}' failed to find solution (status: {prob.status})")
+                # #region agent log
+                log_entry = {
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'D',
+                    'location': 'optimize_draftkings_nba_lineup.py:714',
+                    'message': f'Strategy {strategy["name"]} FAILED',
+                    'data': {
+                        'strategy_name': strategy['name'],
+                        'status': prob.status,
+                        'status_name': ['Not Solved', 'Optimal', 'Unbounded', 'Undefined'][prob.status] if prob.status < 4 else 'Unknown',
+                        'lineups_generated_so_far': len(lineups),
+                        'total_players': len(players),
+                        'excluded_by_exposure': len(excluded_by_exposure) if 'excluded_by_exposure' in locals() else 0
+                    },
+                    'timestamp': int(__import__('time').time() * 1000)
+                }
+                _debug_log(log_entry)
+                # #endregion
                 continue
             
             # Extract selected players
@@ -730,6 +904,25 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
             lineups.append(selected_df)
             selected_players_sets.append(selected_player_set)
             
+            # #region agent log
+            log_entry = {
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'E',
+                'location': 'optimize_draftkings_nba_lineup.py:756',
+                'message': f'Strategy {strategy["name"]} SUCCESS',
+                'data': {
+                    'strategy_name': strategy['name'],
+                    'players_selected': len(selected_players),
+                    'lineups_generated_so_far': len(lineups),
+                    'total_salary': sum(p['Salary'] for p in selected_players),
+                    'total_fpts': sum(p['FPTS'] for p in selected_players)
+                },
+                'timestamp': int(__import__('time').time() * 1000)
+            }
+            _debug_log(log_entry)
+            # #endregion
+            
             # Update player exposure counts
             for player_name in selected_player_set:
                 player_exposure_count[player_name] = player_exposure_count.get(player_name, 0) + 1
@@ -738,7 +931,40 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
             print(f"Error generating lineup with strategy '{strategy['name']}': {e}")
             import traceback
             traceback.print_exc()
+            # #region agent log
+            log_entry = {
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'F',
+                'location': 'optimize_draftkings_nba_lineup.py:763',
+                'message': f'Exception in strategy {strategy["name"]}',
+                'data': {
+                    'strategy_name': strategy['name'],
+                    'error': str(e),
+                    'lineups_generated_so_far': len(lineups)
+                },
+                'timestamp': int(__import__('time').time() * 1000)
+            }
+            _debug_log(log_entry)
+            # #endregion
             continue
+    
+    # #region agent log
+    log_entry = {
+        'sessionId': 'debug-session',
+        'runId': 'run1',
+        'hypothesisId': 'G',
+        'location': 'optimize_draftkings_nba_lineup.py:769',
+        'message': 'Finished optimize_multiple_lineups',
+        'data': {
+            'total_lineups_generated': len(lineups),
+            'requested_lineups': num_lineups,
+            'strategies_attempted': len(strategies[:num_lineups])
+        },
+        'timestamp': int(__import__('time').time() * 1000)
+    }
+    _debug_log(log_entry)
+    # #endregion
     
     return lineups
 
@@ -909,86 +1135,315 @@ def assign_position_slots(selected_df: pd.DataFrame) -> pd.DataFrame:
     df['is_pf_only'] = df['is_pf'] & ~df['is_sf']
     df['is_sf_pf'] = df['is_sf'] & df['is_pf']  # Can play both
     
-    # Strategy: Fill PG and SG first, prioritizing single-position players
-    # This leaves multi-position PG/SG players available for the G slot
+    # Strategy: Fill required position slots (PG, SG, SF, PF, C) FIRST before flexible slots (G, F)
+    # This ensures we don't use up SF/PF-eligible players for G/F slots before filling SF/PF slots
     
     # Fill PG slot - prefer PG-only players, but can use PG/SG if needed
-    eligible_pg = df[(df['is_pg'] == True) & (df['assigned'] == False)]
-    if len(eligible_pg) > 0:
-        # Prefer PG-only players first
-        pg_only = eligible_pg[eligible_pg['is_pg_only'] == True]
-        if len(pg_only) > 0:
-            idx = pg_only.sort_values('FPTS', ascending=False).index[0]
+    # IMPORTANT: Avoid using PF-eligible players here to save them for PF slot
+    # Use .loc with boolean indexing to avoid issues with == True comparison
+    eligible_pg = df.loc[(df['is_pg']) & (~df['assigned'])]
+    if len(eligible_pg) == 0:
+        raise ValueError("No eligible player found for PG slot. Optimizer may have selected invalid lineup.")
+    # Prefer PG-only players first (avoid PF-eligible players)
+    pg_only = eligible_pg.loc[eligible_pg['is_pg_only']]
+    if len(pg_only) > 0:
+        # Prefer PG-only players who are NOT PF-eligible
+        pg_only_not_pf = pg_only.loc[~pg_only['is_pf']]
+        if len(pg_only_not_pf) > 0:
+            idx = pg_only_not_pf.sort_values('FPTS', ascending=False).index[0]
         else:
+            idx = pg_only.sort_values('FPTS', ascending=False).index[0]
+    else:
+        # Prefer PG/SG players who are NOT PF-eligible
+        pg_not_pf = eligible_pg.loc[~eligible_pg['is_pf']]
+        if len(pg_not_pf) > 0:
+            idx = pg_not_pf.sort_values('FPTS', ascending=False).index[0]
+        else:
+            # Last resort: use PF-eligible player (should be rare)
             idx = eligible_pg.sort_values('FPTS', ascending=False).index[0]
-        df.loc[idx, 'Slot'] = 'PG'
-        df.loc[idx, 'assigned'] = True
+    df.loc[idx, 'Slot'] = 'PG'
+    df.loc[idx, 'assigned'] = True
     
     # Fill SG slot - prefer SG-only players, but can use PG/SG if needed
-    eligible_sg = df[(df['is_sg'] == True) & (df['assigned'] == False)]
-    if len(eligible_sg) > 0:
-        # Prefer SG-only players first
-        sg_only = eligible_sg[eligible_sg['is_sg_only'] == True]
-        if len(sg_only) > 0:
+    # IMPORTANT: Don't use SF-eligible or PF-eligible players here if possible
+    # Use .loc with boolean indexing to avoid issues with == True comparison
+    eligible_sg = df.loc[(df['is_sg']) & (~df['assigned'])]
+    if len(eligible_sg) == 0:
+        raise ValueError("No eligible player found for SG slot. Optimizer may have selected invalid lineup.")
+    # Prefer SG-only players first (avoid SF-eligible and PF-eligible players)
+    sg_only = eligible_sg.loc[eligible_sg['is_sg_only']]
+    if len(sg_only) > 0:
+        # Prefer SG-only players who are NOT SF-eligible and NOT PF-eligible
+        sg_only_not_sf_pf = sg_only.loc[~sg_only['is_sf'] & ~sg_only['is_pf']]
+        if len(sg_only_not_sf_pf) > 0:
+            idx = sg_only_not_sf_pf.sort_values('FPTS', ascending=False).index[0]
+        else:
             idx = sg_only.sort_values('FPTS', ascending=False).index[0]
+    else:
+        # If no SG-only players, use PG/SG players, but STRICTLY avoid SF-eligible and PF-eligible players
+        # This ensures we save SF-eligible players for SF slot and PF-eligible players for PF slot
+        sg_not_sf_pf = eligible_sg.loc[~eligible_sg['is_sf'] & ~eligible_sg['is_pf']]
+        if len(sg_not_sf_pf) > 0:
+            idx = sg_not_sf_pf.sort_values('FPTS', ascending=False).index[0]
         else:
-            idx = eligible_sg.sort_values('FPTS', ascending=False).index[0]
-        df.loc[idx, 'Slot'] = 'SG'
-        df.loc[idx, 'assigned'] = True
+            # Prefer SF-eligible over PF-eligible (SF comes before PF in slot order)
+            sg_not_pf = eligible_sg.loc[~eligible_sg['is_pf']]
+            if len(sg_not_pf) > 0:
+                idx = sg_not_pf.sort_values('FPTS', ascending=False).index[0]
+            else:
+                # Last resort: use PF-eligible player (should be rare)
+                idx = eligible_sg.sort_values('FPTS', ascending=False).index[0]
+    df.loc[idx, 'Slot'] = 'SG'
+    df.loc[idx, 'assigned'] = True
     
-    # Fill SF slot - prefer SF-only players
-    eligible_sf = df[(df['is_sf'] == True) & (df['assigned'] == False)]
-    if len(eligible_sf) > 0:
-        sf_only = eligible_sf[eligible_sf['is_sf_only'] == True]
-        if len(sf_only) > 0:
-            idx = sf_only.sort_values('FPTS', ascending=False).index[0]
-        else:
+    # Fill SF slot - prefer SF-only players, but reserve at least one F-eligible player for F slot
+    # IMPORTANT: Fill SF BEFORE G and F slots to ensure we have SF-eligible players available
+    # Use .loc with boolean indexing to avoid issues with == True comparison
+    eligible_sf = df.loc[(df['is_sf']) & (~df['assigned'])]
+    if len(eligible_sf) == 0:
+        raise ValueError("No eligible player found for SF slot. Optimizer may have selected invalid lineup.")
+    
+    # Count how many F-eligible players are still unassigned (needed for F slot after SF and PF are filled)
+    unassigned_f_eligible = df.loc[(df['is_f']) & (~df['assigned'])]
+    unassigned_f_count = len(unassigned_f_eligible)
+    
+    # Strategy: We need to ensure we leave at least 1 F-eligible player for F slot
+    # SF-only and PF-only players ARE F-eligible, so if we use them for SF/PF slots, we've used F-eligible players
+    # Best strategy: Use SF/PF players for SF and PF slots when possible, saving SF-only/PF-only for F slot
+    # But if we don't have SF/PF players, use SF-only/PF-only and ensure we have enough F-eligible players total
+    
+    sf_pf_players = eligible_sf.loc[eligible_sf['is_sf_pf']]  # Players who can play both SF and PF
+    sf_only = eligible_sf.loc[eligible_sf['is_sf_only']]
+    
+    # Strategy: Prefer SF-only players for SF slot to save SF/PF players for PF slot
+    # Only use SF/PF players if we have enough F-eligible players remaining
+    if len(sf_only) > 0:
+        # Use SF-only players first (they're F-eligible but can't play PF, so safe to use here)
+        idx = sf_only.sort_values('FPTS', ascending=False).index[0]
+    elif len(sf_pf_players) > 0 and unassigned_f_count > 2:
+        # We have SF/PF players and enough F-eligible players left - use SF/PF for SF slot
+        # This still leaves SF/PF players available for PF slot
+        idx = sf_pf_players.sort_values('FPTS', ascending=False).index[0]
+    else:
+        # No SF-only players, must use SF/PF (but ensure we have enough F-eligible players)
+        if unassigned_f_count > 1:
             idx = eligible_sf.sort_values('FPTS', ascending=False).index[0]
-        df.loc[idx, 'Slot'] = 'SF'
-        df.loc[idx, 'assigned'] = True
+        else:
+            # Not enough F-eligible players - this shouldn't happen with correct optimizer constraints
+            raise ValueError(
+                f"Cannot fill SF slot: Only {unassigned_f_count} F-eligible player(s) remaining, "
+                f"but need at least 1 for PF slot and 1 for F slot. Optimizer may have selected invalid lineup."
+            )
+    df.loc[idx, 'Slot'] = 'SF'
+    df.loc[idx, 'assigned'] = True
     
-    # Fill PF slot - prefer PF-only players
-    eligible_pf = df[(df['is_pf'] == True) & (df['assigned'] == False)]
-    if len(eligible_pf) > 0:
-        pf_only = eligible_pf[eligible_pf['is_pf_only'] == True]
-        if len(pf_only) > 0:
-            idx = pf_only.sort_values('FPTS', ascending=False).index[0]
+    # Fill PF slot - MUST reserve at least one F-eligible player for F slot
+    # IMPORTANT: Fill PF BEFORE F slot to ensure we have PF-eligible players available
+    # Use .loc with boolean indexing to avoid issues with == True comparison
+    eligible_pf = df.loc[(df['is_pf']) & (~df['assigned'])]
+    
+    # #region agent log
+    import json
+    assigned_so_far = df[df['assigned'] == True]
+    log_entry = {
+        'sessionId': 'debug-session',
+        'runId': 'run1',
+        'hypothesisId': 'J',
+        'location': 'optimize_draftkings_nba_lineup.py:1210',
+        'message': 'PF slot assignment - checking eligibility',
+        'data': {
+            'eligible_pf_count': len(eligible_pf),
+            'assigned_players_count': len(assigned_so_far),
+            'assigned_slots': assigned_so_far['Slot'].tolist() if 'Slot' in assigned_so_far.columns else [],
+            'total_players': len(df),
+            'pf_eligible_players': eligible_pf['Player'].tolist() if len(eligible_pf) > 0 else []
+        },
+        'timestamp': int(__import__('time').time() * 1000)
+    }
+    _debug_log(log_entry)
+    # #endregion
+    
+    if len(eligible_pf) == 0:
+        raise ValueError("No eligible player found for PF slot. Optimizer may have selected invalid lineup.")
+    
+    # Count how many F-eligible players are still unassigned (CRITICAL: need at least 1 for F slot)
+    unassigned_f_eligible = df.loc[(df['is_f']) & (~df['assigned'])]
+    unassigned_f_count = len(unassigned_f_eligible)
+    
+    # #region agent log
+    unassigned_c_eligible = df.loc[(df['is_c']) & (~df['assigned'])]
+    unassigned_c_count = len(unassigned_c_eligible)
+    log_entry = {
+        'sessionId': 'debug-session',
+        'runId': 'run1',
+        'hypothesisId': 'K',
+        'location': 'optimize_draftkings_nba_lineup.py:1216',
+        'message': 'PF slot assignment - F-eligible and C-eligible check',
+        'data': {
+            'unassigned_f_count': unassigned_f_count,
+            'unassigned_f_players': unassigned_f_eligible['Player'].tolist() if len(unassigned_f_eligible) > 0 else [],
+            'unassigned_c_count': unassigned_c_count,
+            'unassigned_c_players': unassigned_c_eligible['Player'].tolist() if len(unassigned_c_eligible) > 0 else [],
+            'pf_only_count': len(eligible_pf.loc[eligible_pf['is_pf_only']]) if len(eligible_pf) > 0 else 0,
+            'pf_only_not_c_count': len(eligible_pf.loc[eligible_pf['is_pf_only'] & ~eligible_pf['is_c']]) if len(eligible_pf) > 0 else 0,
+            'sf_pf_count': len(eligible_pf.loc[eligible_pf['is_sf_pf']]) if len(eligible_pf) > 0 else 0
+        },
+        'timestamp': int(__import__('time').time() * 1000)
+    }
+    _debug_log(log_entry)
+    # #endregion
+    
+    pf_pf_sf_players = eligible_pf.loc[eligible_pf['is_sf_pf']]  # Players who can play both SF and PF
+    pf_only = eligible_pf.loc[eligible_pf['is_pf_only']]
+    
+    # Count C-eligible players remaining (CRITICAL: need at least 1 for C slot)
+    unassigned_c_eligible = df.loc[(df['is_c']) & (~df['assigned'])]
+    unassigned_c_count = len(unassigned_c_eligible)
+    
+    # Strategy: Prefer PF-only players who are NOT C-eligible for PF slot
+    # This preserves C-eligible players for C slot
+    # Only use C-eligible players for PF if absolutely necessary (when unassigned_c_count > 1)
+    pf_only_not_c = pf_only.loc[~pf_only['is_c']] if len(pf_only) > 0 else pd.DataFrame()
+    
+    # Priority order:
+    # 1. PF-only players who are NOT C-eligible (if we have enough F-eligible players)
+    # 2. SF/PF players (if we have enough F-eligible and C-eligible players)
+    # 3. PF-only players who ARE C-eligible (only if we have more than 1 C-eligible player)
+    # 4. Any PF-eligible player (last resort)
+    
+    if len(pf_only_not_c) > 0 and unassigned_f_count > 1:
+        # Best case: PF-only players who are NOT C-eligible
+        idx = pf_only_not_c.sort_values('FPTS', ascending=False).index[0]
+    elif len(pf_pf_sf_players) > 0 and unassigned_f_count > 1 and unassigned_c_count > 0:
+        # Good case: SF/PF players (they're F-eligible, and we have C-eligible players left)
+        idx = pf_pf_sf_players.sort_values('FPTS', ascending=False).index[0]
+    elif len(pf_only) > 0 and unassigned_c_count > 1 and unassigned_f_count > 1:
+        # Acceptable: PF-only players who ARE C-eligible, but we have more than 1 C-eligible player
+        idx = pf_only.sort_values('FPTS', ascending=False).index[0]
+    elif len(eligible_pf) > 0:
+        # Last resort: Any PF-eligible player, but check constraints
+        if unassigned_c_count == 0:
+            raise ValueError(
+                f"Cannot fill PF slot: No C-eligible players remaining for C slot. "
+                f"Optimizer may have selected invalid lineup."
+            )
+        elif unassigned_f_count <= 1:
+            raise ValueError(
+                f"Cannot fill PF slot: Only {unassigned_f_count} F-eligible player(s) remaining, "
+                f"but need at least 1 for F slot. Optimizer may have selected invalid lineup."
+            )
         else:
             idx = eligible_pf.sort_values('FPTS', ascending=False).index[0]
-        df.loc[idx, 'Slot'] = 'PF'
-        df.loc[idx, 'assigned'] = True
+    else:
+        raise ValueError(
+            f"Cannot fill PF slot: No eligible PF players found. "
+            f"Optimizer may have selected invalid lineup."
+        )
+    df.loc[idx, 'Slot'] = 'PF'
+    df.loc[idx, 'assigned'] = True
     
     # Fill C slot
-    eligible_c = df[(df['is_c'] == True) & (df['assigned'] == False)]
-    if len(eligible_c) > 0:
-        idx = eligible_c.sort_values('FPTS', ascending=False).index[0]
-        df.loc[idx, 'Slot'] = 'C'
-        df.loc[idx, 'assigned'] = True
+    # Use .loc with boolean indexing to avoid issues with == True comparison
+    eligible_c = df.loc[(df['is_c']) & (~df['assigned'])]
+    
+    # #region agent log
+    assigned_so_far = df[df['assigned'] == True]
+    log_entry = {
+        'sessionId': 'debug-session',
+        'runId': 'run1',
+        'hypothesisId': 'L',
+        'location': 'optimize_draftkings_nba_lineup.py:1360',
+        'message': 'C slot assignment - checking eligibility',
+        'data': {
+            'eligible_c_count': len(eligible_c),
+            'assigned_players_count': len(assigned_so_far),
+            'assigned_slots': assigned_so_far['Slot'].tolist() if 'Slot' in assigned_so_far.columns else [],
+            'total_players': len(df),
+            'c_eligible_players': eligible_c['Player'].tolist() if len(eligible_c) > 0 else []
+        },
+        'timestamp': int(__import__('time').time() * 1000)
+    }
+    _debug_log(log_entry)
+    # #endregion
+    
+    if len(eligible_c) == 0:
+        raise ValueError("No eligible player found for C slot. Optimizer may have selected invalid lineup.")
+    idx = eligible_c.sort_values('FPTS', ascending=False).index[0]
+    df.loc[idx, 'Slot'] = 'C'
+    df.loc[idx, 'assigned'] = True
+    
+    # Fill F slot (must be SF or PF) - CRITICAL: Fill F slot BEFORE G slot to ensure we reserve an F-eligible player
+    # After filling SF and PF slots, we should have at least 1 F-eligible player left for F slot
+    # NOTE: C slot is already filled, so we don't need to check for C-eligible players here
+    # Use .loc with boolean indexing to avoid issues with == True comparison
+    eligible_f = df.loc[(df['is_f']) & (~df['assigned'])]
+    if len(eligible_f) == 0:
+        raise ValueError("No eligible player found for F slot. Optimizer may have selected invalid lineup.")
+    
+    # Simply assign the highest FPTS F-eligible player to F slot
+    # C slot is already filled, so we don't need to preserve C-eligible players
+    idx = eligible_f.sort_values('FPTS', ascending=False).index[0]
+    df.loc[idx, 'Slot'] = 'F'
+    df.loc[idx, 'assigned'] = True
     
     # Fill G slot (must be PG or SG) - should have at least one available
-    eligible_g = df[(df['is_g'] == True) & (df['assigned'] == False)]
+    # IMPORTANT: Fill G AFTER F slot to avoid using F-eligible players for G slot
+    # The optimizer ensures we have at least 4 G-eligible players total (for PG, SG, G, and F slots)
+    # Use .loc with boolean indexing to avoid issues with == True comparison
+    eligible_g = df.loc[(df['is_g']) & (~df['assigned'])]
     if len(eligible_g) == 0:
-        # This shouldn't happen if optimizer worked correctly, but handle it
         raise ValueError("No eligible player found for G slot. Optimizer may have selected invalid lineup.")
     idx = eligible_g.sort_values('FPTS', ascending=False).index[0]
     df.loc[idx, 'Slot'] = 'G'
     df.loc[idx, 'assigned'] = True
     
-    # Fill F slot (must be SF or PF) - should have at least one available
-    eligible_f = df[(df['is_f'] == True) & (df['assigned'] == False)]
-    if len(eligible_f) == 0:
-        raise ValueError("No eligible player found for F slot. Optimizer may have selected invalid lineup.")
-    idx = eligible_f.sort_values('FPTS', ascending=False).index[0]
-    df.loc[idx, 'Slot'] = 'F'
-    df.loc[idx, 'assigned'] = True
-    
     # Fill UTIL slot (any remaining player - should be exactly 1)
     unassigned = df[df['assigned'] == False]
-    if len(unassigned) != 1:
-        raise ValueError(f"Expected exactly 1 unassigned player for UTIL slot, but found {len(unassigned)}")
-    idx = unassigned.index[0]
-    df.loc[idx, 'Slot'] = 'UTIL'
-    df.loc[idx, 'assigned'] = True
+    if len(unassigned) == 0:
+        raise ValueError("All players already assigned, but UTIL slot is missing.")
+    elif len(unassigned) == 1:
+        # Perfect case: exactly 1 player for UTIL
+        idx = unassigned.index[0]
+        df.loc[idx, 'Slot'] = 'UTIL'
+        df.loc[idx, 'assigned'] = True
+    else:
+        # More than 1 unassigned player - this indicates a problem
+        # This can happen if the optimizer selected players that don't properly satisfy constraints
+        # OR if there's a bug in the slot assignment logic
+        # The issue is likely that we have players who are eligible for multiple positions
+        # but weren't assigned because we already filled those slots
+        # For example: if we have a PG/SG player assigned to PG, and another PG/SG assigned to SG,
+        # and a third PG/SG assigned to G, but we also have a fourth player who is PG/SG/SF/PF
+        # that wasn't assigned to any specific slot
+        
+        # The safest fix: assign the highest FPTS unassigned player to UTIL
+        # and if there are still unassigned players, that's a critical error
+        idx = unassigned.sort_values('FPTS', ascending=False).index[0]
+        df.loc[idx, 'Slot'] = 'UTIL'
+        df.loc[idx, 'assigned'] = True
+        
+        # Check if there are still unassigned players
+        remaining_unassigned = df[df['assigned'] == False]
+        if len(remaining_unassigned) > 0:
+            # This should never happen - we should have exactly 8 players and 8 slots
+            # But if it does, we need to understand why
+            # The most likely cause: the optimizer selected players that don't satisfy the constraints
+            # OR there's a bug in how we're checking eligibility
+            
+            # Try to assign remaining players to UTIL by creating multiple UTIL slots?
+            # No, DraftKings only allows 1 UTIL slot
+            
+            # The real fix: we need to ensure the optimizer constraints are correct
+            # OR we need to fix the slot assignment to handle edge cases
+            
+            # For now, let's raise a more informative error
+            raise ValueError(
+                f"Slot assignment error: {len(remaining_unassigned)} player(s) remain unassigned after filling all 8 slots. "
+                f"Unassigned players: {remaining_unassigned['Player'].tolist() if 'Player' in remaining_unassigned.columns else 'N/A'}. "
+                f"Assigned slots: {df[df['assigned'] == True]['Slot'].tolist()}. "
+                f"This suggests the optimizer selected players that don't satisfy position constraints correctly, "
+                f"or there's a bug in the slot assignment logic."
+            )
     
     # Verify all 8 players are assigned
     unassigned_count = (df['assigned'] == False).sum()

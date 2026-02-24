@@ -38,14 +38,33 @@ with st.sidebar:
 def get_matchups_for_date(selected_date):
     """Fetch NBA matchups for a given date from the API"""
     season = '2025-26'
-    
+    # #region agent log
+    _log_path = '/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug-fc44ac.log'
+    _t0 = time.time()
+    def _dbg(**kw):
+        try:
+            os.makedirs(os.path.dirname(_log_path), exist_ok=True)
+            open(_log_path, 'a').write(__import__('json').dumps({"sessionId": "fc44ac", "timestamp": int(time.time() * 1000), **kw}) + '\n')
+        except Exception:
+            pass
+    _dbg(hypothesisId="H0", location="1_Teams.py:get_matchups_for_date:entry", message="get_matchups_for_date called (cache miss)", data={"selected_date": str(selected_date)})
+    _dbg(hypothesisId="H1", location="1_Teams.py:get_matchups_for_date:before_call", message="ScheduleLeagueV2 call starting", data={"season": season})
+    # #endregion
     # Fetch from API
     try:
         league_schedule = nba_api.stats.endpoints.ScheduleLeagueV2(
             league_id='00',
-            season=season
+            season=season,
+            timeout=90
         ).get_data_frames()[0]
+        # #region agent log
+        _dur = (time.time() - _t0) * 1000
+        _dbg(hypothesisId="H1", location="1_Teams.py:get_matchups_for_date:after_success", message="ScheduleLeagueV2 completed", data={"duration_ms": round(_dur, 0), "row_count": len(league_schedule)})
+        # #endregion
     except Exception as e:
+        # #region agent log
+        _dbg(hypothesisId="H2", location="1_Teams.py:get_matchups_for_date:exception", message="ScheduleLeagueV2 failed", data={"exc_type": type(e).__name__, "exc_msg": str(e), "duration_ms": round((time.time() - _t0) * 1000, 0)})
+        # #endregion
         return [], f"Error fetching schedule: {str(e)}"
     
     try:
@@ -181,6 +200,10 @@ if selected_matchup:
     home_team_name = selected_matchup['home_team_name']
     away_team_id = selected_matchup['away_team_id']
     home_team_id = selected_matchup['home_team_id']
+    # Update module-level variables so the HTML tables pick up the right team
+    # _stats = functions.get_matchup_stats(home_team_id, away_team_id)
+    # for key, value in _stats.items():
+    #     setattr(functions, key, value)
     
     # Get tricodes directly from matchup (from API)
     away_abbr = selected_matchup.get('away_team', '')

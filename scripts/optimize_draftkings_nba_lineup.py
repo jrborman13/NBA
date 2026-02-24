@@ -9,9 +9,21 @@ import numpy as np
 from pulp import LpMaximize, LpProblem, LpVariable, lpSum
 import os
 import sys
+import json
 import argparse
 from datetime import datetime
 from typing import Optional, Tuple, List, Dict
+
+# Debug log: write only when path exists and is writable (no-op on Streamlit Cloud)
+def _debug_log(log_entry: dict) -> None:
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        log_path = os.path.join(project_root, '.cursor', 'debug.log')
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, 'a') as f:
+            f.write(json.dumps(log_entry) + '\n')
+    except Exception:
+        pass
 
 # Try to import fuzzywuzzy, but make it optional
 try:
@@ -521,8 +533,7 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
         },
         'timestamp': int(__import__('time').time() * 1000)
     }
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps(log_entry) + '\n')
+    _debug_log(log_entry)
     # #endregion
     
     # Strategy definitions
@@ -579,8 +590,7 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
             },
             'timestamp': int(__import__('time').time() * 1000)
         }
-        with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps(log_entry) + '\n')
+        _debug_log(log_entry)
         # #endregion
         
         try:
@@ -703,8 +713,7 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                 },
                 'timestamp': int(__import__('time').time() * 1000)
             }
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps(log_entry) + '\n')
+            _debug_log(log_entry)
             # #endregion
             
             # Player exposure constraint: no player can appear in more than 3 lineups total
@@ -739,8 +748,7 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                 },
                 'timestamp': int(__import__('time').time() * 1000)
             }
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps(log_entry) + '\n')
+            _debug_log(log_entry)
             # #endregion
             
             if prob.status != 1:
@@ -829,8 +837,7 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                         },
                         'timestamp': int(__import__('time').time() * 1000)
                     }
-                    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps(log_entry) + '\n')
+                    _debug_log(log_entry)
                     # #endregion
             
             if prob.status != 1:
@@ -852,8 +859,7 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                     },
                     'timestamp': int(__import__('time').time() * 1000)
                 }
-                with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps(log_entry) + '\n')
+                _debug_log(log_entry)
                 # #endregion
                 continue
             
@@ -914,8 +920,7 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                 },
                 'timestamp': int(__import__('time').time() * 1000)
             }
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps(log_entry) + '\n')
+            _debug_log(log_entry)
             # #endregion
             
             # Update player exposure counts
@@ -940,8 +945,7 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                 },
                 'timestamp': int(__import__('time').time() * 1000)
             }
-            with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps(log_entry) + '\n')
+            _debug_log(log_entry)
             # #endregion
             continue
     
@@ -959,8 +963,7 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
         },
         'timestamp': int(__import__('time').time() * 1000)
     }
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps(log_entry) + '\n')
+    _debug_log(log_entry)
     # #endregion
     
     return lineups
@@ -1257,8 +1260,7 @@ def assign_position_slots(selected_df: pd.DataFrame) -> pd.DataFrame:
         },
         'timestamp': int(__import__('time').time() * 1000)
     }
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps(log_entry) + '\n')
+    _debug_log(log_entry)
     # #endregion
     
     if len(eligible_pf) == 0:
@@ -1288,8 +1290,7 @@ def assign_position_slots(selected_df: pd.DataFrame) -> pd.DataFrame:
         },
         'timestamp': int(__import__('time').time() * 1000)
     }
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps(log_entry) + '\n')
+    _debug_log(log_entry)
     # #endregion
     
     pf_pf_sf_players = eligible_pf.loc[eligible_pf['is_sf_pf']]  # Players who can play both SF and PF
@@ -1362,8 +1363,7 @@ def assign_position_slots(selected_df: pd.DataFrame) -> pd.DataFrame:
         },
         'timestamp': int(__import__('time').time() * 1000)
     }
-    with open('/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps(log_entry) + '\n')
+    _debug_log(log_entry)
     # #endregion
     
     if len(eligible_c) == 0:

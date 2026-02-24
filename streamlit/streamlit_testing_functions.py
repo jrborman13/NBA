@@ -3,6 +3,19 @@ import requests
 import json
 import pandas as pd
 import nba_api
+
+from nba_api.library.http import NBAHTTP
+NBAHTTP.headers = {
+    "Host": "stats.nba.com",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://www.nba.com/",
+    "Origin": "https://www.nba.com",
+    "Connection": "keep-alive",
+}
+
 import streamlit as st
 import os
 import sys
@@ -38,7 +51,7 @@ def get_cached_team_advanced_stats(season: str = current_season, last_n_games: i
         if last_n_games:
             params['last_n_games'] = last_n_games
         
-        df = nba_api.stats.endpoints.LeagueDashTeamStats(**params).get_data_frames()[0]
+        df = nba_api.stats.endpoints.LeagueDashTeamStats(**params, timeout=90).get_data_frames()[0]
         
         # Add ranking columns
         df['OFF_RATING_RANK'] = df['OFF_RATING'].rank(ascending=False, method='first').astype(int)
@@ -74,7 +87,7 @@ def get_cached_team_misc_stats(season: str = current_season, last_n_games: int =
         if last_n_games:
             params['last_n_games'] = last_n_games
         
-        df = nba_api.stats.endpoints.LeagueDashTeamStats(**params).get_data_frames()[0]
+        df = nba_api.stats.endpoints.LeagueDashTeamStats(**params, timeout=90).get_data_frames()[0]
         
         # Add differentials and rankings
         df['PTS_PAINT_DIFF'] = df['PTS_PAINT'] - df['OPP_PTS_PAINT']
@@ -119,7 +132,7 @@ def get_cached_team_traditional_stats(season: str = current_season, last_n_games
         if group_quantity:
             params['starter_bench_nullable'] = group_quantity
         
-        df = nba_api.stats.endpoints.LeagueDashTeamStats(**params).get_data_frames()[0]
+        df = nba_api.stats.endpoints.LeagueDashTeamStats(**params, timeout=90).get_data_frames()[0]
         
         # Add ranking columns
         df['AST_RANK'] = df['AST'].rank(ascending=False, method='first').astype(int)
@@ -149,7 +162,7 @@ def get_cached_team_four_factors_stats(season: str = current_season, last_n_game
         if last_n_games:
             params['last_n_games'] = last_n_games
         
-        df = nba_api.stats.endpoints.LeagueDashTeamStats(**params).get_data_frames()[0]
+        df = nba_api.stats.endpoints.LeagueDashTeamStats(**params, timeout=90).get_data_frames()[0]
         
         # Add ranking columns
         df['OPP_TOV_PCT_RANK'] = df['OPP_TOV_PCT'].rank(ascending=False, method='first').astype(int)
@@ -160,71 +173,72 @@ def get_cached_team_four_factors_stats(season: str = current_season, last_n_game
         return pd.DataFrame()
 
 
-#ADVANCED DATA LOADING
-##SEASON
-print("[DEBUG] Loading team advanced stats (module level)...")
-data_adv_season = get_cached_team_advanced_stats()
-print(f"[DEBUG] Team advanced stats loaded: {len(data_adv_season)} rows")
-
-# Add missing ranking columns for Core Stats (only if DataFrame has data and required columns)
-if len(data_adv_season) > 0 and 'OFF_RATING' in data_adv_season.columns:
-    if 'OFF_RATING_RANK' not in data_adv_season.columns:
-        data_adv_season['OFF_RATING_RANK'] = data_adv_season['OFF_RATING'].rank(ascending=False, method='first').astype(int)
-    if 'DEF_RATING_RANK' not in data_adv_season.columns and 'DEF_RATING' in data_adv_season.columns:
-        data_adv_season['DEF_RATING_RANK'] = data_adv_season['DEF_RATING'].rank(ascending=True, method='first').astype(int)
-    if 'NET_RATING_RANK' not in data_adv_season.columns and 'NET_RATING' in data_adv_season.columns:
-        data_adv_season['NET_RATING_RANK'] = data_adv_season['NET_RATING'].rank(ascending=False, method='first').astype(int)
-    if 'PACE_RANK' not in data_adv_season.columns and 'PACE' in data_adv_season.columns:
-        data_adv_season['PACE_RANK'] = data_adv_season['PACE'].rank(ascending=False, method='first').astype(int)
-    if 'AST_PCT_RANK' not in data_adv_season.columns and 'AST_PCT' in data_adv_season.columns:
-        data_adv_season['AST_PCT_RANK'] = data_adv_season['AST_PCT'].rank(ascending=False, method='first').astype(int)
-    if 'TM_TOV_PCT_RANK' not in data_adv_season.columns and 'TM_TOV_PCT' in data_adv_season.columns:
-        data_adv_season['TM_TOV_PCT_RANK'] = data_adv_season['TM_TOV_PCT'].rank(ascending=True, method='first').astype(int)
-    if 'AST_TO_RANK' not in data_adv_season.columns and 'AST_TO' in data_adv_season.columns:
-        data_adv_season['AST_TO_RANK'] = data_adv_season['AST_TO'].rank(ascending=False, method='first').astype(int)
-    if 'DREB_PCT_RANK' not in data_adv_season.columns and 'DREB_PCT' in data_adv_season.columns:
-        data_adv_season['DREB_PCT_RANK'] = data_adv_season['DREB_PCT'].rank(ascending=False, method='first').astype(int)
-    if 'OREB_PCT_RANK' not in data_adv_season.columns and 'OREB_PCT' in data_adv_season.columns:
-        data_adv_season['OREB_PCT_RANK'] = data_adv_season['OREB_PCT'].rank(ascending=False, method='first').astype(int)
-    if 'REB_PCT_RANK' not in data_adv_season.columns and 'REB_PCT' in data_adv_season.columns:
-        data_adv_season['REB_PCT_RANK'] = data_adv_season['REB_PCT'].rank(ascending=False, method='first').astype(int)
-##LAST 5 GAMES
-data_adv_L5 = get_cached_team_advanced_stats(last_n_games=5)
-
-#MISC DATA LOADING
-##SEASON
-data_misc_season = get_cached_team_misc_stats()
-##LAST 5 GAMES
-data_misc_L5 = get_cached_team_misc_stats(last_n_games=5)
-
-#LOAD TRADITIONAL DATA
-## SEASON
-data_trad_season = get_cached_team_traditional_stats()
-## LAST 5
-data_trad_L5 = get_cached_team_traditional_stats(last_n_games=5)
-## SEASON - STARTERS
-data_trad_season_starters = get_cached_team_traditional_stats(group_quantity='Starters')
-## LAST 5 - STARTERS
-data_trad_L5_starters = get_cached_team_traditional_stats(last_n_games=5, group_quantity='Starters')
-## SEASON - BENCH
-data_trad_season_bench = get_cached_team_traditional_stats(group_quantity='Bench')
-## LAST 5 - BENCH
-data_trad_L5_bench = get_cached_team_traditional_stats(last_n_games=5, group_quantity='Bench')
-
-#LOAD FOUR FACTORS DATA
-##SEASON
-data_4F_season = get_cached_team_four_factors_stats()
-## LAST 5 GAMES
-data_4F_L5 = get_cached_team_four_factors_stats(last_n_games=5)
-
-#Key base variables
-if len(data_adv_season) > 0 and 'TEAM_NAME' in data_adv_season.columns and 'TEAM_ID' in data_adv_season.columns:
-    wolves_id = data_adv_season.loc[data_adv_season['TEAM_NAME'] == 'Minnesota Timberwolves', 'TEAM_ID'].values[0] if len(data_adv_season.loc[data_adv_season['TEAM_NAME'] == 'Minnesota Timberwolves']) > 0 else '1610612750'
-else:
-    wolves_id = '1610612750'
+#ADVANCED DATA LOADING (lazy: loaded on first matchup selection to avoid blocking import)
+_team_data_loaded = False
+data_adv_season = pd.DataFrame()
+data_adv_L5 = pd.DataFrame()
+data_misc_season = pd.DataFrame()
+data_misc_L5 = pd.DataFrame()
+data_trad_season = pd.DataFrame()
+data_trad_L5 = pd.DataFrame()
+data_trad_season_starters = pd.DataFrame()
+data_trad_L5_starters = pd.DataFrame()
+data_trad_season_bench = pd.DataFrame()
+data_trad_L5_bench = pd.DataFrame()
+data_4F_season = pd.DataFrame()
+data_4F_L5 = pd.DataFrame()
+wolves_id = '1610612750'
 logo_link = f'https://cdn.nba.com/logos/nba/{wolves_id}/primary/L/logo.svg'
 timberwolves = 'Minnesota Timberwolves'
 nba_logo = 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png?w=100&h=100&transparent=true'
+
+def _ensure_team_data_loaded():
+    """Load team stats from API on first use so import does not block on stats.nba.com."""
+    global _team_data_loaded, data_adv_season, data_adv_L5, data_misc_season, data_misc_L5
+    global data_trad_season, data_trad_L5, data_trad_season_starters, data_trad_L5_starters
+    global data_trad_season_bench, data_trad_L5_bench, data_4F_season, data_4F_L5
+    global wolves_id, logo_link
+    if _team_data_loaded:
+        return
+    _team_data_loaded = True
+    data_adv_season = get_cached_team_advanced_stats()
+    if len(data_adv_season) > 0 and 'OFF_RATING' in data_adv_season.columns:
+        if 'OFF_RATING_RANK' not in data_adv_season.columns:
+            data_adv_season['OFF_RATING_RANK'] = data_adv_season['OFF_RATING'].rank(ascending=False, method='first').astype(int)
+        if 'DEF_RATING_RANK' not in data_adv_season.columns and 'DEF_RATING' in data_adv_season.columns:
+            data_adv_season['DEF_RATING_RANK'] = data_adv_season['DEF_RATING'].rank(ascending=True, method='first').astype(int)
+        if 'NET_RATING_RANK' not in data_adv_season.columns and 'NET_RATING' in data_adv_season.columns:
+            data_adv_season['NET_RATING_RANK'] = data_adv_season['NET_RATING'].rank(ascending=False, method='first').astype(int)
+        if 'PACE_RANK' not in data_adv_season.columns and 'PACE' in data_adv_season.columns:
+            data_adv_season['PACE_RANK'] = data_adv_season['PACE'].rank(ascending=False, method='first').astype(int)
+        if 'AST_PCT_RANK' not in data_adv_season.columns and 'AST_PCT' in data_adv_season.columns:
+            data_adv_season['AST_PCT_RANK'] = data_adv_season['AST_PCT'].rank(ascending=False, method='first').astype(int)
+        if 'TM_TOV_PCT_RANK' not in data_adv_season.columns and 'TM_TOV_PCT' in data_adv_season.columns:
+            data_adv_season['TM_TOV_PCT_RANK'] = data_adv_season['TM_TOV_PCT'].rank(ascending=True, method='first').astype(int)
+        if 'AST_TO_RANK' not in data_adv_season.columns and 'AST_TO' in data_adv_season.columns:
+            data_adv_season['AST_TO_RANK'] = data_adv_season['AST_TO'].rank(ascending=False, method='first').astype(int)
+        if 'DREB_PCT_RANK' not in data_adv_season.columns and 'DREB_PCT' in data_adv_season.columns:
+            data_adv_season['DREB_PCT_RANK'] = data_adv_season['DREB_PCT'].rank(ascending=False, method='first').astype(int)
+        if 'OREB_PCT_RANK' not in data_adv_season.columns and 'OREB_PCT' in data_adv_season.columns:
+            data_adv_season['OREB_PCT_RANK'] = data_adv_season['OREB_PCT'].rank(ascending=False, method='first').astype(int)
+        if 'REB_PCT_RANK' not in data_adv_season.columns and 'REB_PCT' in data_adv_season.columns:
+            data_adv_season['REB_PCT_RANK'] = data_adv_season['REB_PCT'].rank(ascending=False, method='first').astype(int)
+    data_adv_L5 = get_cached_team_advanced_stats(last_n_games=5)
+    data_misc_season = get_cached_team_misc_stats()
+    data_misc_L5 = get_cached_team_misc_stats(last_n_games=5)
+    data_trad_season = get_cached_team_traditional_stats()
+    data_trad_L5 = get_cached_team_traditional_stats(last_n_games=5)
+    data_trad_season_starters = get_cached_team_traditional_stats(group_quantity='Starters')
+    data_trad_L5_starters = get_cached_team_traditional_stats(last_n_games=5, group_quantity='Starters')
+    data_trad_season_bench = get_cached_team_traditional_stats(group_quantity='Bench')
+    data_trad_L5_bench = get_cached_team_traditional_stats(last_n_games=5, group_quantity='Bench')
+    data_4F_season = get_cached_team_four_factors_stats()
+    data_4F_L5 = get_cached_team_four_factors_stats(last_n_games=5)
+    if len(data_adv_season) > 0 and 'TEAM_NAME' in data_adv_season.columns and 'TEAM_ID' in data_adv_season.columns:
+        wolves_id = data_adv_season.loc[data_adv_season['TEAM_NAME'] == 'Minnesota Timberwolves', 'TEAM_ID'].values[0] if len(data_adv_season.loc[data_adv_season['TEAM_NAME'] == 'Minnesota Timberwolves']) > 0 else '1610612750'
+    else:
+        wolves_id = '1610612750'
+    logo_link = f'https://cdn.nba.com/logos/nba/{wolves_id}/primary/L/logo.svg'
 
 # Function to get standings with clutch data
 # Removed @st.cache_data - using Supabase cache instead
@@ -246,7 +260,8 @@ def get_standings_with_clutch(season='2025-26'):
         standings_df = nba_api.stats.endpoints.LeagueStandings(
             league_id='00', 
             season=season, 
-            season_type='Regular Season'
+            season_type='Regular Season',
+            timeout=90
         ).get_data_frames()[0]
         
         # Fetch team clutch stats
@@ -257,7 +272,8 @@ def get_standings_with_clutch(season='2025-26'):
                 season_type_all_star='Regular Season',
                 clutch_time='Last 5 Minutes',
                 point_diff=5,  # Within 5 points
-                ahead_behind='Ahead or Behind'
+                ahead_behind='Ahead or Behind',
+                timeout=90
             ).get_data_frames()[0]
             
             # Merge clutch data with standings on TEAM_ID
@@ -356,11 +372,240 @@ def set_matchup_override(matchup):
     global _selected_matchup_override
     _selected_matchup_override = matchup
 
+# Helper function to safely get values from DataFrame (must be defined before _refresh_core_stats)
+def safe_get_value(df, team_id, column, default=None, id_column=None):
+    """Safely get a value from DataFrame, returning default if not found
+
+    Args:
+        df: DataFrame to search
+        team_id: Team ID to search for
+        column: Column name to retrieve
+        default: Default value if not found
+        id_column: ID column name (auto-detects 'TEAM_ID' or 'TeamID' if None)
+    """
+    if team_id is None:
+        return default
+
+    # Auto-detect ID column name
+    if id_column is None:
+        if 'TEAM_ID' in df.columns:
+            id_column = 'TEAM_ID'
+        elif 'TeamId' in df.columns:
+            id_column = 'TeamId'
+        elif 'TeamID' in df.columns:
+            id_column = 'TeamID'
+        else:
+            # Try to find any column that might be the ID column
+            id_candidates = [col for col in df.columns if 'id' in col.lower() or 'team' in col.lower()]
+            if id_candidates:
+                id_column = id_candidates[0]
+            else:
+                return default
+
+    if id_column not in df.columns or column not in df.columns:
+        return default
+
+    filtered = df.loc[df[id_column] == team_id, column]
+    if len(filtered) > 0:
+        return filtered.values[0]
+    return default
+
 # Function to update selected matchup
+def _refresh_core_stats():
+    """Recompute module-level core stat variables for current away_id, home_id.
+    Called when matchup changes so the Teams page HTML table and Core Stats show the correct team."""
+    mod = sys.modules[__name__]
+    a, h = mod.away_id, mod.home_id
+    if a is None or h is None:
+        return
+    st = mod.standings
+    d_adv_s = mod.data_adv_season
+    d_adv_l5 = mod.data_adv_L5
+    # Record and seed
+    setattr(mod, 'away_team_record', safe_get_value(st, a, 'Record', id_column='TeamID'))
+    setattr(mod, 'away_team_seed', safe_get_value(st, a, 'PlayoffRank', id_column='TeamID'))
+    setattr(mod, 'away_team_division_seed', safe_get_value(st, a, 'DivisionRank', id_column='TeamID'))
+    setattr(mod, 'home_team_record', safe_get_value(st, h, 'Record', id_column='TeamID'))
+    setattr(mod, 'home_team_seed', safe_get_value(st, h, 'PlayoffRank', id_column='TeamID'))
+    setattr(mod, 'home_team_division_seed', safe_get_value(st, h, 'DivisionRank', id_column='TeamID'))
+    # Offensive ratings
+    setattr(mod, 'away_team_ortg', safe_get_value(d_adv_s, a, 'OFF_RATING', 0))
+    setattr(mod, 'away_team_ortg_rank', safe_get_value(d_adv_s, a, 'OFF_RATING_RANK', 0))
+    setattr(mod, 'l5_away_team_ortg', safe_get_value(d_adv_l5, a, 'OFF_RATING', 0))
+    setattr(mod, 'l5_away_team_ortg_rank', safe_get_value(d_adv_l5, a, 'OFF_RATING_RANK', 0))
+    setattr(mod, 'la_ortg', round(d_adv_s['OFF_RATING'].mean(), 1) if len(d_adv_s) > 0 and 'OFF_RATING' in d_adv_s.columns else 0.0)
+    setattr(mod, 'l5_la_ortg', round(d_adv_l5['OFF_RATING'].mean(), 1) if len(d_adv_l5) > 0 and 'OFF_RATING' in d_adv_l5.columns else 0.0)
+    setattr(mod, 'home_team_ortg', safe_get_value(d_adv_s, h, 'OFF_RATING', 0))
+    setattr(mod, 'home_team_ortg_rank', safe_get_value(d_adv_s, h, 'OFF_RATING_RANK', 0))
+    setattr(mod, 'l5_home_team_ortg', safe_get_value(d_adv_l5, h, 'OFF_RATING', 0))
+    setattr(mod, 'l5_home_team_ortg_rank', safe_get_value(d_adv_l5, h, 'OFF_RATING_RANK', 0))
+    # Defensive ratings
+    setattr(mod, 'away_team_drtg', safe_get_value(d_adv_s, a, 'DEF_RATING', 0))
+    setattr(mod, 'away_team_drtg_rank', safe_get_value(d_adv_s, a, 'DEF_RATING_RANK', 0))
+    setattr(mod, 'l5_away_team_drtg', safe_get_value(d_adv_l5, a, 'DEF_RATING', 0))
+    setattr(mod, 'l5_away_team_drtg_rank', safe_get_value(d_adv_l5, a, 'DEF_RATING_RANK', 0))
+    setattr(mod, 'la_drtg', round(d_adv_s['DEF_RATING'].mean(), 1) if len(d_adv_s) > 0 and 'DEF_RATING' in d_adv_s.columns else 0.0)
+    setattr(mod, 'l5_la_drtg', round(d_adv_l5['DEF_RATING'].mean(), 1) if len(d_adv_l5) > 0 and 'DEF_RATING' in d_adv_l5.columns else 0.0)
+    setattr(mod, 'home_team_drtg', safe_get_value(d_adv_s, h, 'DEF_RATING', 0))
+    setattr(mod, 'home_team_drtg_rank', safe_get_value(d_adv_s, h, 'DEF_RATING_RANK', 0))
+    setattr(mod, 'l5_home_team_drtg', safe_get_value(d_adv_l5, h, 'DEF_RATING', 0))
+    setattr(mod, 'l5_home_team_drtg_rank', safe_get_value(d_adv_l5, h, 'DEF_RATING_RANK', 0))
+    # Net ratings
+    setattr(mod, 'away_team_net', safe_get_value(d_adv_s, a, 'NET_RATING', 0))
+    setattr(mod, 'away_team_net_rank', safe_get_value(d_adv_s, a, 'NET_RATING_RANK', 0))
+    setattr(mod, 'l5_away_team_net', safe_get_value(d_adv_l5, a, 'NET_RATING', 0))
+    setattr(mod, 'l5_away_team_net_rank', safe_get_value(d_adv_l5, a, 'NET_RATING_RANK', 0))
+    setattr(mod, 'la_net', 0)
+    setattr(mod, 'l5_la_net', 0)
+    setattr(mod, 'home_team_net', safe_get_value(d_adv_s, h, 'NET_RATING', 0))
+    setattr(mod, 'home_team_net_rank', safe_get_value(d_adv_s, h, 'NET_RATING_RANK', 0))
+    setattr(mod, 'l5_home_team_net', safe_get_value(d_adv_l5, h, 'NET_RATING', 0))
+    setattr(mod, 'l5_home_team_net_rank', safe_get_value(d_adv_l5, h, 'NET_RATING_RANK', 0))
+    # DREB%
+    setattr(mod, 'away_team_dreb', safe_get_value(d_adv_s, a, 'DREB_PCT', 0))
+    setattr(mod, 'away_team_dreb_rank', safe_get_value(d_adv_s, a, 'DREB_PCT_RANK', 0))
+    setattr(mod, 'l5_away_team_dreb', safe_get_value(d_adv_l5, a, 'DREB_PCT', 0))
+    setattr(mod, 'l5_away_team_dreb_rank', safe_get_value(d_adv_l5, a, 'DREB_PCT_RANK', 0))
+    setattr(mod, 'la_dreb', round(d_adv_s['DREB_PCT'].mean(), 3) if len(d_adv_s) > 0 and 'DREB_PCT' in d_adv_s.columns else 0.0)
+    setattr(mod, 'l5_la_dreb', round(d_adv_l5['DREB_PCT'].mean(), 3) if len(d_adv_l5) > 0 and 'DREB_PCT' in d_adv_l5.columns else 0.0)
+    setattr(mod, 'home_team_dreb', safe_get_value(d_adv_s, h, 'DREB_PCT', 0))
+    setattr(mod, 'home_team_dreb_rank', safe_get_value(d_adv_s, h, 'DREB_PCT_RANK', 0))
+    setattr(mod, 'l5_home_team_dreb', safe_get_value(d_adv_l5, h, 'DREB_PCT', 0))
+    setattr(mod, 'l5_home_team_dreb_rank', safe_get_value(d_adv_l5, h, 'DREB_PCT_RANK', 0))
+    # OREB%
+    setattr(mod, 'away_team_oreb', safe_get_value(d_adv_s, a, 'OREB_PCT', 0))
+    setattr(mod, 'away_team_oreb_rank', safe_get_value(d_adv_s, a, 'OREB_PCT_RANK', 0))
+    setattr(mod, 'l5_away_team_oreb', safe_get_value(d_adv_l5, a, 'OREB_PCT', 0))
+    setattr(mod, 'l5_away_team_oreb_rank', safe_get_value(d_adv_l5, a, 'OREB_PCT_RANK', 0))
+    setattr(mod, 'la_oreb', round(d_adv_s['OREB_PCT'].mean(), 3) if len(d_adv_s) > 0 and 'OREB_PCT' in d_adv_s.columns else 0.0)
+    setattr(mod, 'l5_la_oreb', round(d_adv_l5['OREB_PCT'].mean(), 3) if len(d_adv_l5) > 0 and 'OREB_PCT' in d_adv_l5.columns else 0.0)
+    setattr(mod, 'home_team_oreb', safe_get_value(d_adv_s, h, 'OREB_PCT', 0))
+    setattr(mod, 'home_team_oreb_rank', safe_get_value(d_adv_s, h, 'OREB_PCT_RANK', 0))
+    setattr(mod, 'l5_home_team_oreb', safe_get_value(d_adv_l5, h, 'OREB_PCT', 0))
+    setattr(mod, 'l5_home_team_oreb_rank', safe_get_value(d_adv_l5, h, 'OREB_PCT_RANK', 0))
+    # REB%
+    setattr(mod, 'away_team_reb', safe_get_value(d_adv_s, a, 'REB_PCT', 0))
+    setattr(mod, 'away_team_reb_rank', safe_get_value(d_adv_s, a, 'REB_PCT_RANK', 0))
+    setattr(mod, 'l5_away_team_reb', safe_get_value(d_adv_l5, a, 'REB_PCT', 0))
+    setattr(mod, 'l5_away_team_reb_rank', safe_get_value(d_adv_l5, a, 'REB_PCT_RANK', 0))
+    setattr(mod, 'la_reb', round(d_adv_s['REB_PCT'].mean(), 3) if len(d_adv_s) > 0 and 'REB_PCT' in d_adv_s.columns else 0.0)
+    setattr(mod, 'l5_la_reb', round(d_adv_l5['REB_PCT'].mean(), 3) if len(d_adv_l5) > 0 and 'REB_PCT' in d_adv_l5.columns else 0.0)
+    setattr(mod, 'home_team_reb', safe_get_value(d_adv_s, h, 'REB_PCT', 0))
+    setattr(mod, 'home_team_reb_rank', safe_get_value(d_adv_s, h, 'REB_PCT_RANK', 0))
+    setattr(mod, 'l5_home_team_reb', safe_get_value(d_adv_l5, h, 'REB_PCT', 0))
+    setattr(mod, 'l5_home_team_reb_rank', safe_get_value(d_adv_l5, h, 'REB_PCT_RANK', 0))
+    # Points in the paint, 2nd chance, fast break (misc)
+    d_misc_s = getattr(mod, 'data_misc_season', None)
+    d_misc_l5 = getattr(mod, 'data_misc_L5', None)
+    if d_misc_s is not None and len(d_misc_s) > 0 and 'PTS_PAINT' in d_misc_s.columns and d_misc_l5 is not None and len(d_misc_l5) > 0:
+        setattr(mod, 'away_team_pitp_off', safe_get_value(d_misc_s, a, 'PTS_PAINT', 0))
+        setattr(mod, 'away_team_pitp_off_rank', safe_get_value(d_misc_s, a, 'PTS_PAINT_RANK', 0))
+        setattr(mod, 'l5_away_team_pitp_off', safe_get_value(d_misc_l5, a, 'PTS_PAINT', 0))
+        setattr(mod, 'l5_away_team_pitp_off_rank', safe_get_value(d_misc_l5, a, 'PTS_PAINT_RANK', 0))
+        setattr(mod, 'la_pitp_off', round(d_misc_s['PTS_PAINT'].mean(), 1) if 'PTS_PAINT' in d_misc_s.columns else 0)
+        setattr(mod, 'l5_la_pitp_off', round(d_misc_l5['PTS_PAINT'].mean(), 1) if 'PTS_PAINT' in d_misc_l5.columns else 0)
+        setattr(mod, 'home_team_pitp_off', safe_get_value(d_misc_s, h, 'PTS_PAINT', 0))
+        setattr(mod, 'home_team_pitp_off_rank', safe_get_value(d_misc_s, h, 'PTS_PAINT_RANK', 0))
+        setattr(mod, 'l5_home_team_pitp_off', safe_get_value(d_misc_l5, h, 'PTS_PAINT', 0))
+        setattr(mod, 'l5_home_team_pitp_off_rank', safe_get_value(d_misc_l5, h, 'PTS_PAINT_RANK', 0))
+        setattr(mod, 'away_team_pitp_def', safe_get_value(d_misc_s, a, 'OPP_PTS_PAINT', 0))
+        setattr(mod, 'away_team_pitp_def_rank', safe_get_value(d_misc_s, a, 'OPP_PTS_PAINT_RANK', 0))
+        setattr(mod, 'l5_away_team_pitp_def', safe_get_value(d_misc_l5, a, 'OPP_PTS_PAINT', 0))
+        setattr(mod, 'l5_away_team_pitp_def_rank', safe_get_value(d_misc_l5, a, 'OPP_PTS_PAINT_RANK', 0))
+        setattr(mod, 'la_pitp_def', round(d_misc_s['OPP_PTS_PAINT'].mean(), 1) if 'OPP_PTS_PAINT' in d_misc_s.columns else 0)
+        setattr(mod, 'l5_la_pitp_def', round(d_misc_l5['OPP_PTS_PAINT'].mean(), 1) if 'OPP_PTS_PAINT' in d_misc_l5.columns else 0)
+        setattr(mod, 'home_team_pitp_def', safe_get_value(d_misc_s, h, 'OPP_PTS_PAINT', 0))
+        setattr(mod, 'home_team_pitp_def_rank', safe_get_value(d_misc_s, h, 'OPP_PTS_PAINT_RANK', 0))
+        setattr(mod, 'l5_home_team_pitp_def', safe_get_value(d_misc_l5, h, 'OPP_PTS_PAINT', 0))
+        setattr(mod, 'l5_home_team_pitp_def_rank', safe_get_value(d_misc_l5, h, 'OPP_PTS_PAINT_RANK', 0))
+        setattr(mod, 'away_team_pitp_diff', round(safe_get_value(d_misc_s, a, 'PTS_PAINT_DIFF', 0), 1))
+        setattr(mod, 'away_team_pitp_diff_rank', int(safe_get_value(d_misc_s, a, 'PTS_PAINT_DIFF_RANK', 0)) if 'PTS_PAINT_DIFF_RANK' in d_misc_s.columns else 0)
+        setattr(mod, 'l5_away_team_pitp_diff', round(safe_get_value(d_misc_l5, a, 'PTS_PAINT_DIFF', 0), 1) if 'PTS_PAINT_DIFF' in d_misc_l5.columns else 0)
+        setattr(mod, 'l5_away_team_pitp_diff_rank', int(safe_get_value(d_misc_l5, a, 'PTS_PAINT_DIFF_RANK', 0)) if 'PTS_PAINT_DIFF_RANK' in d_misc_l5.columns else 0)
+        setattr(mod, 'la_pitp_diff', round(d_misc_s['PTS_PAINT_DIFF'].mean(), 1) if 'PTS_PAINT_DIFF' in d_misc_s.columns else 0)
+        setattr(mod, 'l5_la_pitp_diff', round(d_misc_l5['PTS_PAINT_DIFF'].mean(), 1) if 'PTS_PAINT_DIFF' in d_misc_l5.columns else 0)
+        setattr(mod, 'home_team_pitp_diff', round(safe_get_value(d_misc_s, h, 'PTS_PAINT_DIFF', 0), 1) if 'PTS_PAINT_DIFF' in d_misc_s.columns else 0)
+        setattr(mod, 'home_team_pitp_diff_rank', int(safe_get_value(d_misc_s, h, 'PTS_PAINT_DIFF_RANK', 0)) if 'PTS_PAINT_DIFF_RANK' in d_misc_s.columns else 0)
+        setattr(mod, 'l5_home_team_pitp_diff', round(safe_get_value(d_misc_l5, h, 'PTS_PAINT_DIFF', 0), 1) if 'PTS_PAINT_DIFF' in d_misc_l5.columns else 0)
+        setattr(mod, 'l5_home_team_pitp_diff_rank', int(safe_get_value(d_misc_l5, h, 'PTS_PAINT_DIFF_RANK', 0)) if 'PTS_PAINT_DIFF_RANK' in d_misc_l5.columns else 0)
+    else:
+        for _v in ('away_team_pitp_off', 'away_team_pitp_off_rank', 'l5_away_team_pitp_off', 'l5_away_team_pitp_off_rank',
+                   'home_team_pitp_off', 'home_team_pitp_off_rank', 'l5_home_team_pitp_off', 'l5_home_team_pitp_off_rank',
+                   'away_team_pitp_def', 'away_team_pitp_def_rank', 'l5_away_team_pitp_def', 'l5_away_team_pitp_def_rank',
+                   'home_team_pitp_def', 'home_team_pitp_def_rank', 'l5_home_team_pitp_def', 'l5_home_team_pitp_def_rank',
+                   'away_team_pitp_diff', 'away_team_pitp_diff_rank', 'l5_away_team_pitp_diff', 'l5_away_team_pitp_diff_rank',
+                   'home_team_pitp_diff', 'home_team_pitp_diff_rank', 'l5_home_team_pitp_diff', 'l5_home_team_pitp_diff_rank',
+                   'la_pitp_off', 'l5_la_pitp_off', 'la_pitp_def', 'l5_la_pitp_def', 'la_pitp_diff', 'l5_la_pitp_diff'):
+            setattr(mod, _v, 0)
+    # 2nd chance and fast break: refresh if data available (same pattern as original block)
+    if d_misc_s is not None and len(d_misc_s) > 0 and 'PTS_2ND_CHANCE' in d_misc_s.columns and d_misc_l5 is not None and len(d_misc_l5) > 0:
+        setattr(mod, 'away_team_2c_off', safe_get_value(d_misc_s, a, 'PTS_2ND_CHANCE', 0))
+        setattr(mod, 'away_team_2c_off_rank', safe_get_value(d_misc_s, a, 'PTS_2ND_CHANCE_RANK', 0))
+        setattr(mod, 'l5_away_team_2c_off', safe_get_value(d_misc_l5, a, 'PTS_2ND_CHANCE', 0))
+        setattr(mod, 'l5_away_team_2c_off_rank', safe_get_value(d_misc_l5, a, 'PTS_2ND_CHANCE_RANK', 0))
+        setattr(mod, 'la_2c_off', round(d_misc_s['PTS_2ND_CHANCE'].mean(), 1))
+        setattr(mod, 'l5_la_2c_off', round(d_misc_l5['PTS_2ND_CHANCE'].mean(), 1))
+        setattr(mod, 'home_team_2c_off', safe_get_value(d_misc_s, h, 'PTS_2ND_CHANCE', 0))
+        setattr(mod, 'home_team_2c_off_rank', safe_get_value(d_misc_s, h, 'PTS_2ND_CHANCE_RANK', 0))
+        setattr(mod, 'l5_home_team_2c_off', safe_get_value(d_misc_l5, h, 'PTS_2ND_CHANCE', 0))
+        setattr(mod, 'l5_home_team_2c_off_rank', safe_get_value(d_misc_l5, h, 'PTS_2ND_CHANCE_RANK', 0))
+        setattr(mod, 'away_team_2c_def', safe_get_value(d_misc_s, a, 'OPP_PTS_2ND_CHANCE', 0))
+        setattr(mod, 'away_team_2c_def_rank', safe_get_value(d_misc_s, a, 'OPP_PTS_2ND_CHANCE_RANK', 0))
+        setattr(mod, 'l5_away_team_2c_def', safe_get_value(d_misc_l5, a, 'OPP_PTS_2ND_CHANCE', 0))
+        setattr(mod, 'l5_away_team_2c_def_rank', safe_get_value(d_misc_l5, a, 'OPP_PTS_2ND_CHANCE_RANK', 0))
+        setattr(mod, 'la_2c_def', round(d_misc_s['OPP_PTS_2ND_CHANCE'].mean(), 1))
+        setattr(mod, 'l5_la_2c_def', round(d_misc_l5['OPP_PTS_2ND_CHANCE'].mean(), 1))
+        setattr(mod, 'home_team_2c_def', safe_get_value(d_misc_s, h, 'OPP_PTS_2ND_CHANCE', 0))
+        setattr(mod, 'home_team_2c_def_rank', safe_get_value(d_misc_s, h, 'OPP_PTS_2ND_CHANCE_RANK', 0))
+        setattr(mod, 'l5_home_team_2c_def', safe_get_value(d_misc_l5, h, 'OPP_PTS_2ND_CHANCE', 0))
+        setattr(mod, 'l5_home_team_2c_def_rank', safe_get_value(d_misc_l5, h, 'OPP_PTS_2ND_CHANCE_RANK', 0))
+        setattr(mod, 'away_team_2c_diff', round(safe_get_value(d_misc_s, a, 'PTS_2ND_CHANCE_DIFF', 0), 1))
+        setattr(mod, 'away_team_2c_diff_rank', int(safe_get_value(d_misc_s, a, 'PTS_2ND_CHANCE_DIFF_RANK', 0)))
+        setattr(mod, 'l5_away_team_2c_diff', round(safe_get_value(d_misc_l5, a, 'PTS_2ND_CHANCE_DIFF', 0), 1))
+        setattr(mod, 'l5_away_team_2c_diff_rank', int(safe_get_value(d_misc_l5, a, 'PTS_2ND_CHANCE_DIFF_RANK', 0)))
+        setattr(mod, 'la_2c_diff', round(d_misc_s['PTS_2ND_CHANCE_DIFF'].mean(), 1) if 'PTS_2ND_CHANCE_DIFF' in d_misc_s.columns else 0)
+        setattr(mod, 'l5_la_2c_diff', round(d_misc_l5['PTS_2ND_CHANCE_DIFF'].mean(), 1) if 'PTS_2ND_CHANCE_DIFF' in d_misc_l5.columns else 0)
+        setattr(mod, 'home_team_2c_diff', round(safe_get_value(d_misc_s, h, 'PTS_2ND_CHANCE_DIFF', 0), 1))
+        setattr(mod, 'home_team_2c_diff_rank', int(safe_get_value(d_misc_s, h, 'PTS_2ND_CHANCE_DIFF_RANK', 0)))
+        setattr(mod, 'l5_home_team_2c_diff', round(safe_get_value(d_misc_l5, h, 'PTS_2ND_CHANCE_DIFF', 0), 1))
+        setattr(mod, 'l5_home_team_2c_diff_rank', int(safe_get_value(d_misc_l5, h, 'PTS_2ND_CHANCE_DIFF_RANK', 0)))
+    if d_misc_s is not None and len(d_misc_s) > 0 and 'PTS_FB' in d_misc_s.columns and d_misc_l5 is not None and len(d_misc_l5) > 0:
+        setattr(mod, 'away_team_fb_off', safe_get_value(d_misc_s, a, 'PTS_FB', 0))
+        setattr(mod, 'away_team_fb_off_rank', safe_get_value(d_misc_s, a, 'PTS_FB_RANK', 0))
+        setattr(mod, 'l5_away_team_fb_off', safe_get_value(d_misc_l5, a, 'PTS_FB', 0))
+        setattr(mod, 'l5_away_team_fb_off_rank', safe_get_value(d_misc_l5, a, 'PTS_FB_RANK', 0))
+        setattr(mod, 'la_fb_off', round(d_misc_s['PTS_FB'].mean(), 1))
+        setattr(mod, 'l5_la_fb_off', round(d_misc_l5['PTS_FB'].mean(), 1))
+        setattr(mod, 'home_team_fb_off', safe_get_value(d_misc_s, h, 'PTS_FB', 0))
+        setattr(mod, 'home_team_fb_off_rank', safe_get_value(d_misc_s, h, 'PTS_FB_RANK', 0))
+        setattr(mod, 'l5_home_team_fb_off', safe_get_value(d_misc_l5, h, 'PTS_FB', 0))
+        setattr(mod, 'l5_home_team_fb_off_rank', safe_get_value(d_misc_l5, h, 'PTS_FB_RANK', 0))
+        setattr(mod, 'away_team_fb_def', safe_get_value(d_misc_s, a, 'OPP_PTS_FB', 0))
+        setattr(mod, 'away_team_fb_def_rank', safe_get_value(d_misc_s, a, 'OPP_PTS_FB_RANK', 0))
+        setattr(mod, 'l5_away_team_fb_def', safe_get_value(d_misc_l5, a, 'OPP_PTS_FB', 0))
+        setattr(mod, 'l5_away_team_fb_def_rank', safe_get_value(d_misc_l5, a, 'OPP_PTS_FB_RANK', 0))
+        setattr(mod, 'la_fb_def', round(d_misc_s['OPP_PTS_FB'].mean(), 1))
+        setattr(mod, 'l5_la_fb_def', round(d_misc_l5['OPP_PTS_FB'].mean(), 1))
+        setattr(mod, 'home_team_fb_def', safe_get_value(d_misc_s, h, 'OPP_PTS_FB', 0))
+        setattr(mod, 'home_team_fb_def_rank', safe_get_value(d_misc_s, h, 'OPP_PTS_FB_RANK', 0))
+        setattr(mod, 'l5_home_team_fb_def', safe_get_value(d_misc_l5, h, 'OPP_PTS_FB', 0))
+        setattr(mod, 'l5_home_team_fb_def_rank', safe_get_value(d_misc_l5, h, 'OPP_PTS_FB_RANK', 0))
+        setattr(mod, 'away_team_fb_diff', round(safe_get_value(d_misc_s, a, 'PTS_FB_DIFF', 0), 1))
+        setattr(mod, 'away_team_fb_diff_rank', int(safe_get_value(d_misc_s, a, 'PTS_FB_DIFF_RANK', 0)))
+        setattr(mod, 'l5_away_team_fb_diff', round(safe_get_value(d_misc_l5, a, 'PTS_FB_DIFF', 0), 1))
+        setattr(mod, 'l5_away_team_fb_diff_rank', int(safe_get_value(d_misc_l5, a, 'PTS_FB_DIFF_RANK', 0)))
+        setattr(mod, 'la_fb_diff', round(d_misc_s['PTS_FB_DIFF'].mean(), 1) if 'PTS_FB_DIFF' in d_misc_s.columns else 0)
+        setattr(mod, 'l5_la_fb_diff', round(d_misc_l5['PTS_FB_DIFF'].mean(), 1) if 'PTS_FB_DIFF' in d_misc_l5.columns else 0)
+        setattr(mod, 'home_team_fb_diff', round(safe_get_value(d_misc_s, h, 'PTS_FB_DIFF', 0), 1))
+        setattr(mod, 'home_team_fb_diff_rank', int(safe_get_value(d_misc_s, h, 'PTS_FB_DIFF_RANK', 0)))
+        setattr(mod, 'l5_home_team_fb_diff', round(safe_get_value(d_misc_l5, h, 'PTS_FB_DIFF', 0), 1))
+        setattr(mod, 'l5_home_team_fb_diff_rank', int(safe_get_value(d_misc_l5, h, 'PTS_FB_DIFF_RANK', 0)))
+
 def update_selected_matchup(matchup):
     """Update module-level variables based on selected matchup"""
     global game_id, away_id, home_id, away_logo_link, home_logo_link, game_title, home_or_away
-    
+    _ensure_team_data_loaded()
+
     if matchup:
         game_id = matchup['game_id']
         away_id = matchup['away_team_id']
@@ -381,6 +626,8 @@ def update_selected_matchup(matchup):
             away_logo_link = f'https://cdn.nba.com/logos/nba/{away_id}/primary/L/logo.svg'
             home_logo_link = f'https://cdn.nba.com/logos/nba/{home_id}/primary/L/logo.svg'
             game_title = f'{matchup["away_team_name"]} at {matchup["home_team_name"]}'
+        # Recompute core stats so HTML table and Core Stats tab show the selected team
+        _refresh_core_stats()
     else:
         game_id = None
         home_or_away = None
@@ -402,44 +649,6 @@ if selected_matchup:
     update_selected_matchup(selected_matchup)
 else:
     update_selected_matchup(None)
-
-# Helper function to safely get values from DataFrame
-def safe_get_value(df, team_id, column, default=None, id_column=None):
-    """Safely get a value from DataFrame, returning default if not found
-    
-    Args:
-        df: DataFrame to search
-        team_id: Team ID to search for
-        column: Column name to retrieve
-        default: Default value if not found
-        id_column: ID column name (auto-detects 'TEAM_ID' or 'TeamID' if None)
-    """
-    if team_id is None:
-        return default
-    
-    # Auto-detect ID column name
-    if id_column is None:
-        if 'TEAM_ID' in df.columns:
-            id_column = 'TEAM_ID'
-        elif 'TeamId' in df.columns:
-            id_column = 'TeamId'
-        elif 'TeamID' in df.columns:
-            id_column = 'TeamID'
-        else:
-            # Try to find any column that might be the ID column
-            id_candidates = [col for col in df.columns if 'id' in col.lower() or 'team' in col.lower()]
-            if id_candidates:
-                id_column = id_candidates[0]
-            else:
-                return default
-    
-    if id_column not in df.columns or column not in df.columns:
-        return default
-    
-    filtered = df.loc[df[id_column] == team_id, column]
-    if len(filtered) > 0:
-        return filtered.values[0]
-    return default
 
 # Only calculate stats if we have valid team IDs
 if away_id is not None and home_id is not None:
@@ -1882,7 +2091,7 @@ la_c3_acc = round(team_stats_diff['Corner3Accuracy'].mean(), 3)
 
 league_id = '00'  # NBA league ID
 
-@st.cache_data(ttl=21600, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_players_dataframe():
     """Get players dataframe from PlayerIndex endpoint for the current season"""
     # Fetch from API
@@ -1910,7 +2119,7 @@ def get_players_dataframe():
     
     return pd.DataFrame()
 
-
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_all_player_game_logs():
     """Get game logs for all players in the current season (uses Supabase cache)"""
     print(f"[DEBUG] get_all_player_game_logs() called - pf is {pf is not None}")
@@ -1957,8 +2166,15 @@ def get_team_roster_stats(team_id: int, players_df: pd.DataFrame, game_logs_df: 
     Returns:
         DataFrame with player stats
     """
+    # Resolve column names (PlayerIndex / get_players_dataframe may use different naming)
+    team_id_col = next((c for c in ('TEAM_ID', 'TeamID', 'team_id') if c in players_df.columns), None)
+    person_id_col = next((c for c in ('PERSON_ID', 'PlayerID', 'player_id') if c in players_df.columns), None)
+    first_name_col = next((c for c in ('PLAYER_FIRST_NAME', 'FIRST_NAME', 'firstName') if c in players_df.columns), None)
+    last_name_col = next((c for c in ('PLAYER_LAST_NAME', 'LAST_NAME', 'lastName') if c in players_df.columns), None)
+    if team_id_col is None or person_id_col is None or first_name_col is None or last_name_col is None:
+        return pd.DataFrame()
     # Filter players by team
-    team_players = players_df[players_df['TEAM_ID'].astype(int) == team_id].copy()
+    team_players = players_df[players_df[team_id_col].astype(int) == team_id].copy()
     
     if len(team_players) == 0:
         return pd.DataFrame()
@@ -1978,7 +2194,7 @@ def get_team_roster_stats(team_id: int, players_df: pd.DataFrame, game_logs_df: 
     
     # Fallback: extract game IDs from player game logs for players on this team
     if team_logs is None or len(team_logs) == 0:
-        team_player_ids = team_players['PERSON_ID'].tolist()
+        team_player_ids = team_players[person_id_col].tolist()
         team_player_logs = game_logs_df[game_logs_df['PLAYER_ID'].isin(team_player_ids)].copy()
         if len(team_player_logs) > 0:
             # Get unique game IDs and dates from team players' game logs
@@ -2004,8 +2220,8 @@ def get_team_roster_stats(team_id: int, players_df: pd.DataFrame, game_logs_df: 
     roster_stats = []
     
     for _, player in team_players.iterrows():
-        player_id = player['PERSON_ID']
-        player_name = f"{player['PLAYER_FIRST_NAME']} {player['PLAYER_LAST_NAME']}"
+        player_id = player[person_id_col]
+        player_name = f"{player[first_name_col]} {player[last_name_col]}"
         position = player.get('POSITION', '')
         
         # Get player's game logs

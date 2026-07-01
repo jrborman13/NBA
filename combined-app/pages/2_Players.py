@@ -16,6 +16,7 @@ import backtest as bt
 import injury_report as ir
 import player_similarity as ps
 import player_synergy as psyn
+import hexagon_viz as hv
 import pandas as pd
 import nba_api.stats.endpoints
 from datetime import datetime, date, timedelta
@@ -575,8 +576,15 @@ with st.container(border=False):
 # with st.container(height=1000, border=True):
 #     st.altair_chart(player_data['final_chart'], width='content')
 
-# Create tabs for Current Season, Predictions, and YoY Data
-tab1, tab2, tab3 = st.tabs(["Current Season", "Predictions", "YoY Data"])
+# Create tabs for Current Season, Predictions, YoY Data, and Player Hexagon
+tab1, tab2, tab3, tab4 = st.tabs(["Current Season", "Predictions", "YoY Data", "🕸️ Player Hexagon"])
+
+with tab4:
+    # Six-axis player hexagon for the selected player (current season, all-players pool).
+    # Shared renderer (player_app/hexagon_viz.py) — identical scoring/radar to the standalone
+    # Player Hexagon page. Fails clean (st.info) if the player has no hexagon row.
+    hv.render_hexagon_tab(psyn.CURRENT_SEASON, int(selected_player_id),
+                          player_name=player_data.get('player_info_name'))
 
 with tab1:
     # Display averages table with heatmap

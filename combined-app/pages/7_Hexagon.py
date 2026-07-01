@@ -25,30 +25,18 @@ except ImportError:
     st.stop()
 
 from supabase_config import get_supabase_client, get_supabase_service_client
+import hexagon_viz as hv  # shared fetch + scoring + radar (single source of truth; no drift)
 
 st.set_page_config(layout="wide")
 st.title("🔷 Player Hexagon")
 
-AXES = ["finishing", "shooting", "playmaking", "defending", "rebounding", "gravity"]
-AXIS_LABELS = ["Finishing", "Shooting", "Playmaking", "Defending", "Rebounding", "Gravity"]
-SEASON_TYPE = "Regular Season"
-MIN_SAMPLE = 1500  # on-court offensive possessions below which scores get a noise caveat
-
-# axis -> [(sub_metric column, display label)] — column names match v_player_axis_pctile & hexagon_weights
-AXIS_SUBMETRICS = {
-    "finishing":  [("rim_rate", "Rim rate"), ("rim_fg_pct_over_league", "Rim FG% over league"), ("team_rim_freq_lift", "Team rim-freq on/off")],
-    "shooting":   [("cs_efg", "Catch-&-shoot eFG"), ("pu_efg", "Pull-up eFG"), ("shotmaking_over_exp", "Jump make over expected"), ("spotup_ppp", "Spot-up PPP")],
-    "playmaking": [("ast_pct", "AST%"), ("ast_pts_created", "Assist pts created"), ("drive_ast", "Drive assists")],
-    "defending":  [("def_rim_stop", "Rim-stop (norm−actual)"), ("def_pm_stop", "FG suppression (−PM)"), ("deflections_per36", "Deflections / 36"), ("contested2_per36", "Contested 2PT / 36"), ("blk_per100", "BLK / 100"), ("stl_per100", "STL / 100")],
-    "rebounding": [("oreb_pct", "OREB%"), ("dreb_pct", "DREB%"), ("sc_rate_on_minus_off", "2nd-chance on/off"), ("contested_reb_per36", "Contested reb / 36"), ("reb_chance_pct", "Reb-chance conversion")],
-    "gravity":    [("shot_diet_gravity_efg", "Shot-diet gravity"), ("off_rating_lift", "ORtg on/off lift"), ("rim_freq_lift", "Rim-freq on/off lift")],
-}
+# Shared constants + scoring/render from hexagon_viz (this page adds the selector, compare, weights UI)
+AXES, AXIS_LABELS, SEASON_TYPE, MIN_SAMPLE, AXIS_SUBMETRICS = (
+    hv.AXES, hv.AXIS_LABELS, hv.SEASON_TYPE, hv.MIN_SAMPLE, hv.AXIS_SUBMETRICS)
 
 
 # ---------------------------------------------------------------- data access
-@st.cache_resource
-def _client():
-    return get_supabase_client()
+_client = hv.client  # shared cached client
 
 
 @st.cache_resource
@@ -89,76 +77,15 @@ def get_player_names():
     return out
 
 
-@st.cache_data(ttl=1800)
-def get_pctiles(season, pool):
-    r = (_client().table("v_player_axis_pctile").select("*")
-         .eq("season", season).eq("season_type", SEASON_TYPE).eq("pool", pool).execute())
-    df = pd.DataFrame(r.data)
-    return df.set_index("player_id") if not df.empty else df
-
-
-@st.cache_data(ttl=1800)
-def get_raw(season):
-    r = (_client().table("player_axis_metrics").select("*")
-         .eq("season", season).eq("season_type", SEASON_TYPE).execute())
-    df = pd.DataFrame(r.data)
-    return df.set_index("player_id") if not df.empty else df
-
-
-@st.cache_data(ttl=3600)
-def get_default_weights():
-    r = _client().table("hexagon_weights").select("axis, sub_metric, weight").execute()
-    return {(row["axis"], row["sub_metric"]): float(row["weight"]) for row in (r.data or [])}
-
-
-# ---------------------------------------------------------------- scoring
-def compute_scores(prow, weights):
-    """axis score = weighted mean of its sub-metric percentiles, skipping nulls"""
-    out = {}
-    for axis, subs in AXIS_SUBMETRICS.items():
-        num = den = 0.0
-        for sub, _ in subs:
-            p = prow.get(sub) if prow is not None else None
-            w = weights.get((axis, sub), 0.0)
-            if w and p is not None and not pd.isna(p):
-                num += w * float(p)
-                den += w
-        out[axis] = int(round(num / den)) if den > 0 else 0
-    return out
-
-
-def _f(v, fmt, scale=1.0):
-    if v is None or (isinstance(v, float) and pd.isna(v)):
-        return "—"
-    try:
-        return fmt.format(v * scale)
-    except Exception:
-        return str(v)
-
-
-def raw_hover(raw_row):
-    if raw_row is None:
-        return ["" for _ in AXES]
-    g = raw_row.get
-    return [
-        f"Rim rate {_f(g('rim_rate'), '{:.0%}')} · Rim FG% vs lg {_f(g('rim_fg_pct_over_league'), '{:+.1%}')} · team rim-freq on/off {_f(g('team_rim_freq_lift'), '{:+.1%}')}",
-        f"C&S eFG {_f(g('cs_efg'), '{:.1%}')} · Pull-up eFG {_f(g('pu_efg'), '{:.1%}')} · Jump make vs exp {_f(g('shotmaking_over_exp'), '{:+.1%}')} · Spot-up PPP {_f(g('spotup_ppp'), '{:.2f}')}",
-        f"AST% {_f(g('ast_pct'), '{:.0%}')} · Ast pts created {_f(g('ast_pts_created'), '{:.1f}')} · Drive ast {_f(g('drive_ast'), '{:.1f}')}",
-        f"Rim-stop {_f(g('def_rim_stop'), '{:+.1%}')} · FG suppression {_f(g('def_pm_stop'), '{:+.1f}')} · Defl/36 {_f(g('deflections_per36'), '{:.1f}')} · Cont2/36 {_f(g('contested2_per36'), '{:.1f}')}",
-        f"OREB% {_f(g('oreb_pct'), '{:.0%}')} · DREB% {_f(g('dreb_pct'), '{:.0%}')} · 2nd-chance on/off {_f(g('sc_rate_on_minus_off'), '{:+.1%}')} · Cont reb/36 {_f(g('contested_reb_per36'), '{:.1f}')}",
-        f"Shot-diet gravity {_f(g('shot_diet_gravity_efg'), '{:+.3f}')} · ORtg lift {_f(g('off_rating_lift'), '{:+.1f}')} · rim-freq lift {_f(g('rim_freq_lift'), '{:+.1%}')}",
-    ]
-
-
-def add_trace(fig, scores, raw_row, name, color):
-    vals = [scores[a] for a in AXES]
-    fig.add_trace(go.Scatterpolar(
-        r=vals + [vals[0]],
-        theta=AXIS_LABELS + [AXIS_LABELS[0]],
-        customdata=raw_hover(raw_row) + [raw_hover(raw_row)[0]],
-        fill="toself", name=name, line=dict(color=color, width=2),
-        hovertemplate="<b>%{theta}</b>: %{r}<br>%{customdata}<extra>" + name + "</extra>",
-    ))
+# Fetch + scoring + render come from hexagon_viz (shared; keeps this page and the Players-page
+# hexagon tab identical). Aliased so the UI code below is unchanged.
+get_pctiles = hv.fetch_pctiles          # (season, pool)
+get_raw = hv.fetch_raw                  # (season)
+get_default_weights = hv.fetch_default_weights
+compute_scores = hv.compute_scores
+_f = hv._f
+raw_hover = hv.raw_hover
+add_trace = hv.add_trace
 
 
 # ---------------------------------------------------------------- controls (in-page)

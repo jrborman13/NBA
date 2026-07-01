@@ -17,6 +17,8 @@ import injury_report as ir
 import player_similarity as ps
 import player_synergy as psyn
 import hexagon_viz as hv
+import team_fit as tf
+from supabase_config import get_supabase_client
 import pandas as pd
 import nba_api.stats.endpoints
 from datetime import datetime, date, timedelta
@@ -576,8 +578,15 @@ with st.container(border=False):
 # with st.container(height=1000, border=True):
 #     st.altair_chart(player_data['final_chart'], width='content')
 
-# Create tabs for Current Season, Predictions, YoY Data, and Player Hexagon
-tab1, tab2, tab3, tab4 = st.tabs(["Current Season", "Predictions", "YoY Data", "🕸️ Player Hexagon"])
+# Cache the SeasonFit (loads ~80k fingerprint rows) keyed by season, so switching players is instant.
+@st.cache_resource(show_spinner="Loading style fingerprints…")
+def load_team_fit(season):
+    return tf.SeasonFit(get_supabase_client(), season)
+
+
+# Create tabs for Current Season, Predictions, YoY Data, Player Hexagon, and Team Fit
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["Current Season", "Predictions", "YoY Data", "🕸️ Player Hexagon", "🧩 Team Fit"])
 
 with tab4:
     # Six-axis player hexagon for the selected player (current season, all-players pool).
@@ -585,6 +594,79 @@ with tab4:
     # Player Hexagon page. Fails clean (st.info) if the player has no hexagon row.
     hv.render_hexagon_tab(psyn.CURRENT_SEASON, int(selected_player_id),
                           player_name=player_data.get('player_info_name'))
+
+with tab5:
+    # Team Fit v1 — stylistic player↔team fit from the shared style fingerprint (Path B).
+    # Reuses team_fit.SeasonFit (rank_teams / explain / embedding) — no scoring reimplemented.
+    st.warning("⚠️ **" + tf.HONEST_NOTE + "**")
+    _tf_player_name = player_data.get('player_info_name', 'this player')
+    try:
+        _sf = load_team_fit(psyn.CURRENT_SEASON)
+    except Exception as _e:
+        st.error(f"Could not load Team Fit data for {psyn.CURRENT_SEASON}: {_e}")
+    else:
+        _pid = int(selected_player_id)
+        if _pid not in _sf.players:
+            st.info(f"🧩 No Team Fit available for **{_tf_player_name}** in {psyn.CURRENT_SEASON} — "
+                    f"needs **≥ 15 MPG** and a style fingerprint (bench/low-minute or just-traded "
+                    f"players may not qualify yet).")
+        else:
+            _ranked = _sf.rank_teams(_pid, w=0.9)
+            _top = _ranked[0]
+            _fit_col, _why_col = st.columns([0.55, 0.45])
+            with _fit_col:
+                st.subheader(f"Best stylistic fits for {_tf_player_name}")
+                _fit_df = pd.DataFrame(_ranked)[["team", "blend", "need_fill", "style_match"]]
+                _fit_df.columns = ["Team", "Fit (blend)", "Need-fill", "Style-match"]
+                st.dataframe(
+                    _fit_df, hide_index=True, width='stretch', height=460,
+                    column_config={c: st.column_config.NumberColumn(format="%.2f")
+                                   for c in ["Fit (blend)", "Need-fill", "Style-match"]},
+                )
+            with _why_col:
+                st.subheader(f"Why → {_top['team']}")
+                st.caption("Top dimensions the player supplies that the team ranks low in "
+                           "(player pctile vs team pctile):")
+                for _label, _pp, _tp in _sf.explain(_pid, _top["team_id"]):
+                    st.markdown(f"- **{_label}** — you **{_pp}th** pctile · team **{_tp}th** pctile")
+
+            # Embedding kept collapsed for game-time speed (PCA is cheap but the plot is optional).
+            with st.expander("🗺️ Style embedding — players + teams in one 2D space", expanded=False):
+                try:
+                    import plotly.graph_objects as go
+                except Exception:
+                    go = None
+                if go is None:
+                    st.caption("Install plotly to see the embedding.")
+                else:
+                    _emb = _sf.embedding()
+                    _top_ids = {r["team_id"] for r in _ranked[:3]}
+                    _pxx, _pyy, _ptxt = [], [], []
+                    for (_et, _eid), (_x, _y) in _emb.items():
+                        if _et == "P" and _eid != _pid:
+                            _pxx.append(_x); _pyy.append(_y); _ptxt.append(_sf.player_name.get(_eid, str(_eid)))
+                    _fig = go.Figure()
+                    _fig.add_trace(go.Scatter(x=_pxx, y=_pyy, mode="markers", name="players",
+                        marker=dict(size=5, color="rgba(120,120,120,0.45)"), text=_ptxt, hoverinfo="text"))
+                    _tx, _ty, _ttxt, _tcol = [], [], [], []
+                    for _tid in _sf.teams:
+                        if ("T", _tid) in _emb:
+                            _x, _y = _emb[("T", _tid)]
+                            _tx.append(_x); _ty.append(_y); _ttxt.append(_sf.team_name.get(_tid, str(_tid)))
+                            _tcol.append("#FF4B4B" if _tid in _top_ids else "rgba(31,119,180,0.85)")
+                    _fig.add_trace(go.Scatter(x=_tx, y=_ty, mode="markers+text", name="teams",
+                        marker=dict(size=12, color=_tcol, symbol="square", line=dict(width=1, color="white")),
+                        text=_ttxt, textposition="top center", textfont=dict(size=9), hoverinfo="text"))
+                    if ("P", _pid) in _emb:
+                        _x, _y = _emb[("P", _pid)]
+                        _fig.add_trace(go.Scatter(x=[_x], y=[_y], mode="markers+text",
+                            name=_tf_player_name, marker=dict(size=16, color="#2ca02c", symbol="star",
+                            line=dict(width=1, color="white")), text=[_tf_player_name],
+                            textposition="bottom center", hoverinfo="text"))
+                    _fig.update_layout(height=520, showlegend=True, xaxis_title="PC1", yaxis_title="PC2",
+                                       margin=dict(l=20, r=20, t=20, b=20))
+                    st.plotly_chart(_fig, width='stretch')
+                    st.caption(f"🔴 your top-3 fits · ⭐ {_tf_player_name} · nearby = similar playstyle")
 
 with tab1:
     # Display averages table with heatmap

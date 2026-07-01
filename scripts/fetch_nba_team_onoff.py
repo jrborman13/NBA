@@ -61,10 +61,10 @@ def fetch_and_store_team_onoff():
                 error_count += 1
                 continue
             
-            # Merge result sets (overall, off court, on court)
+            # Merge result sets (NBA TeamPlayerOnOffDetails: 0=overall, 1=on court, 2=off court)
             overall_df = result_sets[0]
-            off_court_df = result_sets[1]
-            on_court_df = result_sets[2]
+            on_court_df = result_sets[1]
+            off_court_df = result_sets[2]
             
             # Merge on/off data
             merged_df = overall_df.merge(

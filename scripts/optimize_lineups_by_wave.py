@@ -295,11 +295,14 @@ def combine_predictions_for_waves(matchups: List[Dict], selected_wave_times: Lis
     return combined_df, team_abbreviations
 
 
-def optimize_combined_waves(game_date: date, draftables_path: str, selected_wave_times: List[str], 
-                           predictions_dir: str = None, output_dir: str = None, max_salary: int = 50000):
+def optimize_combined_waves(game_date: date, draftables_path: str, selected_wave_times: List[str],
+                           predictions_dir: str = None, output_dir: str = None, max_salary: int = 50000,
+                           locked_players: List[str] = None, excluded_players: List[str] = None,
+                           team_fpts_scalars: Dict[str, float] = None, contest_type: str = 'gpp',
+                           stack_team: str = None, stack_count: int = 2):
     """
     Optimize lineups using players from all selected waves combined.
-    
+
     Args:
         game_date: Date to optimize for
         draftables_path: Path to draftables CSV file
@@ -307,7 +310,13 @@ def optimize_combined_waves(game_date: date, draftables_path: str, selected_wave
         predictions_dir: Directory containing prediction CSV files (default: ~/Downloads)
         output_dir: Directory to save optimized lineups (default: ~/Downloads)
         max_salary: Maximum salary cap (default: 50000)
-        
+        locked_players: List of player names to force-include in every lineup
+        excluded_players: List of player names to exclude from all lineups
+        team_fpts_scalars: Dict mapping team abbreviation to FPTS multiplier (e.g. {'MIN': 1.1})
+        contest_type: 'cash' or 'gpp' — affects strategy ordering
+        stack_team: Team abbreviation to stack (e.g. 'MIN')
+        stack_count: Number of players to include from stack_team (default 2)
+
     Returns:
         List of optimized lineup DataFrames
     """
@@ -354,16 +363,36 @@ def optimize_combined_waves(game_date: date, draftables_path: str, selected_wave
     
     # Add position flags
     merged_df = add_position_flags(merged_df)
-    
+
+    # Apply excluded players filter
+    if excluded_players:
+        excluded_normalized = [p.lower().strip() for p in excluded_players]
+        merged_df = merged_df[~merged_df['Player'].str.lower().str.strip().isin(excluded_normalized)].copy()
+
+    # Apply team FPTS scalars
+    if team_fpts_scalars and 'Team' in merged_df.columns:
+        for team, scalar in team_fpts_scalars.items():
+            mask = merged_df['Team'] == team
+            merged_df.loc[mask, 'FPTS'] = merged_df.loc[mask, 'FPTS'] * scalar
+
     # Check if we have enough players
     players_with_preds = merged_df[merged_df['FPTS'] > 0]
     if len(players_with_preds) < 8:
         print(f"Warning: Only {len(players_with_preds)} players have predictions. May not be able to fill lineup.")
         return []
-    
+
     # Optimize multiple lineups (5 unique lineups)
     try:
-        lineup_dfs = optimize_multiple_lineups(merged_df, max_salary=max_salary, num_lineups=5, max_overlap=3)
+        lineup_dfs = optimize_multiple_lineups(
+            merged_df,
+            max_salary=max_salary,
+            num_lineups=5,
+            max_overlap=3,
+            locked_players=locked_players,
+            stack_team=stack_team,
+            stack_count=stack_count,
+            contest_type=contest_type,
+        )
         return lineup_dfs
     except Exception as e:
         print(f"Error optimizing lineups: {e}")

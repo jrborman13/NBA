@@ -44,12 +44,15 @@ STAT_TO_MARKET = {
     'REB': 'player_rebounds',
     'AST': 'player_assists',
     'PRA': 'player_points_rebounds_assists',
-    'RA': 'player_rebounds_assists',  # Rebounds + Assists combo
+    'PR': 'player_points_rebounds',
+    'PA': 'player_points_assists',
+    'RA': 'player_rebounds_assists',
     'STL': 'player_steals',
     'BLK': 'player_blocks',
+    'TOV': 'player_turnovers',
     'FG3M': 'player_threes',
-    'FTM': 'player_frees_made',  # Made free throws
-    'FPTS': 'player_fantasy_points',  # Fantasy points
+    'FTM': 'player_frees_made',
+    'FPTS': 'player_fantasy_points',
 }
 
 # Reverse mapping: API market name -> our stat code

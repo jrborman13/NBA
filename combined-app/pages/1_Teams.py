@@ -1,7 +1,8 @@
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'streamlit'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'new-streamlit-app', 'player-app'))
+from concurrent.futures import ThreadPoolExecutor, as_completed
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'streamlit'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'player_app'))
 
 import streamlit as st
 import streamlit_testing_functions as functions
@@ -17,6 +18,7 @@ import team_onoff as toff
 import altair as alt
 import pandas as pd
 import streamlit as st
+from theme_colors import tc
 
 # Clear all caches
 # st.cache_data.clear()
@@ -31,25 +33,21 @@ with st.sidebar:
         st.cache_data.clear()
         st.success("✅ Cache cleared successfully!")
         st.rerun()
-    st.markdown("---")  # Separator
+    st.markdown("---")
+    st.markdown("### Comparison Split")
+    _split_choice = st.radio(
+        "Second column shows:",
+        ["Last 5 Games", "Post All-Star Break", "Playoffs"],
+        index=1,
+        key="teams_split_choice",
+    )
+    st.markdown("---")
 
 # Function to fetch matchups for a given date (same as Players page)
 @st.cache_data(ttl=21600, show_spinner=False)
 def get_matchups_for_date(selected_date):
     """Fetch NBA matchups for a given date from the API"""
     season = '2025-26'
-    # #region agent log
-    _log_path = '/Users/jackborman/Desktop/PycharmProjects/NBA/.cursor/debug-fc44ac.log'
-    _t0 = time.time()
-    def _dbg(**kw):
-        try:
-            os.makedirs(os.path.dirname(_log_path), exist_ok=True)
-            open(_log_path, 'a').write(__import__('json').dumps({"sessionId": "fc44ac", "timestamp": int(time.time() * 1000), **kw}) + '\n')
-        except Exception:
-            pass
-    _dbg(hypothesisId="H0", location="1_Teams.py:get_matchups_for_date:entry", message="get_matchups_for_date called (cache miss)", data={"selected_date": str(selected_date)})
-    _dbg(hypothesisId="H1", location="1_Teams.py:get_matchups_for_date:before_call", message="ScheduleLeagueV2 call starting", data={"season": season})
-    # #endregion
     # Fetch from API
     try:
         league_schedule = nba_api.stats.endpoints.ScheduleLeagueV2(
@@ -57,14 +55,7 @@ def get_matchups_for_date(selected_date):
             season=season,
             timeout=90
         ).get_data_frames()[0]
-        # #region agent log
-        _dur = (time.time() - _t0) * 1000
-        _dbg(hypothesisId="H1", location="1_Teams.py:get_matchups_for_date:after_success", message="ScheduleLeagueV2 completed", data={"duration_ms": round(_dur, 0), "row_count": len(league_schedule)})
-        # #endregion
     except Exception as e:
-        # #region agent log
-        _dbg(hypothesisId="H2", location="1_Teams.py:get_matchups_for_date:exception", message="ScheduleLeagueV2 failed", data={"exc_type": type(e).__name__, "exc_msg": str(e), "duration_ms": round((time.time() - _t0) * 1000, 0)})
-        # #endregion
         return [], f"Error fetching schedule: {str(e)}"
     
     try:
@@ -113,67 +104,126 @@ def get_matchups_for_date(selected_date):
     except Exception as e:
         return [], f"Error fetching schedule: {str(e)}"
 
+# All 30 NBA teams: (Full Name, Abbreviation, Team ID)
+ALL_NBA_TEAMS = [
+    ("Atlanta Hawks",           "ATL", 1610612737),
+    ("Boston Celtics",          "BOS", 1610612738),
+    ("Brooklyn Nets",           "BKN", 1610612751),
+    ("Charlotte Hornets",       "CHA", 1610612766),
+    ("Chicago Bulls",           "CHI", 1610612741),
+    ("Cleveland Cavaliers",     "CLE", 1610612739),
+    ("Dallas Mavericks",        "DAL", 1610612742),
+    ("Denver Nuggets",          "DEN", 1610612743),
+    ("Detroit Pistons",         "DET", 1610612765),
+    ("Golden State Warriors",   "GSW", 1610612744),
+    ("Houston Rockets",         "HOU", 1610612745),
+    ("Indiana Pacers",          "IND", 1610612754),
+    ("LA Clippers",             "LAC", 1610612746),
+    ("Los Angeles Lakers",      "LAL", 1610612747),
+    ("Memphis Grizzlies",       "MEM", 1610612763),
+    ("Miami Heat",              "MIA", 1610612748),
+    ("Milwaukee Bucks",         "MIL", 1610612749),
+    ("Minnesota Timberwolves",  "MIN", 1610612750),
+    ("New Orleans Pelicans",    "NOP", 1610612740),
+    ("New York Knicks",         "NYK", 1610612752),
+    ("Oklahoma City Thunder",   "OKC", 1610612760),
+    ("Orlando Magic",           "ORL", 1610612753),
+    ("Philadelphia 76ers",      "PHI", 1610612755),
+    ("Phoenix Suns",            "PHX", 1610612756),
+    ("Portland Trail Blazers",  "POR", 1610612757),
+    ("Sacramento Kings",        "SAC", 1610612758),
+    ("San Antonio Spurs",       "SAS", 1610612759),
+    ("Toronto Raptors",         "TOR", 1610612761),
+    ("Utah Jazz",               "UTA", 1610612762),
+    ("Washington Wizards",      "WAS", 1610612764),
+]
+_TEAM_BY_NAME = {name: (abbr, tid) for name, abbr, tid in ALL_NBA_TEAMS}
+_WOLVES_ID = 1610612750
+
 # Date and Matchup selector
 st.markdown("### Select Matchup")
 
-col_date, col_matchup = st.columns([1, 3])
+matchup_mode = st.radio(
+    "Mode:",
+    ["Scheduled Game", "Custom Matchup"],
+    horizontal=True,
+    key="teams_matchup_mode"
+)
 
-with col_date:
-    # Date selector - default to today
-    selected_date = st.date_input(
-        "Select Date:",
-        value=date.today(),
-        key="teams_matchup_date"
+if matchup_mode == "Scheduled Game":
+    col_date, col_matchup = st.columns([1, 3])
+
+    with col_date:
+        selected_date = st.date_input(
+            "Select Date:",
+            value=date.today(),
+            key="teams_matchup_date"
+        )
+
+    with col_matchup:
+        matchups_for_date, matchup_error = get_matchups_for_date(selected_date)
+        if matchup_error:
+            st.warning(f"⚠️ {matchup_error}")
+            matchups_for_date = []
+
+    if matchups_for_date:
+        matchup_options = []
+        for matchup in matchups_for_date:
+            matchup_str = f"{matchup['away_team_name']} @ {matchup['home_team_name']}"
+            if matchup['is_wolves_game']:
+                matchup_str += " 🐺"
+            matchup_options.append(matchup_str)
+
+        selected_matchup_str = st.selectbox(
+            "Choose Matchup:",
+            options=matchup_options,
+            index=0,
+            help="Select a matchup from scheduled games. Timberwolves games are marked with 🐺"
+        )
+        selected_matchup = matchups_for_date[matchup_options.index(selected_matchup_str)]
+    else:
+        st.info(f"ℹ️ No games scheduled for {selected_date.strftime('%B %d, %Y')}.")
+        selected_matchup = None
+        if 'selected_matchup' in st.session_state:
+            del st.session_state['selected_matchup']
+
+else:  # Custom Matchup
+    team_names = [name for name, _, _ in ALL_NBA_TEAMS]
+    col_away, col_home = st.columns(2)
+    with col_away:
+        away_name = st.selectbox("Away Team:", team_names,
+                                 index=team_names.index("Minnesota Timberwolves"),
+                                 key="custom_away_team")
+    with col_home:
+        home_name = st.selectbox("Home Team:", team_names,
+                                 index=team_names.index("Boston Celtics"),
+                                 key="custom_home_team")
+
+    away_abbr, away_tid = _TEAM_BY_NAME[away_name]
+    home_abbr, home_tid = _TEAM_BY_NAME[home_name]
+    selected_matchup = {
+        'game_id': '',
+        'away_team_id': away_tid,
+        'home_team_id': home_tid,
+        'away_team_name': away_name,
+        'home_team_name': home_name,
+        'away_team': away_abbr,
+        'home_team': home_abbr,
+        'game_time': '',
+        'is_wolves_game': (away_tid == _WOLVES_ID or home_tid == _WOLVES_ID),
+    }
+
+if selected_matchup:
+    prev_matchup = st.session_state.get('selected_matchup', {})
+    matchup_changed = (
+        not prev_matchup or
+        str(prev_matchup.get('away_team_id')) != str(selected_matchup.get('away_team_id')) or
+        str(prev_matchup.get('home_team_id')) != str(selected_matchup.get('home_team_id'))
     )
-
-with col_matchup:
-    # Get matchups for selected date
-    matchups_for_date, matchup_error = get_matchups_for_date(selected_date)
-    
-    # Show error if API call failed
-    if matchup_error:
-        st.warning(f"⚠️ {matchup_error}")
-        matchups_for_date = []
-
-if matchups_for_date:
-    # Create matchup options for dropdown
-    matchup_options = []
-    for matchup in matchups_for_date:
-        matchup_str = f"{matchup['away_team_name']} @ {matchup['home_team_name']}"
-        if matchup['is_wolves_game']:
-            matchup_str += " 🐺"
-        matchup_options.append(matchup_str)
-    
-    # Default to first option (Wolves game if available, otherwise first by time)
-    default_idx = 0
-    
-    selected_matchup_str = st.selectbox(
-        "Choose Matchup:",
-        options=matchup_options,
-        index=default_idx,
-        help="Select a matchup from scheduled games. Timberwolves games are marked with 🐺"
-    )
-    
-    # Find the selected matchup
-    selected_matchup = matchups_for_date[matchup_options.index(selected_matchup_str)]
-    
-    # Store in session state to track changes
-    matchup_changed = ('selected_matchup' not in st.session_state or 
-                      st.session_state.get('selected_matchup', {}).get('game_id') != selected_matchup.get('game_id'))
-    
-    if matchup_changed:
-        st.session_state['selected_matchup'] = selected_matchup
-        st.session_state['matchup_override'] = selected_matchup
-    
-    # Update matchup variables without reloading
-    if 'matchup_override' in st.session_state:
-        functions.set_matchup_override(st.session_state['matchup_override'])
-        functions.update_selected_matchup(st.session_state['matchup_override'])
-else:
-    st.info(f"ℹ️ No games scheduled for {selected_date.strftime('%B %d, %Y')}.")
-    selected_matchup = None
-    if 'selected_matchup' in st.session_state:
-        del st.session_state['selected_matchup']
+    st.session_state['selected_matchup'] = selected_matchup
+    st.session_state['matchup_override'] = selected_matchup
+    functions.set_matchup_override(selected_matchup)
+    functions.update_selected_matchup(selected_matchup)
 
 # Only show tabs and content if a matchup is selected
 if selected_matchup:
@@ -528,7 +578,7 @@ if selected_matchup:
                     if row_idx in west_standings.index:
                         team_id = west_standings.loc[row_idx, 'TeamID']
                         if team_id == away_team_id or team_id == home_team_id:
-                            return ['background-color: #e8f4f8'] * len(west_display.columns)
+                            return [f'background-color: {tc.section_bg}'] * len(west_display.columns)
                     return [''] * len(west_display.columns)
                 
                 styled_west = west_display.style.apply(highlight_selected_teams_west, axis=1)
@@ -595,7 +645,7 @@ if selected_matchup:
                     if row_idx in east_standings.index:
                         team_id = east_standings.loc[row_idx, 'TeamID']
                         if team_id == away_team_id or team_id == home_team_id:
-                            return ['background-color: #e8f4f8'] * len(east_display.columns)
+                            return [f'background-color: {tc.section_bg}'] * len(east_display.columns)
                     return [''] * len(east_display.columns)
                 
                 styled_east = east_display.style.apply(highlight_selected_teams_east, axis=1)
@@ -755,6 +805,206 @@ if selected_matchup:
             print(f"Error getting team game logs: {e}")
             return pd.DataFrame()
     
+    @st.cache_data(ttl=1800, show_spinner=False)
+    def get_season_series_data(t_away_id, t_away_abbr, t_home_id, t_home_abbr, season=None):
+        """Get head-to-head season series data for two teams."""
+        try:
+            if season is None:
+                season = pf.CURRENT_SEASON
+
+            away_logs = pf.get_team_game_logs(t_away_id, season)
+            home_logs = pf.get_team_game_logs(t_home_id, season)
+
+            if len(away_logs) == 0 and len(home_logs) == 0:
+                return pd.DataFrame(), pd.DataFrame(), {}, {'away': {}, 'home': {}}
+
+            # Filter to head-to-head games only
+            def filter_h2h(logs, opp_abbr):
+                if len(logs) == 0:
+                    return pd.DataFrame()
+                mask = logs['MATCHUP'].apply(lambda m: str(m).split()[-1] == opp_abbr)
+                return logs[mask].sort_values('GAME_DATE', ascending=False).copy()
+
+            away_h2h = filter_h2h(away_logs, t_home_abbr)
+            home_h2h = filter_h2h(home_logs, t_away_abbr)
+
+            # Series record
+            away_wins = int((away_h2h['WL'] == 'W').sum()) if len(away_h2h) > 0 else 0
+            away_losses = int((away_h2h['WL'] == 'L').sum()) if len(away_h2h) > 0 else 0
+            home_wins = int((home_h2h['WL'] == 'W').sum()) if len(home_h2h) > 0 else 0
+            home_losses = int((home_h2h['WL'] == 'L').sum()) if len(home_h2h) > 0 else 0
+
+            # GAME_IDs for player stats lookup
+            game_ids = set(away_h2h['GAME_ID'].astype(str).tolist()) if len(away_h2h) > 0 else set()
+
+            # Per-side player stats: top scorer/rebounder/assister + over/underperformers
+            _side_stats = {'away': {}, 'home': {}}
+            if game_ids:
+                try:
+                    player_logs = pf.get_bulk_player_game_logs(season)
+                    if len(player_logs) > 0:
+                        h2h_plogs = player_logs[player_logs['GAME_ID'].astype(str).isin(game_ids)]
+
+                        # Season averages across all games (for performance comparison)
+                        szn_avgs = player_logs.groupby('PLAYER_NAME').agg(
+                            szn_pts=('PTS', 'mean'),
+                            szn_reb=('REB', 'mean'),
+                            szn_ast=('AST', 'mean'),
+                            szn_gp=('GAME_ID', 'count'),
+                        )
+
+                        for team_id, side in [(t_away_id, 'away'), (t_home_id, 'home')]:
+                            team_plogs = h2h_plogs[h2h_plogs['TEAM_ID'] == team_id]
+                            if len(team_plogs) == 0:
+                                continue
+
+                            agg = team_plogs.groupby('PLAYER_NAME').agg(
+                                total_pts=('PTS', 'sum'),
+                                total_reb=('REB', 'sum'),
+                                total_ast=('AST', 'sum'),
+                                games=('GAME_ID', 'count'),
+                            ).reset_index()
+                            agg['ppg'] = agg['total_pts'] / agg['games']
+                            agg['rpg'] = agg['total_reb'] / agg['games']
+                            agg['apg'] = agg['total_ast'] / agg['games']
+
+                            top_sc  = agg.nlargest(1, 'total_pts').iloc[0]
+                            top_reb = agg.nlargest(1, 'total_reb').iloc[0]
+                            top_ast = agg.nlargest(1, 'total_ast').iloc[0]
+
+                            _side_stats[side]['top_scorer']    = (top_sc['PLAYER_NAME'],  round(float(top_sc['ppg']),   1), int(top_sc['total_pts']))
+                            _side_stats[side]['top_rebounder'] = (top_reb['PLAYER_NAME'], round(float(top_reb['rpg']),  1), int(top_reb['total_reb']))
+                            _side_stats[side]['top_assister']  = (top_ast['PLAYER_NAME'], round(float(top_ast['apg']),  1), int(top_ast['total_ast']))
+
+                            # Over / underperformers vs season averages (≥20% swing, min szn avg)
+                            THRESH = 0.20
+                            overperformers, underperformers = [], []
+                            for _, row in agg.iterrows():
+                                nm = row['PLAYER_NAME']
+                                if nm not in szn_avgs.index or szn_avgs.loc[nm, 'szn_gp'] < 5:
+                                    continue
+                                szn = szn_avgs.loc[nm]
+                                over_s, under_s = [], []
+                                for stat, h2h_val, szn_val, min_szn in [
+                                    ('PTS', row['ppg'], szn['szn_pts'], 5.0),
+                                    ('REB', row['rpg'], szn['szn_reb'], 3.0),
+                                    ('AST', row['apg'], szn['szn_ast'], 3.0),
+                                ]:
+                                    if szn_val < min_szn:
+                                        continue
+                                    pct = (h2h_val - szn_val) / szn_val
+                                    entry = {'stat': stat, 'h2h': round(h2h_val, 1), 'szn': round(szn_val, 1), 'pct': pct}
+                                    if pct >= THRESH:
+                                        over_s.append(entry)
+                                    elif pct <= -THRESH:
+                                        under_s.append(entry)
+                                if over_s:
+                                    overperformers.append({'name': nm, 'stats': over_s, 'games': int(row['games'])})
+                                if under_s:
+                                    underperformers.append({'name': nm, 'stats': under_s, 'games': int(row['games'])})
+
+                            overperformers.sort(key=lambda x: -max(s['pct'] for s in x['stats']))
+                            underperformers.sort(key=lambda x: min(s['pct'] for s in x['stats']))
+                            _side_stats[side]['overperformers']  = overperformers
+                            _side_stats[side]['underperformers'] = underperformers
+
+                except Exception as e:
+                    print(f"Error getting player stats for season series: {e}")
+
+            # Build display DataFrames
+            def format_h2h_display(h2h_logs, opp_team_id):
+                display_data = []
+                for _, game in h2h_logs.iterrows():
+                    outcome = game.get('WL', 'N/A')
+                    matchup = game.get('MATCHUP', '')
+                    home_away = 'A' if '@' in matchup else 'H'
+
+                    team_score = int(game.get('PTS', 0))
+                    plus_minus = game.get('PLUS_MINUS', 0)
+                    opp_score = int(team_score - plus_minus) if pd.notna(plus_minus) else 0
+                    final_score = f"{team_score}-{opp_score}"
+
+                    opp_logo_url = f"https://cdn.nba.com/logos/nba/{opp_team_id}/primary/L/logo.svg"
+
+                    fgm = game.get('FGM', 0)
+                    fga = game.get('FGA', 0)
+                    fg3m = game.get('FG3M', 0)
+                    fg3a = game.get('FG3A', 0)
+                    fg_pct = (fgm / fga * 100) if fga > 0 else 0.0
+                    fg2m = fgm - fg3m
+                    fg2a = fga - fg3a
+                    fg2_pct = (fg2m / fg2a * 100) if fg2a > 0 else 0.0
+                    fg3_pct = (fg3m / fg3a * 100) if fg3a > 0 else 0.0
+
+                    game_date = pd.to_datetime(game.get('GAME_DATE', ''))
+                    date_str = game_date.strftime('%m/%d') if pd.notna(game_date) else 'N/A'
+
+                    display_data.append({
+                        'Opponent': opp_logo_url,
+                        'H/A': home_away,
+                        'Date': date_str,
+                        'Outcome': outcome,
+                        'Final Score': final_score,
+                        'FG%': f"{fg_pct:.1f}",
+                        '2PT%': f"{fg2_pct:.1f}",
+                        '3PT%': f"{fg3_pct:.1f}",
+                        'REB': int(game.get('REB', 0)),
+                        'AST': int(game.get('AST', 0)),
+                        'TO': int(game.get('TOV', 0)),
+                        'STL': int(game.get('STL', 0)),
+                        'BLK': int(game.get('BLK', 0)),
+                    })
+                return pd.DataFrame(display_data)
+
+            # Build misc display DataFrames (Opp, H/A, Date, Outcome, Score + PITP, FB PTS, PTS off TOV)
+            def format_misc_display(h2h_logs, team_id, opp_team_id):
+                display_data = []
+                for _, game in h2h_logs.iterrows():
+                    outcome = game.get('WL', 'N/A')
+                    matchup = game.get('MATCHUP', '')
+                    home_away = 'A' if '@' in matchup else 'H'
+
+                    team_score = int(game.get('PTS', 0))
+                    plus_minus = game.get('PLUS_MINUS', 0)
+                    opp_score = int(team_score - plus_minus) if pd.notna(plus_minus) else 0
+                    final_score = f"{team_score}-{opp_score}"
+
+                    opp_logo_url = f"https://cdn.nba.com/logos/nba/{opp_team_id}/primary/L/logo.svg"
+
+                    game_date = pd.to_datetime(game.get('GAME_DATE', ''))
+                    date_str = game_date.strftime('%m/%d') if pd.notna(game_date) else 'N/A'
+
+                    gid = str(game.get('GAME_ID', ''))
+                    misc_row = misc_by_game.get((gid, int(team_id)), {})
+                    pitp = int(misc_row.get('PTS_PAINT', 0)) if misc_row else 0
+                    fb_pts = int(misc_row.get('PTS_FB', 0)) if misc_row else 0
+                    pts_off_tov = int(misc_row.get('PTS_OFF_TOV', 0)) if misc_row else 0
+
+                    display_data.append({
+                        'Opponent': opp_logo_url,
+                        'H/A': home_away,
+                        'Date': date_str,
+                        'Outcome': outcome,
+                        'Final Score': final_score,
+                        'PITP': pitp,
+                        'FB PTS': fb_pts,
+                        'PTS off TOV': pts_off_tov,
+                    })
+                return pd.DataFrame(display_data)
+
+            away_display = format_h2h_display(away_h2h, t_home_id)
+            home_display = format_h2h_display(home_h2h, t_away_id)
+
+            series_record = {
+                'away_w': away_wins, 'away_l': away_losses,
+                'home_w': home_wins, 'home_l': home_losses,
+            }
+            return away_display, home_display, series_record, _side_stats
+
+        except Exception as e:
+            print(f"Error getting season series data: {e}")
+            return pd.DataFrame(), pd.DataFrame(), {}, {'away': {}, 'home': {}}
+
     # ============================================================
     # SYNERGY DATA FETCHING FUNCTIONS
     # ============================================================
@@ -824,51 +1074,45 @@ if selected_matchup:
         if season is None:
             season = pf.CURRENT_SEASON
         
-        synergy_playtypes = ['Cut', 'Handoff', 'Isolation', 'Misc', 'OffScreen', 'Postup', 
-                            'PRBallHandler', 'PRRollman', 'OffRebound', 'Spotup', 'Transition']
+        synergy_playtypes = ['Cut', 'Handoff', 'Isolation', 'Misc', 'OffScreen', 'Postup',
+                             'PRBallHandler', 'PRRollman', 'OffRebound', 'Spotup', 'Transition']
         synergy_sides = ['offensive', 'defensive']
-        
-        # Fetch from API
-        result = {}
-        total_requests = len(synergy_playtypes) * len(synergy_sides)
-        current_request = 0
-        
-        for playtype in synergy_playtypes:
-            result[playtype] = {}
-            for side in synergy_sides:
-                current_request += 1
-                
-                # API call
-                synergy_data = None
-                for attempt in range(3):
-                    try:
-                        synergy_data = nba_api.stats.endpoints.SynergyPlayTypes(
-                            league_id='00',
-                            per_mode_simple='Totals',
-                            season=season,
-                            season_type_all_star='Regular Season',
-                            player_or_team_abbreviation='T',
-                            type_grouping_nullable=side,
-                            play_type_nullable=playtype,
-                            timeout=60
-                        ).get_data_frames()[0]
-                        break
-                    except Exception as e:
-                        if attempt < 2:
-                            wait_time = (attempt + 1) * 2
-                            time.sleep(wait_time)
-                            continue
-                        else:
-                            print(f"Error fetching synergy data for playtype {playtype}, type {side}: {str(e)}")
-                            synergy_data = pd.DataFrame()
-                            break
-                
-                result[playtype][side] = synergy_data if synergy_data is not None else pd.DataFrame()
-                
-                # Add delay between API calls to avoid rate limiting
-                if current_request < total_requests:
-                    time.sleep(1.5)
-        
+
+        def _fetch_one(playtype, side):
+            for attempt in range(3):
+                try:
+                    df = nba_api.stats.endpoints.SynergyPlayTypes(
+                        league_id='00',
+                        per_mode_simple='Totals',
+                        season=season,
+                        season_type_all_star='Regular Season',
+                        player_or_team_abbreviation='T',
+                        type_grouping_nullable=side,
+                        play_type_nullable=playtype,
+                        timeout=60,
+                    ).get_data_frames()[0]
+                    return (playtype, side, df)
+                except Exception as e:
+                    if attempt < 2:
+                        time.sleep((attempt + 1) * 2)
+                    else:
+                        print(f"Error fetching synergy data for playtype {playtype}, type {side}: {e}")
+                        return (playtype, side, pd.DataFrame())
+            return (playtype, side, pd.DataFrame())
+
+        # 22 calls (11 playtypes × 2 sides) run concurrently with 4 workers.
+        # Stagger submissions by 0.2 s to avoid a simultaneous burst.
+        result = {pt: {} for pt in synergy_playtypes}
+        tasks = [(pt, side) for pt in synergy_playtypes for side in synergy_sides]
+        futures = {}
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            for i, (pt, side) in enumerate(tasks):
+                time.sleep(i * 0.2)
+                futures[executor.submit(_fetch_one, pt, side)] = (pt, side)
+            for future in as_completed(futures):
+                playtype, side, df = future.result()
+                result[playtype][side] = df
+
         return result
     
     # Removed @st.cache_data - using Supabase cache instead
@@ -1174,9 +1418,9 @@ if selected_matchup:
         """Apply conditional row highlighting based on Outcome"""
         def highlight_row(row):
             if row['Outcome'] == 'W':
-                return ['background-color: #d4edda'] * len(row)  # Light green
+                return [f'background-color: {tc.green_bg}'] * len(row)  # Light green
             elif row['Outcome'] == 'L':
-                return ['background-color: #f8d7da'] * len(row)  # Light red
+                return [f'background-color: {tc.red_bg}'] * len(row)  # Light red
             else:
                 return [''] * len(row)
         
@@ -1230,7 +1474,136 @@ if selected_matchup:
             st.info(f"Team ID: {home_team_id}, Season: {pf.CURRENT_SEASON}")
     
     st.markdown("---")
-    
+
+    # ============================================================
+    # SEASON SERIES SECTION
+    # ============================================================
+    st.markdown("### 🤝 Season Series")
+
+    try:
+        with st.spinner("Loading season series..."):
+            ss_away_df, ss_home_df, ss_record, ss_player_stats = get_season_series_data(
+                away_team_id, away_abbr, home_team_id, home_abbr, pf.CURRENT_SEASON
+            )
+
+        total_h2h = ss_record.get('away_w', 0) + ss_record.get('away_l', 0) if ss_record else 0
+
+        if total_h2h == 0:
+            st.info("No head-to-head games played yet this season.")
+        else:
+            away_w = ss_record['away_w']
+            away_l = ss_record['away_l']
+            home_w = ss_record['home_w']
+            home_l = ss_record['home_l']
+
+            if away_w > home_w:
+                series_label = f"{away_abbr} leads {away_w}-{away_l}"
+            elif home_w > away_w:
+                series_label = f"{home_abbr} leads {home_w}-{home_l}"
+            else:
+                series_label = f"Series tied {away_w}-{home_w}"
+
+            st.markdown(f"**{series_label}** &nbsp;|&nbsp; {total_h2h} game{'s' if total_h2h != 1 else ''} played")
+
+            # Top performers (scorer / rebounder / assister)
+            _away_ps = ss_player_stats.get('away', {})
+            _home_ps = ss_player_stats.get('home', {})
+            tp_cols = st.columns(2)
+            with tp_cols[0]:
+                if _away_ps.get('top_scorer'):
+                    name, ppg, total = _away_ps['top_scorer']
+                    st.markdown(f"**{away_abbr} Top Scorer:** {name} — {ppg:.1f} PPG ({total} PTS)")
+                if _away_ps.get('top_rebounder'):
+                    name, rpg, total = _away_ps['top_rebounder']
+                    st.markdown(f"**{away_abbr} Top Rebounder:** {name} — {rpg:.1f} RPG ({total} REB)")
+                if _away_ps.get('top_assister'):
+                    name, apg, total = _away_ps['top_assister']
+                    st.markdown(f"**{away_abbr} Top Assister:** {name} — {apg:.1f} APG ({total} AST)")
+            with tp_cols[1]:
+                if _home_ps.get('top_scorer'):
+                    name, ppg, total = _home_ps['top_scorer']
+                    st.markdown(f"**{home_abbr} Top Scorer:** {name} — {ppg:.1f} PPG ({total} PTS)")
+                if _home_ps.get('top_rebounder'):
+                    name, rpg, total = _home_ps['top_rebounder']
+                    st.markdown(f"**{home_abbr} Top Rebounder:** {name} — {rpg:.1f} RPG ({total} REB)")
+                if _home_ps.get('top_assister'):
+                    name, apg, total = _home_ps['top_assister']
+                    st.markdown(f"**{home_abbr} Top Assister:** {name} — {apg:.1f} APG ({total} AST)")
+
+            # Per-game tables
+            ss_cols = st.columns(2)
+            with ss_cols[0]:
+                st.markdown(f"#### {away_abbr}")
+                if len(ss_away_df) > 0:
+                    st.dataframe(
+                        style_game_logs(ss_away_df),
+                        width='stretch',
+                        hide_index=True,
+                        column_config=game_logs_column_config
+                    )
+                else:
+                    st.caption("No game data available")
+            with ss_cols[1]:
+                st.markdown(f"#### {home_abbr}")
+                if len(ss_home_df) > 0:
+                    st.dataframe(
+                        style_game_logs(ss_home_df),
+                        width='stretch',
+                        hide_index=True,
+                        column_config=game_logs_column_config
+                    )
+                else:
+                    st.caption("No game data available")
+
+            # Individual performance vs season averages
+            _has_perf = any([
+                _away_ps.get('overperformers'), _away_ps.get('underperformers'),
+                _home_ps.get('overperformers'), _home_ps.get('underperformers'),
+            ])
+            if _has_perf:
+                st.markdown("**📊 Individual Matchup Performance vs Season Averages**")
+                st.caption("≥20% swing in PTS/REB/AST relative to season average, min 5 games played")
+                perf_cols = st.columns(2)
+
+                def _render_perf_side(ps, abbr, col):
+                    with col:
+                        overs  = ps.get('overperformers', [])
+                        unders = ps.get('underperformers', [])
+                        if overs:
+                            st.caption(f"🔥 **{abbr} Outperformed**")
+                            rows = []
+                            for p in overs:
+                                for s in p['stats']:
+                                    rows.append({
+                                        'Player': p['name'],
+                                        'Stat': s['stat'],
+                                        'H2H Avg': s['h2h'],
+                                        'Szn Avg': s['szn'],
+                                        'Δ': f"+{s['pct']*100:.0f}%",
+                                    })
+                            st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
+                        if unders:
+                            st.caption(f"❄️ **{abbr} Underperformed**")
+                            rows = []
+                            for p in unders:
+                                for s in p['stats']:
+                                    rows.append({
+                                        'Player': p['name'],
+                                        'Stat': s['stat'],
+                                        'H2H Avg': s['h2h'],
+                                        'Szn Avg': s['szn'],
+                                        'Δ': f"{s['pct']*100:.0f}%",
+                                    })
+                            st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
+
+                _render_perf_side(_away_ps, away_abbr, perf_cols[0])
+                _render_perf_side(_home_ps, home_abbr, perf_cols[1])
+
+    except Exception as e:
+        st.warning(f"Unable to load season series: {str(e)}")
+
+    st.markdown("---")
+
     # ============================================================
     # SYNERGY PLAYTYPE MATCHUPS SECTION
     # ============================================================
@@ -1564,7 +1937,7 @@ if selected_matchup:
             if period:
                 params['period'] = period
             
-            df = nba_api.stats.endpoints.LeagueDashTeamStats(**params).get_data_frames()[0]
+            df = nba_api.stats.endpoints.LeagueDashTeamStats(**params, timeout=90).get_data_frames()[0]
             
             # Add ranking columns
             df['OFF_RATING_RANK'] = df['OFF_RATING'].rank(ascending=False, method='first').astype(int)
@@ -1810,7 +2183,10 @@ if selected_matchup:
         # Create formatted display dataframes (strings) but keep numeric for styling
         away_display_df = away_quarter_df.copy()
         home_display_df = home_quarter_df.copy()
-        
+        for col in ['Q1', 'Q2', 'Q3', 'Q4']:
+            away_display_df[col] = away_display_df[col].astype(object)
+            home_display_df[col] = home_display_df[col].astype(object)
+
         for idx, row in away_display_df.iterrows():
             metric = row['Metric']
             is_rank = 'RANK' in metric
@@ -1885,6 +2261,113 @@ if selected_matchup:
     body_header_background_color = 'f9f9f9'
     body_background_color = 'white'
 
+    # Best/Worst league band — config used by the LA cell sub-line in Core
+    # Stats + Shooting tabs. Each entry is:
+    #   la_key: (df_attr_on_functions, column_name, pct, lower_is_better, decimals)
+    _BW_CONFIG = {
+        # Core Stats — Advanced/Misc/Traditional/Four Factors data sources.
+        'ortg':             ('data_adv_season',  'OFF_RATING',         False, False, 1),
+        'drtg':             ('data_adv_season',  'DEF_RATING',         False, True,  1),
+        'net':              ('data_adv_season',  'NET_RATING',         False, False, 1),
+        'oreb':             ('data_adv_season',  'OREB_PCT',           True,  False, 1),
+        'dreb':             ('data_adv_season',  'DREB_PCT',           True,  False, 1),
+        'reb':              ('data_adv_season',  'REB_PCT',            True,  False, 1),
+        'pitp_off':         ('data_misc_season', 'PTS_PAINT',          False, False, 1),
+        'pitp_def':         ('data_misc_season', 'OPP_PTS_PAINT',      False, True,  1),
+        'pitp_diff':        ('data_misc_season', 'PTS_PAINT_DIFF',     False, False, 1),
+        '2c_off':           ('data_misc_season', 'PTS_2ND_CHANCE',     False, False, 1),
+        '2c_def':           ('data_misc_season', 'OPP_PTS_2ND_CHANCE', False, True,  1),
+        '2c_diff':          ('data_misc_season', 'PTS_2ND_CHANCE_DIFF',False, False, 1),
+        'fb_off':           ('data_misc_season', 'PTS_FB',             False, False, 1),
+        'fb_def':           ('data_misc_season', 'OPP_PTS_FB',         False, True,  1),
+        'fb_diff':          ('data_misc_season', 'PTS_FB_DIFF',        False, False, 1),
+        'pace':             ('data_adv_season',  'PACE',               False, False, 1),
+        'ast':              ('data_trad_season', 'AST',                False, False, 1),
+        'ast_pct':          ('data_adv_season',  'AST_PCT',            True,  False, 1),
+        'tov':              ('data_trad_season', 'TOV',                False, True,  1),
+        'tov_pct':          ('data_adv_season',  'TM_TOV_PCT',         True,  True,  1),
+        'opp_tov_pct':      ('data_4F_season',   'OPP_TOV_PCT',        True,  False, 1),
+        'ast_tov':          ('data_adv_season',  'AST_TO',             False, False, 2),
+        'pts_off_tov':      ('data_misc_season', 'PTS_OFF_TOV',        False, False, 1),
+        'opp_pts_off_tov':  ('data_misc_season', 'OPP_PTS_OFF_TOV',    False, True,  1),
+        'pts_off_tov_diff': ('data_misc_season', 'PTS_OFF_TOV_DIFF',   False, False, 1),
+        'starters_scoring': ('data_trad_season_starters', 'PTS',       False, False, 1),
+        'bench_scoring':    ('data_trad_season_bench',    'PTS',       False, False, 1),
+        # Shooting — pbpstats-derived team_stats DataFrame.
+        'fgm':       ('team_stats', 'FGM_PG',                  False, False, 1),
+        'fga':       ('team_stats', 'FGA_PG',                  False, False, 1),
+        'fg_pct':    ('team_stats', 'FG%',                     True,  False, 1),
+        '2pt':       ('team_stats', 'FG2M_PG',                 False, False, 1),
+        '2pa':       ('team_stats', 'FG2A_PG',                 False, False, 1),
+        '2pt_pct':   ('team_stats', '2PT%',                    True,  False, 1),
+        '3pt':       ('team_stats', 'FG3M_PG',                 False, False, 1),
+        '3pa':       ('team_stats', 'FG3A_PG',                 False, False, 1),
+        '3pt_pct':   ('team_stats', '3PT%',                    True,  False, 1),
+        '3pt_rate':  ('team_stats', '3PT_RATE',                True,  False, 1),
+        'ftm':       ('team_stats', 'FTM_PG',                  False, False, 1),
+        'fta':       ('team_stats', 'FTA_PG',                  False, False, 1),
+        'ft_pct':    ('team_stats', 'FT%',                     True,  False, 1),
+        'ft_rate':   ('team_stats', 'FT_RATE',                 True,  False, 1),
+        'rim_freq':  ('team_stats', 'AtRimFrequency',          True,  False, 1),
+        'rim_acc':   ('team_stats', 'AtRimAccuracy',           True,  False, 1),
+        'smr_freq':  ('team_stats', 'ShortMidRangeFrequency',  True,  False, 1),
+        'smr_acc':   ('team_stats', 'ShortMidRangeAccuracy',   True,  False, 1),
+        'lmr_freq':  ('team_stats', 'LongMidRangeFrequency',   True,  False, 1),
+        'lmr_acc':   ('team_stats', 'LongMidRangeAccuracy',    True,  False, 1),
+        'atb3_freq': ('team_stats', 'Arc3Frequency',           True,  False, 1),
+        'atb3_acc':  ('team_stats', 'Arc3Accuracy',            True,  False, 1),
+        'c3_freq':   ('team_stats', 'Corner3Frequency',        True,  False, 1),
+        'c3_acc':    ('team_stats', 'Corner3Accuracy',         True,  False, 1),
+    }
+
+    def _bw_str(key, two_lines=False):
+        """Return 'Best: X | Worst: Y' (or two-line equivalent) for an la_* metric.
+
+        Direction-aware: for stats where lower_is_better (DEF Rating, Opp PITP,
+        TOV%, etc.), Best is the minimum value across the league and Worst is
+        the maximum. For everything else it's the opposite.
+
+        `two_lines=True` puts Best on one line and Worst on the next, keeping
+        every row in the Shooting tab the same height.
+        """
+        cfg = _BW_CONFIG.get(key)
+        if not cfg:
+            return ''
+        df_attr, col, pct, lower_is_better, decimals = cfg
+        df = getattr(functions, df_attr, None)
+        if df is None or len(df) == 0 or col not in df.columns:
+            return ''
+        series = df[col].dropna()
+        if series.empty:
+            return ''
+        lo, hi = float(series.min()), float(series.max())
+        best, worst = (lo, hi) if lower_is_better else (hi, lo)
+        def _fmt(v):
+            return f'{v*100:.{decimals}f}%' if pct else f'{v:.{decimals}f}'
+        sep = '<br>' if two_lines else ' | '
+        return f'Best: <strong>{_fmt(best)}</strong>{sep}Worst: <strong>{_fmt(worst)}</strong>'
+
+    def get_rank_color(rank):
+        """Get background-color CSS string based on rank (1=best/green, 30=worst/red)."""
+        try:
+            rank_val = float(rank)
+            if pd.isna(rank_val) or rank_val < 1:
+                rank_val = 30
+            elif rank_val > 30:
+                rank_val = 30
+        except (ValueError, TypeError):
+            rank_val = 30
+        normalized = (rank_val - 1) / 29.0 if rank_val > 1 else 0.0
+        if normalized < 0.5:
+            r = int(255 * (normalized * 2))
+            g = 255
+            b = 100
+        else:
+            r = 255
+            g = int(255 * (1 - (normalized - 0.5) * 2))
+            b = 100
+        return f'background-color: rgba({r}, {g}, {b}, 0.3);'
+
     with tab1:
 
         # Create the HTML for the header
@@ -1910,16 +2393,32 @@ if selected_matchup:
         # Render the HTML in Streamlit
         st.markdown(header_html, unsafe_allow_html=True)
 
+        # Determine which split to show in the second column based on sidebar choice
+        if _split_choice == "Post All-Star Break":
+            _split_label = "Post-ASB"
+            _sp = "pasb"  # attribute prefix
+        elif _split_choice == "Playoffs":
+            _split_label = "Playoffs"
+            _sp = "po"
+        else:
+            _split_label = "Last 5"
+            _sp = "l5"
+
+        # Helper to fetch split-column values by attribute name
+        def _sv(attr_suffix):
+            """Get split value: e.g. _sv('away_team_ortg') -> functions.pasb_away_team_ortg"""
+            return getattr(functions, f'{_sp}_{attr_suffix}', 0)
+
         # Create the HTML table with column spanners
         html_table_2 = f"""
     <table style="width:75%; border: {border}px solid black; border-collapse: collapse; text-align: center; table-layout: fixed;">
       <colgroup>
         <col style="width: 25%;">  <!-- Metric -->
         <col style="width: 14.5%;">  <!-- Away Season -->
-        <col style="width: 14.5%;">  <!-- Away Last 5 -->
+        <col style="width: 14.5%;">  <!-- Away {_split_label} -->
         <col style="width: 17%;">  <!-- League Average -->
         <col style="width: 14.5%;">  <!-- Home Season -->
-        <col style="width: 14.5%;">  <!-- Home Last 5 -->
+        <col style="width: 14.5%;">  <!-- Home {_split_label} -->
       </colgroup>
       <thead>
         <!-- First sticky row -->
@@ -1939,632 +2438,632 @@ if selected_matchup:
         <tr>
           <th style="border: 1px solid black; position: sticky; top: 175px; z-index: 2; background-color: #{body_header_background_color}; text-align: center; vertical-align: middle; box-shadow: 0px 2px 0px 0px black;">Metric</th>
           <th style="border: 1px solid black; position: sticky; top: 175px; z-index: 2; background-color: #{body_header_background_color}; text-align: center; vertical-align: middle; box-shadow: 0px 2px 0px 0px black;">Season</th>
-          <th style="border: 1px solid black; position: sticky; top: 175px; z-index: 2; background-color: #{body_header_background_color}; text-align: center; vertical-align: middle; box-shadow: 0px 2px 0px 0px black;">Last 5</th>
+          <th style="border: 1px solid black; position: sticky; top: 175px; z-index: 2; background-color: #{body_header_background_color}; text-align: center; vertical-align: middle; box-shadow: 0px 2px 0px 0px black;">{_split_label}</th>
           <th style="border: 1px solid black; position: sticky; top: 175px; z-index: 2; background-color: #{body_header_background_color}; text-align: center; vertical-align: middle; box-shadow: 0px 2px 0px 0px black;">League Average</th>
           <th style="border: 1px solid black; position: sticky; top: 175px; z-index: 2; background-color: #{body_header_background_color}; text-align: center; vertical-align: middle; box-shadow: 0px 2px 0px 0px black;">Season</th>
-          <th style="border: 1px solid black; position: sticky; top: 175px; z-index: 2; background-color: #{body_header_background_color}; text-align: center; vertical-align: middle; box-shadow: 0px 2px 0px 0px black;">Last 5</th>
+          <th style="border: 1px solid black; position: sticky; top: 175px; z-index: 2; background-color: #{body_header_background_color}; text-align: center; vertical-align: middle; box-shadow: 0px 2px 0px 0px black;">{_split_label}</th>
         </tr>
       </thead>
       <tbody>
       <tr>
         <td style="border: {border}px solid black;">Offensive Rating</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_ortg_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_ortg}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_ortg_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_ortg}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_ortg_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_ortg_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_ortg")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_ortg_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_ortg}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_ortg}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("ortg")}</p>
         </td>
-         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_ortg_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_ortg}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_ortg_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_ortg}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_ortg_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_ortg_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_ortg")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_ortg_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Defensive Rating</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_drtg_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_drtg}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_drtg_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_drtg}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_drtg_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_drtg_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_drtg")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_drtg_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_drtg}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_drtg}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("drtg")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_drtg_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_drtg}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_drtg_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_drtg}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_drtg_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_drtg_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_drtg")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_drtg_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Net Rating</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_net_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_net}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_net_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_net}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_net_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_net_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_net")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_net_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_net}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_net}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("net")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_net_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_net}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_net_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_net}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_net_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_net_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_net")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_net_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Offensive Rebound %</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; {get_rank_color(functions.away_team_oreb_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_oreb*100, 3)}%</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_oreb_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.l5_away_team_oreb*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_oreb_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; {get_rank_color(_sv("away_team_oreb_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(_sv("away_team_oreb")*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_oreb_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_oreb*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{round(functions.l5_la_oreb*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("oreb")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; {get_rank_color(functions.home_team_oreb_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_oreb*100, 3)}%</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_oreb_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.l5_home_team_oreb*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_oreb_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; {get_rank_color(_sv("home_team_oreb_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(_sv("home_team_oreb")*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_oreb_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Defensive Rebound %</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; {get_rank_color(functions.away_team_dreb_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_dreb*100, 3)}%</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_dreb_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.l5_away_team_dreb*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_dreb_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; {get_rank_color(_sv("away_team_dreb_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(_sv("away_team_dreb")*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_dreb_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_dreb*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{round(functions.l5_la_dreb*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("dreb")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; {get_rank_color(functions.home_team_dreb_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_dreb*100, 3)}%</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_dreb_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.l5_home_team_dreb*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_dreb_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; {get_rank_color(_sv("home_team_dreb_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(_sv("home_team_dreb")*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_dreb_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Rebound %</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; {get_rank_color(functions.away_team_reb_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_reb*100, 3)}%</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_reb_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.l5_away_team_reb*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_reb_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; {get_rank_color(_sv("away_team_reb_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(_sv("away_team_reb")*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_reb_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_reb*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{round(functions.l5_la_reb*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("reb")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; {get_rank_color(functions.home_team_reb_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_reb*100, 3)}%</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_reb_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.l5_home_team_reb*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_reb_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: {border_radius}px; {get_rank_color(_sv("home_team_reb_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(_sv("home_team_reb")*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_reb_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Points in the Paint - Offense</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_pitp_off_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_pitp_off}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_pitp_off_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_pitp_off}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_pitp_off_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_pitp_off_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_pitp_off")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_pitp_off_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_pitp_off}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_pitp_off}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("pitp_off")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_pitp_off_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_pitp_off}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_pitp_off_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_pitp_off}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_pitp_off_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_pitp_off_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_pitp_off")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_pitp_off_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Points in the Paint - Defense</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_pitp_def_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_pitp_def}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_pitp_def_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_pitp_def}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_pitp_def_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_pitp_def_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_pitp_def")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_pitp_def_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_pitp_def}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_pitp_def}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("pitp_def")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_pitp_def_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_pitp_def}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_pitp_def_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_pitp_def}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_pitp_def_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_pitp_def_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_pitp_def")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_pitp_def_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Points in the Paint - Differential</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_pitp_diff_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_pitp_diff}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_pitp_diff_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_pitp_diff}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_pitp_diff_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_pitp_diff_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_pitp_diff")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_pitp_diff_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_pitp_diff}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_pitp_diff}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("pitp_diff")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_pitp_diff_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_pitp_diff}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_pitp_diff_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_pitp_diff}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_pitp_diff_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_pitp_diff_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_pitp_diff")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_pitp_diff_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">2nd Chance Points - Offense</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_2c_off_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_2c_off}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_2c_off_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_2c_off}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_2c_off_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_2c_off_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_2c_off")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_2c_off_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_2c_off}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_2c_off}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("2c_off")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_2c_off_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_2c_off}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_2c_off_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_2c_off}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_2c_off_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_2c_off_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_2c_off")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_2c_off_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">2nd Chance Points - Defense</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_2c_def_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_2c_def}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_2c_def_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_2c_def}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_2c_def_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_2c_def_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_2c_def")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_2c_def_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_2c_def}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_2c_def}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("2c_def")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_2c_def_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_2c_def}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_2c_def_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_2c_def}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_2c_def_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_2c_def_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_2c_def")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_2c_def_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">2nd Chance Points - Differential</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_2c_diff_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_2c_diff}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_2c_diff_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_2c_diff}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_2c_diff_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_2c_diff_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_2c_diff")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_2c_diff_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_2c_diff}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_2c_diff}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("2c_diff")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_2c_diff_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_2c_diff}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_2c_diff_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_2c_diff}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_2c_diff_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_2c_diff_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_2c_diff")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_2c_diff_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Fast Break Points - Offense</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_fb_off_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_fb_off}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_fb_off_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_fb_off}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_fb_off_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_fb_off_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_fb_off")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_fb_off_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_fb_off}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_fb_off}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("fb_off")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_fb_off_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_fb_off}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_fb_off_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_fb_off}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_fb_off_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_fb_off_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_fb_off")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_fb_off_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Fast Break Points - Defense</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_fb_def_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_fb_def}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_fb_def_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_fb_def}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_fb_def_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_fb_def_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_fb_def")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_fb_def_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_fb_def}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_fb_def}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("fb_def")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_fb_def_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_fb_def}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_fb_def_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_fb_def}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_fb_def_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_fb_def_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_fb_def")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_fb_def_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Fast Break Points - Differential</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_fb_diff_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_fb_diff}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_fb_diff_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_fb_diff}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_fb_diff_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_fb_diff_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_fb_diff")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_fb_diff_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_fb_diff}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_fb_diff}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("fb_diff")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_fb_diff_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_fb_diff}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_fb_diff_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_fb_diff}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_fb_diff_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_fb_diff_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_fb_diff")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_fb_diff_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Pace</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_pace_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_pace}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_pace_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_pace}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_pace_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_pace_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_pace")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_pace_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_pace}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_pace}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("pace")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_pace_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_pace}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_pace_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_pace}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_pace_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_pace_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_pace")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_pace_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Assists</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_ast_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_ast}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_ast_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_ast}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_ast_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_ast_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_ast")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_ast_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_ast}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_ast}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("ast")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_ast_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_ast}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_ast_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_ast}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_ast_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_ast_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_ast")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_ast_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Assist Percentage</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_ast_pct_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_ast_pct*100, 3)}%</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_ast_pct_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.l5_away_team_ast_pct*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_ast_pct_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_ast_pct_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(_sv("away_team_ast_pct")*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_ast_pct_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_ast_pct*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{round(functions.l5_la_ast_pct*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("ast_pct")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_ast_pct_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_ast_pct*100, 3)}%</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_ast_pct_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.l5_home_team_ast_pct*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_ast_pct_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_ast_pct_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(_sv("home_team_ast_pct")*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_ast_pct_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Turnovers</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_tov_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_tov}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_tov_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_tov}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_tov_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_tov_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_tov")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_tov_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_tov}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_tov}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("tov")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_tov_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_tov}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_tov_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_tov}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_tov_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_tov_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_tov")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_tov_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Turnover Percentage</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_tov_pct_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_tov_pct*100, 3)}%</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_tov_pct_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.l5_away_team_tov_pct*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_tov_pct_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_tov_pct_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(_sv("away_team_tov_pct")*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_tov_pct_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_tov_pct*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{round(functions.l5_la_tov_pct*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("tov_pct")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_tov_pct_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_tov_pct*100, 3)}%</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_tov_pct_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.l5_home_team_tov_pct*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_tov_pct_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_tov_pct_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(_sv("home_team_tov_pct")*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_tov_pct_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Opp. Turnover Percentage</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_tov_pct_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_tov_pct*100, 3)}%</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_tov_pct_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.l5_away_team_opp_tov_pct*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_opp_tov_pct_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_opp_tov_pct_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(_sv("away_team_opp_tov_pct")*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_opp_tov_pct_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_opp_tov_pct*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{round(functions.l5_la_opp_tov_pct*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("opp_tov_pct")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_tov_pct_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_tov_pct*100, 3)}%</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_tov_pct_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.l5_home_team_opp_tov_pct*100, 3)}%</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_opp_tov_pct_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_opp_tov_pct_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(_sv("home_team_opp_tov_pct")*100, 3)}%</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_opp_tov_pct_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Assist-to-Turnover Ratio</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_ast_tov_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_ast_tov}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_ast_tov_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_ast_tov}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_ast_tov_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_ast_tov_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_ast_tov")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_ast_tov_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_ast_tov}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_ast_tov}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("ast_tov")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_ast_tov_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_ast_tov}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_ast_tov_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_ast_tov}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_ast_tov_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_ast_tov_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_ast_tov")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_ast_tov_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Points off Turnovers</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_pts_off_tov_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_pts_off_tov}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_pts_off_tov_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_pts_off_tov}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_pts_off_tov_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_pts_off_tov_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_pts_off_tov")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_pts_off_tov_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_pts_off_tov}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_pts_off_tov}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("pts_off_tov")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_pts_off_tov_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_pts_off_tov}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_pts_off_tov_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_pts_off_tov}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_pts_off_tov_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_pts_off_tov_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_pts_off_tov")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_pts_off_tov_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Opp. Points off Turnovers</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_pts_off_tov_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_opp_pts_off_tov}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_pts_off_tov_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_opp_pts_off_tov}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_opp_pts_off_tov_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_opp_pts_off_tov_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_opp_pts_off_tov")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_opp_pts_off_tov_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_opp_pts_off_tov}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_opp_pts_off_tov}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("opp_pts_off_tov")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_pts_off_tov_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_opp_pts_off_tov}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_pts_off_tov_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_opp_pts_off_tov}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_opp_pts_off_tov_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_opp_pts_off_tov_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_opp_pts_off_tov")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_opp_pts_off_tov_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Points off Turnovers - Differential</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_pts_off_tov_diff_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_pts_off_tov_diff}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_pts_off_tov_diff_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_pts_off_tov_diff}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_pts_off_tov_diff_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_pts_off_tov_diff_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_pts_off_tov_diff")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_pts_off_tov_diff_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_pts_off_tov_diff}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_pts_off_tov_diff}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("pts_off_tov_diff")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_pts_off_tov_diff_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_pts_off_tov_diff}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_pts_off_tov_diff_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_pts_off_tov_diff}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_pts_off_tov_diff_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_pts_off_tov_diff_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_pts_off_tov_diff")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_pts_off_tov_diff_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Starters Scoring</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_starters_scoring_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_starters_scoring}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_starters_scoring_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_starters_scoring}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_starters_scoring_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_starters_scoring_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_starters_scoring")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_starters_scoring_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_starters_scoring}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_starters_scoring}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("starters_scoring")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_starters_scoring_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_starters_scoring}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_starters_scoring_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_starters_scoring}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_starters_scoring_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_starters_scoring_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_starters_scoring")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_starters_scoring_rank")}</strong></p>
         </td>
       </tr>
       <tr>
         <td style="border: {border}px solid black;">Bench Scoring</td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_bench_scoring_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_bench_scoring}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_bench_scoring_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_away_team_bench_scoring}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_away_team_bench_scoring_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("away_team_bench_scoring_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("away_team_bench_scoring")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("away_team_bench_scoring_rank")}</strong></p>
         </td>
         <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_bench_scoring}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">L5: <strong>{functions.l5_la_bench_scoring}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("bench_scoring")}</p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_bench_scoring_rank)};">
                 <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_bench_scoring}</strong></p>
                 <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_bench_scoring_rank}</strong></p>
         </td>
-        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
-                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.l5_home_team_bench_scoring}</strong></p>
-                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.l5_home_team_bench_scoring_rank}</strong></p>
+        <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(_sv("home_team_bench_scoring_rank"))};">
+                <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{_sv("home_team_bench_scoring")}</strong></p>
+                <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{_sv("home_team_bench_scoring_rank")}</strong></p>
         </td>
       </tr>  
       </tbody>
@@ -2642,12 +3141,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Field Goals Made</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_fgm_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_fgm}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_fgm_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_fgm_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_opp_fgm}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_fgm_rank}</strong></p>
                 </td>
@@ -2659,15 +3158,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_fgm}</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("fgm", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_fgm_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_fgm}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_fgm_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_fgm_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_opp_fgm}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_fgm_rank}</strong></p>
                 </td>
@@ -2681,12 +3181,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Field Goals Attempted</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_fga_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_fga}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_fga_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_fga_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_opp_fga}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_fga_rank}</strong></p>
                 </td>
@@ -2698,15 +3198,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_fga}</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("fga", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_fga_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_fga}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_fga_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_fga_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_opp_fga}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_fga_rank}</strong></p>
                 </td>
@@ -2720,12 +3221,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Field Goal Percentage</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_fg_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_fg_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_fg_pct_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_fg_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_fg_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_fg_pct_rank}</strong></p>
                 </td>
@@ -2737,15 +3238,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_fg_pct*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("fg_pct", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_fg_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_fg_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_fg_pct_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_fg_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_fg_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_fg_pct_rank}</strong></p>
                 </td>
@@ -2759,12 +3261,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">2PT Field Goals Made</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_2pt_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_2pt}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_2pt_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_2pt_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_opp_2pt}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_2pt_rank}</strong></p>
                 </td>
@@ -2776,15 +3278,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_2pt}</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("2pt", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_2pt_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_2pt}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_2pt_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_2pt_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_opp_2pt}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_2pt_rank}</strong></p>
                 </td>
@@ -2798,12 +3301,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">2PT Field Goals Attempted</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_2pa_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_2pa}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_2pa_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_2pa_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_opp_2pa}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_2pa_rank}</strong></p>
                 </td>
@@ -2815,15 +3318,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_2pa}</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("2pa", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_2pa_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_2pa}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_2pa_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_2pa_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_opp_2pa}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_2pa_rank}</strong></p>
                 </td>
@@ -2837,12 +3341,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">2PT Field Goal Percentage</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_2pt_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_2pt_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_2pt_pct_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_2pt_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_2pt_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_2pt_pct_rank}</strong></p>
                 </td>
@@ -2854,15 +3358,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_2pt_pct*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("2pt_pct", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_2pt_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_2pt_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_2pt_pct_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_2pt_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_2pt_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_2pt_pct_rank}</strong></p>
                 </td>
@@ -2876,12 +3381,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">3PT Field Goals Made</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_3pt_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_3pt}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_3pt_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_3pt_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_opp_3pt}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_3pt_rank}</strong></p>
                 </td>
@@ -2893,15 +3398,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_3pt}</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("3pt", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_3pt_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_3pt}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_3pt_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_3pt_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_opp_3pt}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_3pt_rank}</strong></p>
                 </td>
@@ -2915,12 +3421,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">3PT Field Goals Attempted</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_3pa_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_3pa}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_3pa_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_3pa_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_opp_3pa}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_3pa_rank}</strong></p>
                 </td>
@@ -2932,15 +3438,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_3pa}</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("3pa", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_3pa_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_3pa}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_3pa_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_3pa_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_opp_3pa}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_3pa_rank}</strong></p>
                 </td>
@@ -2954,12 +3461,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">3PT Field Goal Percentage</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_3pt_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_3pt_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_3pt_pct_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_3pt_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_3pt_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_3pt_pct_rank}</strong></p>
                 </td>
@@ -2971,15 +3478,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_3pt_pct*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("3pt_pct", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_3pt_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_3pt_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_3pt_pct_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_3pt_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_3pt_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_3pt_pct_rank}</strong></p>
                 </td>
@@ -2990,15 +3498,53 @@ if selected_matchup:
                 </td>
             </tr>
             <tr>
+                <td style="border: {border}px solid black;">3PT Field Goal Rate (3PA/FGA)</td>
+                <!-- Away -->
+                    <!-- Team -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_3pt_rate_rank)};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_3pt_rate*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_3pt_rate_rank}</strong></p>
+                </td>
+                    <!-- Opponent -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_3pt_rate_rank)};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_3pt_rate*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_3pt_rate_rank}</strong></p>
+                </td>
+                    <!-- Difference -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_diff_3pt_rate*100, 1)}%</strong></p>
+                </td>
+                <!-- League Average -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_3pt_rate*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("3pt_rate", True)}</p>
+                </td>
+                <!-- Home -->
+                    <!-- Team -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_3pt_rate_rank)};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_3pt_rate*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_3pt_rate_rank}</strong></p>
+                </td>
+                    <!-- Opponent -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_3pt_rate_rank)};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_3pt_rate*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_3pt_rate_rank}</strong></p>
+                </td>
+                    <!-- Difference -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_diff_3pt_rate*100, 1)}%</strong></p>
+                </td>
+            </tr>
+            <tr>
                 <td style="border: {border}px solid black;">Free Throws Made</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_ftm_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_ftm}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_ftm_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_ftm_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_opp_ftm}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_ftm_rank}</strong></p>
                 </td>
@@ -3010,15 +3556,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_ftm}</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("ftm", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_ftm_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_ftm}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_ftm_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_ftm_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_opp_ftm}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_ftm_rank}</strong></p>
                 </td>
@@ -3032,12 +3579,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Free Throws Attempted</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_fta_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_fta}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_fta_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_fta_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.away_team_opp_fta}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_fta_rank}</strong></p>
                 </td>
@@ -3049,15 +3596,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.la_fta}</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("fta", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_fta_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_fta}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_fta_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_fta_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{functions.home_team_opp_fta}</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_fta_rank}</strong></p>
                 </td>
@@ -3071,12 +3619,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Free Throw Percentage</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_ft_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_ft_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_ft_pct_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_ft_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_ft_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_ft_pct_rank}</strong></p>
                 </td>
@@ -3088,15 +3636,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_ft_pct*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("ft_pct", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_ft_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_ft_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_ft_pct_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_ft_pct_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_ft_pct*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_ft_pct_rank}</strong></p>
                 </td>
@@ -3107,15 +3656,53 @@ if selected_matchup:
                 </td>
             </tr>
             <tr>
+                <td style="border: {border}px solid black;">Free Throw Rate (FTA/FGA)</td>
+                <!-- Away -->
+                    <!-- Team -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_ft_rate_rank)};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_ft_rate*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_ft_rate_rank}</strong></p>
+                </td>
+                    <!-- Opponent -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_ft_rate_rank)};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_ft_rate*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_ft_rate_rank}</strong></p>
+                </td>
+                    <!-- Difference -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_diff_ft_rate*100, 1)}%</strong></p>
+                </td>
+                <!-- League Average -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_ft_rate*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("ft_rate", True)}</p>
+                </td>
+                <!-- Home -->
+                    <!-- Team -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_ft_rate_rank)};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_ft_rate*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_ft_rate_rank}</strong></p>
+                </td>
+                    <!-- Opponent -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_ft_rate_rank)};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_ft_rate*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_ft_rate_rank}</strong></p>
+                </td>
+                    <!-- Difference -->
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                        <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_diff_ft_rate*100, 1)}%</strong></p>
+                </td>
+            </tr>
+            <tr>
                 <td style="border: {border}px solid black;">Rim Frequency</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_rim_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_rim_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_rim_freq_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_rim_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_rim_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_rim_freq_rank}</strong></p>
                 </td>
@@ -3127,15 +3714,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_rim_freq*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("rim_freq", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_rim_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_rim_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_rim_freq_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_rim_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_rim_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_rim_freq_rank}</strong></p>
                 </td>
@@ -3149,12 +3737,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Rim Accuracy</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_rim_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_rim_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_rim_acc_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_rim_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_rim_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_rim_acc_rank}</strong></p>
                 </td>
@@ -3166,15 +3754,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_rim_acc*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("rim_acc", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_rim_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_rim_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_rim_acc_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_rim_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_rim_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_rim_acc_rank}</strong></p>
                 </td>
@@ -3188,12 +3777,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Short Mid-Range Frequency</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_smr_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_smr_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_smr_freq_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_smr_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_smr_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_smr_freq_rank}</strong></p>
                 </td>
@@ -3205,15 +3794,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_smr_freq*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("smr_freq", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_smr_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_smr_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_smr_freq_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_smr_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_smr_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_smr_freq_rank}</strong></p>
                 </td>
@@ -3227,12 +3817,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Short Mid-Range Accuracy</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_smr_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_smr_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_smr_acc_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_smr_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_smr_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_smr_acc_rank}</strong></p>
                 </td>
@@ -3244,15 +3834,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_smr_acc*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("smr_acc", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_smr_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_smr_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_smr_acc_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_smr_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_smr_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_smr_acc_rank}</strong></p>
                 </td>
@@ -3266,12 +3857,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Long Mid-Range Frequency</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_lmr_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_lmr_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_lmr_freq_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_lmr_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_lmr_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_lmr_freq_rank}</strong></p>
                 </td>
@@ -3283,15 +3874,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_lmr_freq*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("lmr_freq", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_lmr_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_lmr_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_lmr_freq_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_lmr_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_lmr_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_lmr_freq_rank}</strong></p>
                 </td>
@@ -3305,12 +3897,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Long Mid-Range Accuracy</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_lmr_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_lmr_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_lmr_acc_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_lmr_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_lmr_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_lmr_acc_rank}</strong></p>
                 </td>
@@ -3322,15 +3914,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_lmr_acc*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("lmr_acc", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_lmr_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_lmr_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_lmr_acc_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_lmr_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_lmr_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_lmr_acc_rank}</strong></p>
                 </td>
@@ -3344,12 +3937,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Above the Break 3 Frequency</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_atb3_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_atb3_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_atb3_freq_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_atb3_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_atb3_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_atb3_freq_rank}</strong></p>
                 </td>
@@ -3361,15 +3954,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_atb3_freq*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("atb3_freq", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_atb3_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_atb3_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_atb3_freq_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_atb3_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_atb3_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_atb3_freq_rank}</strong></p>
                 </td>
@@ -3383,12 +3977,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Above the Break 3 Accuracy</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_atb3_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_atb3_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_atb3_acc_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_atb3_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_atb3_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_atb3_acc_rank}</strong></p>
                 </td>
@@ -3400,15 +3994,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_atb3_acc*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("atb3_acc", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_atb3_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_atb3_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_atb3_acc_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_atb3_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_atb3_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_atb3_acc_rank}</strong></p>
                 </td>
@@ -3422,12 +4017,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Corner 3 Frequency</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_c3_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_c3_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_c3_freq_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_c3_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_c3_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_c3_freq_rank}</strong></p>
                 </td>
@@ -3439,15 +4034,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_c3_freq*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("c3_freq", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_c3_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_c3_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_c3_freq_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_c3_freq_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_c3_freq*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_c3_freq_rank}</strong></p>
                 </td>
@@ -3461,12 +4057,12 @@ if selected_matchup:
                 <td style="border: {border}px solid black;">Corner 3 Accuracy</td>
                 <!-- Away -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_c3_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_c3_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_c3_acc_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.away_team_opp_c3_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.away_team_opp_c3_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.away_team_opp_c3_acc_rank}</strong></p>
                 </td>
@@ -3478,15 +4074,16 @@ if selected_matchup:
                 <!-- League Average -->
                 <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.la_c3_acc*100, 1)}%</strong></p>
+                        <p style="font-size: {rank_font_size}px; margin: 0;">{_bw_str("c3_acc", True)}</p>
                 </td>
                 <!-- Home -->
                     <!-- Team -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_c3_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_c3_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_c3_acc_rank}</strong></p>
                 </td>
                     <!-- Opponent -->
-                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; background-color: #{body_background_color};">
+                <td style="text-align: center; border: {border}px solid black; padding: {padding}px; border-radius: 5px; {get_rank_color(functions.home_team_opp_c3_acc_rank)};">
                         <p style="font-size: {stat_font_size}px; margin: 0;"><strong>{round(functions.home_team_opp_c3_acc*100, 1)}%</strong></p>
                         <p style="font-size: {rank_font_size}px; margin: 0;">Rank: <strong>{functions.home_team_opp_c3_acc_rank}</strong></p>
                 </td>
@@ -3858,17 +4455,15 @@ if selected_matchup:
                                     # Green gradient - better than season average
                                     diff_pct = ((current_val - season_val) / season_val * 100) if season_val > 0 else 0
                                     intensity = min(diff_pct / 20, 1.0)  # Cap at 20% difference for max intensity
-                                    green_intensity = int(200 + (55 * intensity))
-                                    styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
+                                    styles[i] = f'background-color: {tc.heatmap_green(intensity)};'
                                 elif current_val < season_val:
                                     # Red gradient - worse than season average
                                     diff_pct = ((season_val - current_val) / season_val * 100) if season_val > 0 else 0
                                     intensity = min(diff_pct / 20, 1.0)
-                                    red_intensity = int(200 + (55 * intensity))
-                                    styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
+                                    styles[i] = f'background-color: {tc.heatmap_red(intensity)};'
                                 else:
                                     # Gray - same as season average
-                                    styles[i] = 'background-color: rgb(240, 240, 240);'
+                                    styles[i] = f'background-color: {tc.heatmap_neutral};'
                             except (ValueError, TypeError, KeyError):
                                 pass
                         elif col in pct_cols:
@@ -3887,15 +4482,13 @@ if selected_matchup:
                                 if current_val > season_val:
                                     diff_pct = ((current_val - season_val) / season_val * 100) if season_val > 0 else 0
                                     intensity = min(diff_pct / 20, 1.0)
-                                    green_intensity = int(200 + (55 * intensity))
-                                    styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
+                                    styles[i] = f'background-color: {tc.heatmap_green(intensity)};'
                                 elif current_val < season_val:
                                     diff_pct = ((season_val - current_val) / season_val * 100) if season_val > 0 else 0
                                     intensity = min(diff_pct / 20, 1.0)
-                                    red_intensity = int(200 + (55 * intensity))
-                                    styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
+                                    styles[i] = f'background-color: {tc.heatmap_red(intensity)};'
                                 else:
-                                    styles[i] = 'background-color: rgb(240, 240, 240);'
+                                    styles[i] = f'background-color: {tc.heatmap_neutral};'
                             except (ValueError, TypeError, KeyError):
                                 pass
                     
@@ -3903,6 +4496,32 @@ if selected_matchup:
                 
                 return df.style.apply(style_row, axis=1)
         
+        # Cached wrappers so dropdown changes are instant (no recompute on every selection)
+        @st.cache_data(ttl=1800, show_spinner=False)
+        def get_roster_stats_cached(team_id, num_games, per_mode):
+            _players_df, _game_logs_df = load_roster_data()
+            return functions.get_team_roster_stats(team_id, _players_df, _game_logs_df, num_games, per_mode=per_mode)
+
+        @st.cache_data(ttl=1800, show_spinner=False)
+        def get_player_season_avgs_cached(team_id, per_mode):
+            """Season averages (all games) used as the color-coding baseline."""
+            _players_df, _game_logs_df = load_roster_data()
+            all_games_df = functions.get_team_roster_stats(team_id, _players_df, _game_logs_df, None, per_mode=per_mode)
+            return calculate_player_season_averages(all_games_df, _game_logs_df, per_mode=per_mode)
+
+        # Pre-warm every period + mode combination for both teams so all selections are instant.
+        # Guard with session state so this only runs once per matchup (not on every rerun).
+        _prewarm_key = f"roster_prewarmed_{away_team_id}_{home_team_id}"
+        if _prewarm_key not in st.session_state:
+            with st.spinner("Loading player averages…"):
+                for _tid in [away_team_id, home_team_id]:
+                    for _ng in [10, 5, 3, None]:
+                        for _pm in ['PerGame', 'Totals']:
+                            get_roster_stats_cached(_tid, _ng, _pm)
+                    for _pm in ['PerGame', 'Totals']:
+                        get_player_season_avgs_cached(_tid, _pm)
+            st.session_state[_prewarm_key] = True
+
         # Create tabs for Traditional and Clutch
         tab_traditional, tab_clutch = st.tabs(["Traditional", "Clutch"])
         
@@ -3941,14 +4560,14 @@ if selected_matchup:
                     </div>
                 """, unsafe_allow_html=True)
                 
-                away_roster_df = functions.get_team_roster_stats(away_team_id, players_df, game_logs_df, num_games, per_mode=per_mode_str)
-                
+                away_roster_df = get_roster_stats_cached(away_team_id, num_games, per_mode_str)
+
                 if len(away_roster_df) > 0:
                     # Filter to display columns only
                     away_display_df = away_roster_df[[col for col in display_columns if col in away_roster_df.columns]].copy()
-                    
-                    # Calculate individual player season averages for styling
-                    away_player_season_averages = calculate_player_season_averages(away_roster_df, game_logs_df, per_mode=per_mode_str)
+
+                    # Season averages for color-coding (always all games, independent of period)
+                    away_player_season_averages = get_player_season_avgs_cached(away_team_id, per_mode_str)
                     
                     # Apply styling
                     styled_away_df = style_player_averages_heatmap(away_display_df, away_player_season_averages)
@@ -3973,14 +4592,14 @@ if selected_matchup:
                     </div>
                 """, unsafe_allow_html=True)
                 
-                home_roster_df = functions.get_team_roster_stats(home_team_id, players_df, game_logs_df, num_games, per_mode=per_mode_str)
-                
+                home_roster_df = get_roster_stats_cached(home_team_id, num_games, per_mode_str)
+
                 if len(home_roster_df) > 0:
                     # Filter to display columns only
                     home_display_df = home_roster_df[[col for col in display_columns if col in home_roster_df.columns]].copy()
-                    
-                    # Calculate individual player season averages for styling
-                    home_player_season_averages = calculate_player_season_averages(home_roster_df, game_logs_df, per_mode=per_mode_str)
+
+                    # Season averages for color-coding (always all games, independent of period)
+                    home_player_season_averages = get_player_season_avgs_cached(home_team_id, per_mode_str)
                     
                     # Apply styling
                     styled_home_df = style_player_averages_heatmap(home_display_df, home_player_season_averages)
@@ -4188,15 +4807,15 @@ if selected_matchup:
             def get_status_color(status):
                 status_lower = status.lower() if status else ''
                 if 'out' in status_lower:
-                    return '#dc3545'  # Red
+                    return tc.injury_out
                 elif 'doubtful' in status_lower:
-                    return '#fd7e14'  # Orange
+                    return tc.injury_doubtful
                 elif 'questionable' in status_lower:
-                    return '#ffc107'  # Yellow
+                    return tc.injury_questionable
                 elif 'probable' in status_lower:
-                    return '#28a745'  # Green
+                    return tc.injury_probable
                 else:
-                    return '#6c757d'  # Gray
+                    return tc.injury_unknown
             
             # Helper function to get status sort order (Probable first, Out last)
             def get_status_order(status):
@@ -4235,11 +4854,11 @@ if selected_matchup:
                         
                         st.markdown(f"""
                             <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #eee;">
-                                <img src="{headshot_url}" style="width: 75px; height: 55px; object-fit: cover; border-radius: 4px; background-color: #f0f0f0;" onerror="this.style.display='none'">
+                                <img src="{headshot_url}" style="width: 75px; height: 55px; object-fit: cover; border-radius: 4px; background-color: {tc.img_placeholder};" onerror="this.style.display='none'">
                                 <div style="flex: 1;">
                                     <span style="font-weight: bold;">{formatted_name}</span>
                                     <span style="background-color: {status_color}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-left: 8px;">{status}</span>
-                                    <br><span style="font-size: 13px; color: #666;">{formatted_reason}</span>
+                                    <br><span style="font-size: 13px; color: {tc.text_muted};">{formatted_reason}</span>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
@@ -4265,11 +4884,11 @@ if selected_matchup:
                         
                         st.markdown(f"""
                             <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #eee;">
-                                <img src="{headshot_url}" style="width: 75px; height: 55px; object-fit: cover; border-radius: 4px; background-color: #f0f0f0;" onerror="this.style.display='none'">
+                                <img src="{headshot_url}" style="width: 75px; height: 55px; object-fit: cover; border-radius: 4px; background-color: {tc.img_placeholder};" onerror="this.style.display='none'">
                                 <div style="flex: 1;">
                                     <span style="font-weight: bold;">{formatted_name}</span>
                                     <span style="background-color: {status_color}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-left: 8px;">{status}</span>
-                                    <br><span style="font-size: 13px; color: #666;">{formatted_reason}</span>
+                                    <br><span style="font-size: 13px; color: {tc.text_muted};">{formatted_reason}</span>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)

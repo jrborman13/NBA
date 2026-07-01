@@ -1,0 +1,494 @@
+[
+  {
+    "rule_id": "ROSTER-001",
+    "bucket": "roster_rules",
+    "title": "NBAGL Work Assignment eligibility and roster-status effect",
+    "summary": "A Team may assign a non-Two-Way player from its Active or Inactive List to its NBAGL team; the assigned player is placed on the NBA Team's Inactive List for the duration.",
+    "detail_paraphrase": "At any time, an NBA Team may give an NBAGL Work Assignment to a player (other than a Two-Way Player) who is on its Active List or Inactive List, provided the player has zero, one, or two Years of Service at the time of assignment; if the player has more than two Years of Service, both the player and the Players Association must consent in writing. Upon assignment the player is moved to the NBA Team's Inactive List, reports to and renders services for the NBAGL team, and later returns to the NBA Team when directed. The assignment begins when the player reports in person to the NBAGL team and ends either when he reports back to his NBA Team after being recalled or when the NBAGL Season concludes.",
+    "conditions": [
+      "Player must be on the NBA Team's Active List or Inactive List",
+      "Player has 0, 1, or 2 Years of Service at the time of assignment",
+      "If player has more than 2 Years of Service, written consent of both the player and the Players Association is required",
+      "Assignment begins when the player reports in person to the NBAGL team"
+    ],
+    "exceptions": [
+      "Two-Way Players are not assigned via NBAGL Work Assignment (they provide NBAGL Two-Way Service instead)"
+    ],
+    "depends_on_terms": [
+      "NBAGL Work Assignment",
+      "Active List",
+      "Inactive List",
+      "Two-Way Player",
+      "Years of Service",
+      "NBAGL Season"
+    ],
+    "related_rule_ids": ["ROSTER-002", "ROSTER-003", "ROSTER-013"],
+    "applies_to": ["team", "player"],
+    "thresholds": "0-2 Years of Service for unilateral assignment; >2 Years of Service requires player + Players Association written consent",
+    "citation": {"article": "XLI", "section": "1", "subsection": "(a)", "pages": [550]},
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "ROSTER-002",
+    "bucket": "roster_rules",
+    "title": "No limit on number of NBAGL Work Assignments; anti-abuse restriction",
+    "summary": "There is no cap on how many NBAGL Work Assignments a player may receive, but assignments may not be used to discipline or retaliate against a player.",
+    "detail_paraphrase": "A player may be given an unlimited number of NBAGL Work Assignments. No NBA Team may issue an NBAGL Work Assignment for the purpose of disciplining a player for misconduct or retaliating against a player for exercising any right under the CBA or Uniform Player Contract. The NBA may set reasonable rules governing assignment and recall to the NBAGL so long as they do not violate Article XLI.",
+    "conditions": [],
+    "exceptions": [],
+    "depends_on_terms": [
+      "NBAGL Work Assignment",
+      "Uniform Player Contract"
+    ],
+    "related_rule_ids": ["ROSTER-001", "ROSTER-003"],
+    "applies_to": ["team", "player"],
+    "thresholds": "No numeric limit on number of assignments",
+    "citation": {"article": "XLI", "section": "1", "subsection": "(b)-(c)", "pages": [550]},
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "ROSTER-003",
+    "bucket": "roster_rules",
+    "title": "Reporting deadline for NBAGL assignment and recall",
+    "summary": "To start or end an NBAGL Work Assignment, the Team must give written notice to the player, the NBA, and the Players Association; the player must report within 48 hours.",
+    "detail_paraphrase": "To initiate an NBAGL Work Assignment or to terminate it and recall the player, the NBA Team must provide written notice to the player, the NBA, and the Players Association. The player must report to the NBAGL team or the NBA Team (whichever applies) within 48 hours after receiving the notice. If the player fails to report within that window without a reasonable excuse, the Team may fine and/or suspend him without pay until he reports, and the failure also constitutes conduct prejudicial to the NBA under the NBA Constitution (subject to the One Penalty rule).",
+    "conditions": [
+      "Written notice must be given to the player, the NBA, and the Players Association",
+      "Player must report within 48 hours of receiving notice"
+    ],
+    "exceptions": [
+      "Failure to report with a reasonable excuse is not penalized"
+    ],
+    "depends_on_terms": [
+      "NBAGL Work Assignment",
+      "Players Association",
+      "One Penalty"
+    ],
+    "related_rule_ids": ["ROSTER-001"],
+    "applies_to": ["team", "player"],
+    "thresholds": "48 hours to report after notice received",
+    "citation": {"article": "XLI", "section": "2", "subsection": "(a)-(b)", "pages": [550, 551]},
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "ROSTER-004",
+    "bucket": "roster_rules",
+    "title": "Roster-list status during a suspension on NBAGL Work Assignment",
+    "summary": "A suspended player on an NBAGL Work Assignment must remain on the NBA Inactive List during the suspension and may not play in NBA or NBAGL games, but may be recalled at the Team's option.",
+    "detail_paraphrase": "When a player on an NBAGL Work Assignment is suspended by his Team, his NBAGL team, the NBA, or the NBAGL, his Base Compensation is reduced for each game missed (counted as either NBA or NBAGL games, but not both). The player must remain on the NBA Inactive List for the term of the suspension and may not play in any NBA or NBAGL games during the suspension, though the Team may recall him at its option.",
+    "conditions": [
+      "Player is on an NBAGL Work Assignment and is suspended"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "NBAGL Work Assignment",
+      "Inactive List",
+      "Base Compensation"
+    ],
+    "related_rule_ids": ["ROSTER-001", "ROSTER-005"],
+    "applies_to": ["team", "player"],
+    "thresholds": "",
+    "citation": {"article": "XLI", "section": "4", "subsection": "(e)(iv)", "pages": [554]},
+    "review_flag": false,
+    "notes": "Salary reduction amount belongs to a contracts/salary bucket; captured here only for the roster-list (Inactive List) requirement."
+  },
+  {
+    "rule_id": "ROSTER-005",
+    "bucket": "roster_rules",
+    "title": "Roster-list status during a suspension of a Two-Way Player",
+    "summary": "A suspended Two-Way Player may be kept on the Active, Inactive, or Two-Way List, with special rules forcing transfer to the Two-Way List after the fifth game of a long NBA suspension.",
+    "detail_paraphrase": "When a Two-Way Player is suspended by his Team, his NBAGL team, the NBA, or the NBAGL, his Base Compensation is reduced for each game missed (counted as either NBA or NBAGL games, but not both). During the suspension he may not play in any NBA or NBAGL games and may be maintained on the Team's Active List, Inactive List, or Two-Way List. However, if the Two-Way Player was on the Active List when the conduct leading to the suspension occurred and the suspension was imposed by the NBA, he must be kept on the Active List for the full term of the suspension, unless the suspension exceeds five games, in which case he must be transferred to the Team's Two-Way List following the fifth game of the suspension.",
+    "conditions": [
+      "Player is a Two-Way Player who is suspended",
+      "Special rule triggers only when the player was on the Active List at the time of the conduct and the suspension was imposed by the NBA"
+    ],
+    "exceptions": [
+      "If an NBA-imposed suspension of an Active-List Two-Way Player exceeds 5 games, transfer to the Two-Way List is required after the 5th game"
+    ],
+    "depends_on_terms": [
+      "Two-Way Player",
+      "Active List",
+      "Inactive List",
+      "Two-Way List",
+      "Base Compensation"
+    ],
+    "related_rule_ids": ["ROSTER-004", "ROSTER-009"],
+    "applies_to": ["team", "player"],
+    "thresholds": "Suspension >5 games (NBA-imposed, Active-List Two-Way Player) forces transfer to Two-Way List after the 5th game",
+    "citation": {"article": "XLI", "section": "4", "subsection": "(e)(v)", "pages": [555]},
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "ROSTER-006",
+    "bucket": "roster_rules",
+    "title": "10-Day Contract availability and length",
+    "summary": "Beginning January 5 of any NBA Season, a Team may sign a player to a 10-Day Contract lasting the longer of 10 days or three of the Team's games.",
+    "detail_paraphrase": "Starting on January 5 of any NBA Season, a Team may enter into a Player Contract (other than a Two-Way Contract) for the longer of (i) ten days or (ii) a period encompassing three games played by the Team. This is a 10-Day Contract. A Team may not sign a 10-Day Contract if its length would extend to or past the Team's last Regular Season game. The Salary must be the Minimum Player Salary.",
+    "conditions": [
+      "Date is on or after January 5 of the NBA Season",
+      "Contract is not a Two-Way Contract",
+      "Term may not extend to or past the Team's last Regular Season game"
+    ],
+    "exceptions": [
+      "Under the NBA's hardship rules, a Contract signed at any time during the Season is a 10-Day Contract, and if its normal length would reach the last Regular Season game it is shortened to the number of days remaining (see ROSTER-008)"
+    ],
+    "depends_on_terms": [
+      "10-Day Contract",
+      "Two-Way Contract",
+      "Minimum Player Salary",
+      "Regular Season"
+    ],
+    "related_rule_ids": ["ROSTER-007", "ROSTER-008"],
+    "applies_to": ["team", "player"],
+    "thresholds": "Longer of 10 days or 3 Team games; available from January 5; Salary = Minimum Player Salary",
+    "citation": {"article": "II", "section": "9", "subsection": "(a)-(b),(d)", "pages": [48, 49]},
+    "review_flag": false,
+    "notes": "Salary amount cross-references the salary/contracts bucket; the roster-side limit on signing window and term is captured here."
+  },
+  {
+    "rule_id": "ROSTER-007",
+    "bucket": "roster_rules",
+    "title": "10-Day Contract per-player and per-team limits",
+    "summary": "A Team may sign the same player to at most two 10-Day Contracts per Season, and the number of concurrent 10-Day Contracts is capped by the Team's combined Active+Inactive List size.",
+    "detail_paraphrase": "No Team may enter into a 10-Day Contract with the same player more than twice in any one Season. The number of players a Team may have under 10-Day Contracts at any one time depends on the aggregate number of players on its Active List and Inactive List (including players signed to 10-Day Contracts but excluding Two-Way Players): 12 players permits 0, 13 permits 1, 14 permits 2, and 15 permits 3. If a Team terminates a 10-Day Contract before its stated term expires, the Team and player may not enter into a new Contract before that stated term would have ended.",
+    "conditions": [
+      "Same player may sign no more than two 10-Day Contracts per Season",
+      "Concurrent 10-Day Contract count is determined by combined Active+Inactive List size (excluding Two-Way Players)"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "10-Day Contract",
+      "Active List",
+      "Inactive List",
+      "Two-Way Player"
+    ],
+    "related_rule_ids": ["ROSTER-006", "ROSTER-008"],
+    "applies_to": ["team", "player"],
+    "thresholds": "Max 2 per player per Season; concurrent cap by roster size: 12 players=0, 13=1, 14=2, 15=3",
+    "citation": {"article": "II", "section": "9", "subsection": "(c),(g)", "pages": [48, 49]},
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "ROSTER-008",
+    "bucket": "roster_rules",
+    "title": "Hardship 10-Day Contracts",
+    "summary": "Under the NBA's hardship rules, a Contract signed at any point in the Season is a 10-Day Contract, shortened to the days remaining if it would otherwise reach the last Regular Season game.",
+    "detail_paraphrase": "If the NBA authorizes a Team to sign a Player Contract under its hardship rules, that Contract is treated as a 10-Day Contract regardless of when in the Season it is signed. If the resulting 10-Day Contract's normal length would extend to or past the Team's last Regular Season game, its term is instead the number of days remaining in the Regular Season, counting the day it is signed.",
+    "conditions": [
+      "NBA authorizes the signing under its hardship rules"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "10-Day Contract",
+      "Regular Season"
+    ],
+    "related_rule_ids": ["ROSTER-006", "ROSTER-007"],
+    "applies_to": ["team", "player"],
+    "thresholds": "Term shortened to days remaining in Regular Season when it would otherwise reach the last game",
+    "citation": {"article": "II", "section": "9", "subsection": "(e)", "pages": [49]},
+    "review_flag": false,
+    "notes": "Article II references the NBA's hardship rules but does not state the roster-size threshold that triggers hardship eligibility; that threshold is set by NBA rule, not this Article."
+  },
+  {
+    "rule_id": "ROSTER-009",
+    "bucket": "roster_rules",
+    "title": "Two-Way Player roster count limit",
+    "summary": "A Team may have no more than three Two-Way Players on its roster at any time.",
+    "detail_paraphrase": "No Team may have more than three Two-Way Players on its roster at any time.",
+    "conditions": [],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Two-Way Player",
+      "Two-Way Contract"
+    ],
+    "related_rule_ids": ["ROSTER-010", "ROSTER-011", "ROSTER-012"],
+    "applies_to": ["team"],
+    "thresholds": "Maximum 3 Two-Way Players per Team at any time",
+    "citation": {"article": "II", "section": "11", "subsection": "(b)(i)", "pages": [52]},
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "ROSTER-010",
+    "bucket": "roster_rules",
+    "title": "Two-Way Player Active List 50-game cap",
+    "summary": "A Two-Way Player may be on the Active List for no more than 50 games in a Regular Season, prorated if signed after the season starts.",
+    "detail_paraphrase": "No player under a Two-Way Contract may be on the Active List for more than 50 games during a Regular Season. If the player is signed to a Two-Way Contract after the Regular Season has begun, the cap is 50 multiplied by the fraction of days remaining in the Regular Season (numerator = days remaining including the signing day; denominator = total days of the Regular Season), rounded to the nearest whole number, but never fewer than one game.",
+    "conditions": [
+      "Player is under a Two-Way Contract",
+      "Cap is prorated if the Two-Way Contract is signed after the start of the Regular Season"
+    ],
+    "exceptions": [
+      "Prorated cap is never fewer than 1 game"
+    ],
+    "depends_on_terms": [
+      "Two-Way Contract",
+      "Active List",
+      "Regular Season"
+    ],
+    "related_rule_ids": ["ROSTER-009", "ROSTER-011"],
+    "applies_to": ["team", "player"],
+    "thresholds": "Max 50 Active-List games per Regular Season (prorated by days remaining if signed mid-season; minimum 1)",
+    "citation": {"article": "II", "section": "11", "subsection": "(b)(ii)", "pages": [52]},
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "ROSTER-011",
+    "bucket": "roster_rules",
+    "title": "Two-Way Player Under-Fifteen Game limit",
+    "summary": "A Team may not have a Two-Way Player on its Active List for more than 90 Under-Fifteen Games in a Regular Season, counted per Two-Way Player.",
+    "detail_paraphrase": "An 'Under-Fifteen Game' is any Regular Season game for which a Team has fewer than 15 players signed to Standard NBA Contracts. No Team may have a Two-Way Player on its Active List for more than 90 Under-Fifteen Games during a Regular Season. The count is per Two-Way Player on the Active List for the game: one Two-Way Player counts as one Under-Fifteen Game, two count as two, and three count as three.",
+    "conditions": [
+      "Game is a Regular Season game with fewer than 15 players signed to Standard NBA Contracts (an Under-Fifteen Game)",
+      "Count accrues per Two-Way Player on the Active List for that game"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Under-Fifteen Game",
+      "Two-Way Player",
+      "Active List",
+      "Standard NBA Contract",
+      "Regular Season"
+    ],
+    "related_rule_ids": ["ROSTER-009", "ROSTER-010", "ROSTER-015"],
+    "applies_to": ["team"],
+    "thresholds": "Max 90 Under-Fifteen Games per Regular Season; Under-Fifteen Game = fewer than 15 Standard NBA Contracts",
+    "citation": {"article": "II", "section": "11", "subsection": "(b)(iii)", "pages": [52, 53]},
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "ROSTER-012",
+    "bucket": "roster_rules",
+    "title": "Two-Way Contract eligibility (Years of Service, signing deadline, multi-year limit)",
+    "summary": "Two-Way Contracts are barred after March 4, capped at players with fewer than 4 Years of Service (with a narrow exception), and limited so a player cannot be under a Two-Way Contract for more than 3 Salary Cap Years with the same Team.",
+    "detail_paraphrase": "No Team may sign a player to a Two-Way Contract after March 4 of any Season. No Team may sign or convert a player to a Two-Way Contract if the player has or may have four or more Years of Service at any point during the Contract (e.g., a player with three Years of Service cannot sign a two-year Two-Way Contract); however, a Team may sign or convert a player with four Years of Service to a one-year Two-Way Contract if one of those Years of Service came from a Season in which he did not play any Regular Season, Play-In, or playoff game and was on a roster from the first through the last day of the Regular Season. No Team may sign, convert, or acquire by assignment a Two-Way Contract if, as a result, the player would or could be under a Two-Way Contract for any part of more than three Salary Cap Years with the same NBA Team.",
+    "conditions": [
+      "No Two-Way Contract may be signed after March 4 of a Season",
+      "Player must have fewer than 4 Years of Service at all points during the Contract",
+      "Player may not be under a Two-Way Contract for any part of more than 3 Salary Cap Years with the same NBA Team"
+    ],
+    "exceptions": [
+      "A player with 4 Years of Service may sign/convert to a one-Season Two-Way Contract if a Year of Service was credited for a Season in which he played no Regular Season/Play-In/playoff game and was rostered from the first through the last day of the Regular Season"
+    ],
+    "depends_on_terms": [
+      "Two-Way Contract",
+      "Years of Service",
+      "Salary Cap Year",
+      "Play-In",
+      "Regular Season"
+    ],
+    "related_rule_ids": ["ROSTER-009", "ROSTER-013", "ROSTER-014"],
+    "applies_to": ["team", "player"],
+    "thresholds": "No signing after March 4; <4 Years of Service (narrow 1-year exception at exactly 4); max 3 Salary Cap Years with same Team",
+    "citation": {"article": "II", "section": "11", "subsection": "(e)", "pages": [54]},
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "ROSTER-013",
+    "bucket": "roster_rules",
+    "title": "Two-Way Contract term limit",
+    "summary": "A Two-Way Contract may not exceed two Seasons and may not include an Option Year or Early Termination Option.",
+    "detail_paraphrase": "The term of a Two-Way Contract may not exceed two Seasons in length and may not include any Option Year or Early Termination Option.",
+    "conditions": [],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Two-Way Contract",
+      "Option Year",
+      "Early Termination Option"
+    ],
+    "related_rule_ids": ["ROSTER-012", "ROSTER-014"],
+    "applies_to": ["team", "player"],
+    "thresholds": "Maximum 2 Seasons; no Option Year or Early Termination Option",
+    "citation": {"article": "II", "section": "11", "subsection": "(d)", "pages": [54]},
+    "review_flag": false,
+    "notes": "Article II, Section 2(b) separately confirms no Two-Way Contract may be extended, renegotiated, or include an Option Year/Early Termination Option (p.15)."
+  },
+  {
+    "rule_id": "ROSTER-014",
+    "bucket": "roster_rules",
+    "title": "Standard NBA Contract Conversion Option (Two-Way to standard) and conversion mechanics",
+    "summary": "Every Two-Way Contract gives the Team an option to convert it to a Standard NBA Contract at the Minimum Player Salary for the remainder of its term; the Team may also negotiate a separate Standard NBA Contract that voids the Two-Way Contract.",
+    "detail_paraphrase": "Every Two-Way Contract must give the Team an option to convert it during its term to a Standard NBA Contract (a Contract that is not a Two-Way Contract) providing the player's applicable Minimum Player Salary for each Salary Cap Year, with a term equal to the remainder of the original Two-Way Contract beginning on the exercise date. This Standard NBA Contract Conversion Option may be exercised from July 1 through just before the start of the Team's last Regular Season game in each Salary Cap Year covered by the Two-Way Contract; on conversion the Contract ceases to be governed by the Two-Way rules. Separately, the Team and Two-Way Player may negotiate and sign a Standard NBA Contract (which may not include an Exhibit 10), and upon execution the prior Two-Way Contract becomes null and void. During the Two-Way Contract's term, the contracting Team is the only Team with which the Two-Way Player may negotiate or sign a Standard NBA Contract.",
+    "conditions": [
+      "Conversion option may be exercised between July 1 and just before the Team's last Regular Season game of the applicable Salary Cap Year",
+      "Converted Contract provides the player's applicable Minimum Player Salary for the remaining term",
+      "A separately negotiated Standard NBA Contract may not include an Exhibit 10"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Two-Way Contract",
+      "Standard NBA Contract",
+      "Standard NBA Contract Conversion Option",
+      "Minimum Player Salary",
+      "Salary Cap Year",
+      "Exhibit 10",
+      "Two-Way Player"
+    ],
+    "related_rule_ids": ["ROSTER-013", "ROSTER-016"],
+    "applies_to": ["team", "player"],
+    "thresholds": "Conversion window: July 1 through just before the Team's last Regular Season game of the Salary Cap Year",
+    "citation": {"article": "II", "section": "11", "subsection": "(f)-(g)", "pages": [54, 55, 56]},
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "ROSTER-015",
+    "bucket": "roster_rules",
+    "title": "Two-Way Player Salaries excluded from Team Salary",
+    "summary": "Two-Way Player Salaries are excluded from Team Salary, so no Room or Exception is needed to sign, acquire, or convert a player to a Two-Way Contract.",
+    "detail_paraphrase": "Two-Way Player Salaries are excluded from Team Salary. As a result, a Team does not need Room or a Salary Cap Exception to sign, acquire, or convert a player to a Two-Way Contract.",
+    "conditions": [],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Two-Way Player Salary",
+      "Team Salary",
+      "Two-Way Contract",
+      "Room",
+      "Exception"
+    ],
+    "related_rule_ids": ["ROSTER-009", "ROSTER-014"],
+    "applies_to": ["team"],
+    "thresholds": "",
+    "citation": {"article": "VII", "section": "4", "subsection": "(j)", "pages": [225]},
+    "review_flag": false,
+    "notes": "This is primarily a salary_cap rule but is captured here because it governs the transaction mechanics of adding a Two-Way Player to the roster; cross-reference salary_cap bucket."
+  },
+  {
+    "rule_id": "ROSTER-016",
+    "bucket": "roster_rules",
+    "title": "Two-Way Player Conversion Option (Exhibit 10 to Two-Way)",
+    "summary": "Every Contract with an Exhibit 10 gives the Team an option to convert it to a Two-Way Contract before the first day of the Regular Season, subject to the three-Two-Way-Player roster limit.",
+    "detail_paraphrase": "Every Contract containing an Exhibit 10 must give the Team an option to convert the Contract to a Two-Way Contract providing the Two-Way Player Salary (the Two-Way Player Conversion Option). This option must be exercised before the first day of the NBA Regular Season and may not be exercised if it would violate Article X, Section 4(d) (the limit on Two-Way Players). If exercised, the Contract's Exhibit 1A is voided, the player's Compensation becomes the Two-Way Player Salary, any Exhibit 10 Bonus right is rescinded, and the Contract carries Base Compensation protection equal to the Conversion Protection Amount. A converted Contract is thereafter treated as a Two-Way Contract subject to all Two-Way Contract rules (and need not contain an Exhibit 1B).",
+    "conditions": [
+      "Contract contains an Exhibit 10",
+      "Option must be exercised before the first day of the NBA Regular Season",
+      "Conversion may not violate the Two-Way Player roster limit (Article X, Section 4(d))"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Exhibit 10",
+      "Two-Way Player Conversion Option",
+      "Two-Way Contract",
+      "Two-Way Player Salary",
+      "Conversion Protection Amount",
+      "Regular Season"
+    ],
+    "related_rule_ids": ["ROSTER-009", "ROSTER-014"],
+    "applies_to": ["team", "player"],
+    "thresholds": "Must be exercised before the first day of the Regular Season; subject to 3-Two-Way-Player limit",
+    "citation": {"article": "II", "section": "11", "subsection": "(h)", "pages": [56, 57, 58]},
+    "review_flag": true,
+    "notes": "Article X, Section 4(d) (the referenced Two-Way Player limit) is not in the provided source files; the roster-limit cross-reference is inferred from context and should be verified against Article X."
+  },
+  {
+    "rule_id": "ROSTER-017",
+    "bucket": "roster_rules",
+    "title": "Incomplete-roster charge (fewer than 12 players in Team Salary)",
+    "summary": "From July 1 through the day before the Regular Season, a Team with fewer than 12 counted players in Team Salary has its Team Salary increased by the rookie-minimum salary for each missing player.",
+    "detail_paraphrase": "If at any time from July 1 through the day before the first day of the Regular Season a Team has fewer than 12 players included in its Team Salary, the Team's Team Salary is increased by an incomplete-roster charge calculated as follows: subtract the number of counted players from 12, and if the result is positive, multiply it by the Minimum Annual Salary for players with zero Years of Service for that Salary Cap Year. For this count only, the players counted are (i) players under Contract included in Team Salary, (ii) Free Agents included in Team Salary, (iii) players given Offer Sheets, and (iv) unsigned First Round Picks included in Team Salary. Two-Way Players are not among the counted categories.",
+    "conditions": [
+      "Period is July 1 through the day before the first day of the Regular Season",
+      "Team has fewer than 12 counted players in Team Salary"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Team Salary",
+      "Minimum Annual Salary",
+      "Years of Service",
+      "Salary Cap Year",
+      "Free Agent",
+      "Offer Sheet",
+      "First Round Pick"
+    ],
+    "related_rule_ids": ["ROSTER-018", "ROSTER-015"],
+    "applies_to": ["team"],
+    "thresholds": "Fewer than 12 counted players triggers charge; charge = (12 - count) x rookie (0 Years of Service) Minimum Annual Salary",
+    "citation": {"article": "VII", "section": "4", "subsection": "(f)", "pages": [216, 220, 221]},
+    "review_flag": false,
+    "notes": "Section 4(a)(5) (p.216) includes the incomplete-roster amount in Team Salary; the computation is in Section 4(f) (pp.220-221). This is a minimum-roster/Team Salary interaction rule; salary_cap bucket may also reference it."
+  },
+  {
+    "rule_id": "ROSTER-018",
+    "bucket": "roster_rules",
+    "title": "Non-Guaranteed Training Camp Contract roster prerequisite and limit",
+    "summary": "An Exhibit 9 Non-Guaranteed Training Camp Contract requires the Team to have at least 14 players already signed (excluding Two-Way and training-camp contracts), and no Team may hold more than six such contracts at once.",
+    "detail_paraphrase": "A Non-Guaranteed, Training Camp Contract (using Exhibit 9) eliminates the player's right to receive Base Compensation if the Contract is terminated before the first day of the Regular Season, but is permitted only if: the Contract is one Season long, provides the Minimum Player Salary or Two-Way Salary with no bonuses, and has no Compensation protection; at signing the Team has no fewer than 14 players signed to Player Contracts (not counting Two-Way Contracts or Non-Guaranteed, Training Camp Contracts) on its roster for the relevant Season; and no Team is party to more than six Non-Guaranteed, Training Camp Contracts at any one time.",
+    "conditions": [
+      "Contract is one Season long, at Minimum Player Salary or Two-Way Salary, with no bonuses and no Compensation protection",
+      "At signing, the Team has no fewer than 14 players signed to Player Contracts (excluding Two-Way and Non-Guaranteed Training Camp Contracts)"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Non-Guaranteed, Training Camp Contract",
+      "Two-Way Contract",
+      "Minimum Player Salary",
+      "Two-Way Salary",
+      "Regular Season"
+    ],
+    "related_rule_ids": ["ROSTER-017", "ROSTER-019"],
+    "applies_to": ["team", "player"],
+    "thresholds": "Requires >=14 players already signed (excluding Two-Way/training-camp); max 6 such contracts per Team at once",
+    "citation": {"article": "II", "section": "3", "subsection": "(r)", "pages": [20, 21]},
+    "review_flag": false,
+    "notes": "Primarily a contracts-bucket rule (Exhibit 9 amendment), but the 14-player roster prerequisite and 6-contract cap are roster-affecting transaction limits."
+  },
+  {
+    "rule_id": "ROSTER-019",
+    "bucket": "roster_rules",
+    "title": "Exhibit 10 Contract per-team limit and form requirements",
+    "summary": "No Team may be party to more than six Exhibit 10 Contracts at once, and each must be a one-Season Minimum Player Salary contract with no protection beyond the Exhibit 10 mechanics.",
+    "detail_paraphrase": "No Team may (a) be party at any one time to more than six Contracts containing an Exhibit 10, or (b) enter into a Player Contract with an Exhibit 10 unless the Contract is one Season in length, provides the Minimum Player Salary with no bonuses other than the Exhibit 10 Bonus, and contains no Compensation protection other than in connection with the Conversion Protection Amount. A Team may combine an Exhibit 9 and an Exhibit 10 in one Contract, but exercising the Two-Way Player Conversion Option voids the Exhibit 9.",
+    "conditions": [
+      "Each Exhibit 10 Contract must be one Season, at Minimum Player Salary with no bonuses other than the Exhibit 10 Bonus, and no Compensation protection except via the Conversion Protection Amount"
+    ],
+    "exceptions": [
+      "A Contract may contain both an Exhibit 9 and an Exhibit 10; exercising the Two-Way Player Conversion Option voids the Exhibit 9"
+    ],
+    "depends_on_terms": [
+      "Exhibit 10",
+      "Exhibit 10 Bonus",
+      "Minimum Player Salary",
+      "Conversion Protection Amount",
+      "Two-Way Player Conversion Option"
+    ],
+    "related_rule_ids": ["ROSTER-016", "ROSTER-018"],
+    "applies_to": ["team", "player"],
+    "thresholds": "Max 6 Exhibit 10 Contracts per Team at once; each must be 1 Season at Minimum Player Salary",
+    "citation": {"article": "II", "section": "3", "subsection": "(s)", "pages": [22, 23]},
+    "review_flag": false,
+    "notes": "Exhibit 10 Bonus amount and NBAGL 60-Day Service Period belong to the contracts/G-League-affiliate domain; captured here for the per-team count limit that affects roster composition."
+  },
+  {
+    "rule_id": "ROSTER-020",
+    "bucket": "roster_rules",
+    "title": "Two-Way Player Free Agent Amount on completed Two-Way Contract",
+    "summary": "When a Two-Way Player completes a Two-Way Contract, his Free Agent Amount for Team Salary purposes is the zero-Years-of-Service Standard-Contract Minimum Annual Salary.",
+    "detail_paraphrase": "Notwithstanding the general Free Agent Amount rules, if a Two-Way Player completes a Two-Way Contract, his Free Agent Amount is the Minimum Annual Salary applicable to a player completing a Standard NBA Contract for zero Years of Service.",
+    "conditions": [
+      "Player completed a Two-Way Contract"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Two-Way Player",
+      "Two-Way Contract",
+      "Free Agent Amount",
+      "Minimum Annual Salary",
+      "Standard NBA Contract",
+      "Years of Service"
+    ],
+    "related_rule_ids": ["ROSTER-015", "ROSTER-009"],
+    "applies_to": ["team", "player"],
+    "thresholds": "Free Agent Amount = 0 Years of Service Standard-Contract Minimum Annual Salary",
+    "citation": {"article": "VII", "section": "4", "subsection": "(d)(7)", "pages": [218]},
+    "review_flag": false,
+    "notes": "Primarily a salary_cap (cap hold) rule; captured here because it governs the roster/transaction status of a former Two-Way Player at free agency. Cross-reference free_agency and salary_cap buckets."
+  }
+]

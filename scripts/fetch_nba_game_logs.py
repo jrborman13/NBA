@@ -43,7 +43,7 @@ def fetch_and_store_game_logs():
         
         # Filter out preseason games (keep regular season '2' and playoffs '4')
         if len(df) > 0:
-            df = df[df['GAME_ID'].astype(str).str[2].isin(['2', '4'])].copy()
+            df = df[df['GAME_ID'].astype(str).str[2].isin(['2', '4', '6'])].copy()
         
         if len(df) > 0:
             data = df.to_dict('records')

@@ -52,3 +52,6 @@ Thumbs.db
 # Supabase
 supabase/.temp/
 
+# Streamlit secrets (never commit real values)
+.streamlit/secrets.toml
+

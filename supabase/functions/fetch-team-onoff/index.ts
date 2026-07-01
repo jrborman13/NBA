@@ -35,8 +35,8 @@ Deno.serve(async (req) => {
         
         // The API returns multiple result sets - we need to merge them
         // Result set 0: Overall
-        // Result set 1: Players Off Court
-        // Result set 2: Players On Court
+        // Result set 1: Players On Court
+        // Result set 2: Players Off Court
         if (!apiData.resultSets || apiData.resultSets.length < 3) {
           console.warn(`[fetch-team-onoff] Insufficient data for team ${teamId}`)
           continue
@@ -44,10 +44,10 @@ Deno.serve(async (req) => {
         
         const overallHeaders = apiData.resultSets[0].headers
         const overallRows = apiData.resultSets[0].rowSet || []
-        const offCourtHeaders = apiData.resultSets[1].headers
-        const offCourtRows = apiData.resultSets[1].rowSet || []
-        const onCourtHeaders = apiData.resultSets[2].headers
-        const onCourtRows = apiData.resultSets[2].rowSet || []
+        const onCourtHeaders = apiData.resultSets[1].headers
+        const onCourtRows = apiData.resultSets[1].rowSet || []
+        const offCourtHeaders = apiData.resultSets[2].headers
+        const offCourtRows = apiData.resultSets[2].rowSet || []
         
         // Merge on/off data
         const mergedData = overallRows.map((row: any[], index: number) => {

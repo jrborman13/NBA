@@ -332,6 +332,10 @@ def format_onoff_display_data(processed_df: pd.DataFrame, players_df: Optional[p
         
         df = processed_df.copy()
         
+        # Normalise the player ID column — NBA API uses VS_PLAYER_ID here
+        if 'PLAYER_ID' not in df.columns and 'VS_PLAYER_ID' in df.columns:
+            df['PLAYER_ID'] = df['VS_PLAYER_ID']
+
         # Add player names and headshots if players_df is provided
         if players_df is not None and len(players_df) > 0:
             # Merge player info
@@ -379,7 +383,11 @@ def format_onoff_display_data(processed_df: pd.DataFrame, players_df: Optional[p
         
         # Select and order columns for display
         display_cols = []
-        
+
+        # Always preserve PLAYER_ID for cross-referencing / highlighting
+        if 'PLAYER_ID' in df.columns:
+            display_cols.append('PLAYER_ID')
+
         # Player info columns
         if 'headshot' in df.columns:
             display_cols.append('headshot')

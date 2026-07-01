@@ -307,7 +307,7 @@ def get_player_data(player_id, players_df=None):
     # Keep regular season ('2') and playoffs ('4')
     if len(player_game_logs) > 0:
         player_game_logs = player_game_logs[
-            player_game_logs['GAME_ID'].astype(str).str[2].isin(['2', '4'])
+            player_game_logs['GAME_ID'].astype(str).str[2].isin(['2', '4', '6'])
         ].copy()
     
     # Calculate averages table (last 3, 5, 10 games, and season)

@@ -12,6 +12,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / 'new-streamlit-app' / 'player-app'))
+sys.path.insert(0, str(project_root / 'combined-app' / 'player_app'))
 
 import pandas as pd
 import nba_api.stats.endpoints as endpoints
@@ -25,6 +26,9 @@ import pytz
 import player_functions as pf
 import prediction_model as pm
 import injury_report as ir
+import tanking_utils as _tu
+import injury_adjustments as inj
+import without_player_stats as wps
 
 # Import optimizer functions (optional - only if optimizing)
 try:
@@ -121,7 +125,47 @@ def get_team_roster(team_id: int, players_df: pd.DataFrame) -> List[Dict]:
     return players
 
 
-def generate_predictions_for_date(game_date: date, output_dir: str = None, exclude_injured: bool = True, 
+def get_player_season_avg_minutes(season: str = '2025-26') -> dict:
+    """
+    Return a dict of player_id (str) → season-average MPG from LeagueDashPlayerStats.
+    Used to determine role tier for tanking minute adjustments.
+    """
+    try:
+        df = endpoints.LeagueDashPlayerStats(
+            season=season,
+            per_mode_simple='PerGame',
+            timeout=90,
+        ).get_data_frames()[0]
+        return {str(int(row['PLAYER_ID'])): float(row['MIN']) for _, row in df.iterrows()}
+    except Exception as e:
+        print(f"  ⚠ Could not fetch season avg minutes for tanking adjustment: {e}")
+        return {}
+
+
+def _fetch_bulk_game_logs(season: str = '2025-26') -> pd.DataFrame:
+    """
+    Fetch all player game logs for the season in one API call.
+    Used to provide empirical "without X" data for injury adjustments.
+    Returns empty DataFrame on failure.
+    """
+    try:
+        from nba_api.stats.endpoints import PlayerGameLogs
+        game_logs = PlayerGameLogs(
+            season_nullable=season,
+            league_id_nullable='00',
+        ).get_data_frames()[0]
+        if len(game_logs) > 0:
+            game_logs = game_logs[
+                game_logs['GAME_ID'].astype(str).str[2].isin(['2', '4', '6'])
+            ].copy()
+            game_logs['GAME_DATE'] = pd.to_datetime(game_logs['GAME_DATE'])
+        return game_logs
+    except Exception as e:
+        print(f"  ⚠ Could not fetch bulk game logs: {e}")
+        return pd.DataFrame()
+
+
+def generate_predictions_for_date(game_date: date, output_dir: str = None, exclude_injured: bool = True,
                                   optimize_lineups: bool = False, draftables_path: str = None, max_salary: int = 50000,
                                   tipoff_time_filter: str = None):
     """
@@ -164,7 +208,32 @@ def generate_predictions_for_date(game_date: date, output_dir: str = None, exclu
         raise ValueError("Could not load players dataframe")
     
     print(f"Loaded {len(players_df)} players")
-    
+
+    # Fetch season-average MPG for tanking minute adjustments (fetched once, shared across games)
+    print(f"\nFetching season-average minutes for tanking detection...")
+    player_avg_minutes = get_player_season_avg_minutes()
+    if player_avg_minutes:
+        print(f"  ✓ Loaded avg minutes for {len(player_avg_minutes)} players")
+
+    # Fetch all player game logs once — used for "without X" historical stats lookup
+    print(f"\nFetching bulk player game logs for injury context...")
+    bulk_game_logs = _fetch_bulk_game_logs()
+    if bulk_game_logs is not None and len(bulk_game_logs) > 0:
+        print(f"  ✓ Loaded {len(bulk_game_logs)} player game log rows")
+    else:
+        print(f"  ⚠ Could not load bulk game logs — without-X adjustments will be skipped")
+
+    # Fetch standings once for all games (tanking detection)
+    print(f"\nFetching standings for tanking detection...")
+    tanking_standings_df = _tu.get_standings()
+    if tanking_standings_df is not None:
+        print(f"  ✓ Loaded standings ({len(tanking_standings_df)} teams)")
+    else:
+        print(f"  ⚠ Could not load standings — tanking adjustments will be skipped")
+
+    # Fetch spread for the date (cached per matchup by get_game_spread)
+    # (called per-game inside the loop)
+
     # Fetch injury report for the date (if excluding injured players)
     injury_df = None
     if exclude_injured:
@@ -385,6 +454,165 @@ def generate_predictions_for_date(game_date: date, output_dir: str = None, exclu
                     'FPTS_StdDev': round(std_dev, 2)
                 })
             
+            # ── Apply injury adjustments (with "without X" historical blending) ──
+            # The prediction model has no knowledge of tonight's injury list, so we
+            # apply multipliers here — mirroring what 3_Predictions.py does in the UI.
+            if out_player_ids and players_df is not None:
+                # Build player_id → average-minutes map from season avg data
+                inj_minutes_map = {int(pid): float(mins)
+                                   for pid, mins in player_avg_minutes.items()}
+
+                # Build name → player_id lookup
+                name_to_pid_inj = {p['name']: p['id'] for p in healthy_players}
+
+                # Team membership maps: team_id → set of player_ids on that team
+                away_player_ids_set = {p['id'] for p in healthy_players if p['team_id'] == away_team_id}
+                home_player_ids_set = {p['id'] for p in healthy_players if p['team_id'] == home_team_id}
+                # Also include the out players so teammate lists are correct
+                for p in away_roster:
+                    if p['id'] in out_player_ids:
+                        away_player_ids_set.add(p['id'])
+                for p in home_roster:
+                    if p['id'] in out_player_ids:
+                        home_player_ids_set.add(p['id'])
+
+                inj_adjusted = 0
+                for entry in statlines_list:
+                    pid = name_to_pid_inj.get(entry['Player'])
+                    if pid is None:
+                        continue
+                    pid_team = player_team_ids.get(pid)
+                    if pid_team is None:
+                        continue
+
+                    if pid_team == away_team_id:
+                        teammates_out_inj = [p for p in out_player_ids if p in away_player_ids_set and p != pid]
+                        opponents_out_inj = [p for p in out_player_ids if p in home_player_ids_set]
+                        opp_team_id_inj = home_team_id
+                    else:
+                        teammates_out_inj = [p for p in out_player_ids if p in home_player_ids_set and p != pid]
+                        opponents_out_inj = [p for p in out_player_ids if p in away_player_ids_set]
+                        opp_team_id_inj = away_team_id
+
+                    if not teammates_out_inj and not opponents_out_inj:
+                        continue
+
+                    # Compute "without X" historical multipliers
+                    wp_stats = None
+                    if teammates_out_inj and bulk_game_logs is not None and len(bulk_game_logs) > 0:
+                        try:
+                            wp_stats = wps.get_without_player_stats(
+                                player_id=pid,
+                                absent_player_ids=list(teammates_out_inj),
+                                bulk_game_logs=bulk_game_logs,
+                            )
+                        except Exception:
+                            wp_stats = None
+
+                    try:
+                        injury_adj = inj.calculate_injury_adjustments(
+                            player_id=pid,
+                            player_team_id=int(pid_team),
+                            opponent_team_id=opp_team_id_inj,
+                            teammates_out=list(teammates_out_inj),
+                            opponents_out=list(opponents_out_inj),
+                            player_minutes_map=inj_minutes_map,
+                            players_df=players_df,
+                            without_player_stats=wp_stats,
+                        )
+                    except Exception:
+                        continue
+
+                    if not injury_adj.get('factors'):
+                        continue
+
+                    stat_cols = {
+                        'PTS': 'PTS', 'REB': 'REB', 'AST': 'AST',
+                        'STL': 'STL', 'BLK': 'BLK', 'FG3M': 'FG3M', 'FTM': 'FTM',
+                    }
+                    for stat, col in stat_cols.items():
+                        mult = injury_adj.get(stat, 1.0)
+                        if col in entry:
+                            entry[col] = round(entry[col] * mult, 1)
+
+                    # Recalculate derived columns
+                    entry['PRA'] = round(entry['PTS'] + entry['REB'] + entry['AST'], 1)
+
+                    # Recompute FPTS using DK scoring: PTS*1 + REB*1.25 + AST*1.5 + STL*2 + BLK*2 + FG3M*0.5 - TOV*0.5 + FTM*0
+                    new_fpts = (entry['PTS'] * 1.0 + entry['REB'] * 1.25 + entry['AST'] * 1.5
+                                + entry['STL'] * 2.0 + entry['BLK'] * 2.0 + entry.get('FG3M', 0) * 0.5
+                                - entry.get('TOV', 0) * 0.5)
+                    fpts_scale = new_fpts / entry['FPTS'] if entry['FPTS'] > 0 else 1.0
+                    for col in ('FPTS', 'FPTS_Ceiling', 'FPTS_Floor', 'FPTS_Median'):
+                        if col in entry:
+                            entry[col] = round(entry[col] * fpts_scale, 1)
+                    inj_adjusted += 1
+
+                if inj_adjusted:
+                    print(f"  💊 Injury adjustments applied to {inj_adjusted} players "
+                          f"({len(out_player_ids)} teammate(s) out)")
+
+            # Apply tanking minute adjustments (scale stats proportionally)
+            if tanking_standings_df is not None and player_avg_minutes:
+                # Build minimal statlines for tanking detection
+                tank_statlines = []
+                for entry in statlines_list:
+                    player_name = entry['Player']
+                    # Find the player_id that maps to this name
+                    pid = next(
+                        (p['id'] for p in healthy_players if p['name'] == player_name),
+                        None
+                    )
+                    if pid is None:
+                        continue
+                    baseline_min = player_avg_minutes.get(str(pid), 0.0)
+                    if baseline_min <= 0:
+                        continue
+                    is_away = player_team_ids.get(pid) == away_team_id
+                    tank_statlines.append({
+                        'player_id': str(pid),
+                        'is_away': is_away,
+                        '_original_season_minutes': baseline_min,
+                        'MIN': baseline_min,
+                    })
+
+                if tank_statlines:
+                    spread = _tu.get_game_spread(away_team_abbr, home_team_abbr)
+                    tank_adj, tank_ctx = _tu.compute_tanking_adjustments(
+                        tank_statlines,
+                        away_team_id, home_team_id,
+                        away_team_abbr, home_team_abbr,
+                        standings_df=tanking_standings_df,
+                        spread=spread,
+                    )
+                    if tank_adj:
+                        # Build a name → pid lookup for scaling
+                        name_to_pid = {p['name']: p['id'] for p in healthy_players}
+                        scaled = 0
+                        for entry in statlines_list:
+                            pid = name_to_pid.get(entry['Player'])
+                            if pid is None or str(pid) not in tank_adj:
+                                continue
+                            baseline_min = player_avg_minutes.get(str(pid), 0.0)
+                            adjusted_min = tank_adj[str(pid)]
+                            if baseline_min <= 0:
+                                continue
+                            scale = adjusted_min / baseline_min
+                            for col in ('FPTS', 'PTS', 'REB', 'AST', 'STL',
+                                        'BLK', 'TOV', 'FG3M', 'FTM', 'PRA',
+                                        'FPTS_Ceiling', 'FPTS_Floor',
+                                        'FPTS_Median'):
+                                if col in entry:
+                                    entry[col] = round(entry[col] * scale, 1)
+                            scaled += 1
+
+                        away_t = tank_ctx.get('away_tanking')
+                        home_t = tank_ctx.get('home_tanking')
+                        if away_t or home_t:
+                            label = f"{away_team_abbr}={'hard' if away_t == 'hard' else away_t or 'ok'} / {home_team_abbr}={'hard' if home_t == 'hard' else home_t or 'ok'}"
+                            mult_pct = int(tank_ctx.get('spread_mult', 0) * 100)
+                            print(f"  📉 Tanking adjustments applied ({label}, spread={tank_ctx.get('spread')}, mult={mult_pct}%): {scaled} players scaled")
+
             # Create DataFrame
             predictions_df = pd.DataFrame(statlines_list)
             

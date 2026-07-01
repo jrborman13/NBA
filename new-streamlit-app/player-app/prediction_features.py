@@ -35,34 +35,149 @@ def get_cached_bulk_offensive_synergy(season: str = CURRENT_SEASON) -> Dict[str,
     return data
 
 
+def _load_game_logs_from_supabase(season: str) -> pd.DataFrame:
+    """Load cached game logs from Supabase nba_game_logs table."""
+    try:
+        from supabase_config import get_supabase_client, is_supabase_configured
+        if not is_supabase_configured():
+            return pd.DataFrame()
+        client = get_supabase_client()
+        if not client:
+            return pd.DataFrame()
+        resp = (
+            client.table('nba_game_logs')
+            .select('data')
+            .eq('season', season)
+            .eq('log_type', 'player')
+            .execute()
+        )
+        if resp.data and len(resp.data) > 0:
+            records = resp.data[0].get('data', [])
+            if records:
+                df = pd.DataFrame(records)
+                if 'GAME_DATE' in df.columns:
+                    df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'])
+                return df
+    except Exception as e:
+        print(f"[GAME LOGS] Supabase load failed: {e}")
+    return pd.DataFrame()
+
+
+def _save_game_logs_to_supabase(df: pd.DataFrame, season: str):
+    """Save game logs back to Supabase. Prefers service client for write access."""
+    try:
+        from supabase_config import get_supabase_service_client, get_supabase_client, is_supabase_configured
+        if not is_supabase_configured():
+            return
+        client = get_supabase_service_client() or get_supabase_client()
+        if not client:
+            return
+        # Convert to records, handling datetime serialization
+        save_df = df.copy()
+        if 'GAME_DATE' in save_df.columns:
+            save_df['GAME_DATE'] = save_df['GAME_DATE'].astype(str)
+        data = save_df.to_dict('records')
+        client.table('nba_game_logs').upsert({
+            'season': season,
+            'log_type': 'player',
+            'data': data,
+            'updated_at': datetime.now().isoformat()
+        }, on_conflict='season,log_type').execute()
+        print(f"[GAME LOGS] Saved {len(data)} rows to Supabase")
+    except Exception as e:
+        print(f"[GAME LOGS] Supabase save failed: {e}")
+
+
+def _fetch_incremental_game_logs(season: str, after_date: str) -> pd.DataFrame:
+    """Fetch game logs from NBA API only for games after a given date."""
+    try:
+        from nba_api.stats.endpoints import PlayerGameLogs
+        game_logs = PlayerGameLogs(
+            season_nullable=season,
+            league_id_nullable=LEAGUE_ID,
+            date_from_nullable=after_date,
+            timeout=90,
+        ).get_data_frames()[0]
+
+        if len(game_logs) > 0:
+            game_logs = game_logs[
+                game_logs['GAME_ID'].astype(str).str[2].isin(['2', '4', '6'])
+            ].copy()
+            game_logs['GAME_DATE'] = pd.to_datetime(game_logs['GAME_DATE'])
+        return game_logs
+    except Exception as e:
+        print(f"[GAME LOGS] Incremental fetch failed: {e}")
+        return pd.DataFrame()
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_bulk_player_game_logs(season: str = CURRENT_SEASON) -> pd.DataFrame:
     """
-    Fetch ALL player game logs for the season in ONE API call.
-    This is much faster than fetching individually for each player.
-    
-    Returns:
-        DataFrame with all player game logs, sorted by date descending
+    Fetch player game logs using incremental sync via Supabase.
+
+    1. Load cached logs from Supabase
+    2. Find most recent game date in cache
+    3. Fetch only new games from NBA API (+ re-fetch last 3 days for stat corrections)
+    4. Merge, deduplicate, save back to Supabase
+    5. Return combined result
+
+    Falls back to full API fetch if Supabase is unavailable.
     """
-    # Fetch from API
+    from datetime import timedelta
+
+    # Step 1: Load from Supabase
+    cached = _load_game_logs_from_supabase(season)
+
+    if len(cached) > 0 and 'GAME_DATE' in cached.columns:
+        cached['GAME_DATE'] = pd.to_datetime(cached['GAME_DATE'])
+        max_date = cached['GAME_DATE'].max()
+        # Re-fetch from 3 days before max_date to catch stat corrections
+        fetch_from = (max_date - timedelta(days=3)).strftime('%m/%d/%Y')
+        print(f"[GAME LOGS] Supabase cache: {len(cached)} rows, latest {max_date.strftime('%Y-%m-%d')}. "
+              f"Fetching from {fetch_from}")
+
+        # Step 2: Incremental fetch
+        new_logs = _fetch_incremental_game_logs(season, fetch_from)
+
+        if len(new_logs) > 0:
+            # Step 3: Merge — drop overlapping rows from cache, keep fresh API data
+            overlap_dates = set(new_logs['GAME_DATE'].unique())
+            cached_trimmed = cached[~cached['GAME_DATE'].isin(overlap_dates)]
+            combined = pd.concat([cached_trimmed, new_logs], ignore_index=True)
+            combined = combined.drop_duplicates(subset=['PLAYER_ID', 'GAME_ID'], keep='first')
+            combined = combined.sort_values('GAME_DATE', ascending=False)
+
+            # Step 4: Save back to Supabase (in background, don't block)
+            _save_game_logs_to_supabase(combined, season)
+
+            print(f"[GAME LOGS] Merged: {len(cached_trimmed)} cached + {len(new_logs)} new = {len(combined)} total")
+            return combined
+        else:
+            # API fetch returned nothing new — use cache as-is
+            print(f"[GAME LOGS] No new games found, using {len(cached)} cached rows")
+            return cached.sort_values('GAME_DATE', ascending=False)
+
+    # Step 5: Fallback — no Supabase cache, do full fetch
+    print("[GAME LOGS] No Supabase cache, doing full API fetch")
     try:
         from nba_api.stats.endpoints import PlayerGameLogs
-        
+
         game_logs = PlayerGameLogs(
             season_nullable=season,
-            league_id_nullable=LEAGUE_ID
+            league_id_nullable=LEAGUE_ID,
+            timeout=90,
         ).get_data_frames()[0]
-        
-        # Filter to regular season games only (game_id starts with '002')
+
         if len(game_logs) > 0:
             game_logs = game_logs[
-                game_logs['GAME_ID'].astype(str).str[2].isin(['2', '4'])
+                game_logs['GAME_ID'].astype(str).str[2].isin(['2', '4', '6'])
             ].copy()
-            
-            # Convert date and sort
             game_logs['GAME_DATE'] = pd.to_datetime(game_logs['GAME_DATE'])
             game_logs = game_logs.sort_values('GAME_DATE', ascending=False)
-        
+
+            # Save to Supabase for next time
+            _save_game_logs_to_supabase(game_logs, season)
+
         return game_logs
     except Exception as e:
         print(f"Error fetching bulk player game logs: {e}")
@@ -365,20 +480,16 @@ def get_player_vs_opponent_history(
 def get_team_pace(team_id: int, season: str = CURRENT_SEASON) -> float:
     """
     Get team's pace (possessions per game).
+    Uses bulk league stats (one API call for all teams) then looks up by team_id.
     """
     try:
-        team_stats = endpoints.TeamDashboardByGeneralSplits(
-            team_id=team_id,
-            season=season,
-            measure_type_detailed_defense='Advanced',
-            per_mode_detailed='PerGame'
-        ).get_data_frames()[0]
-        
-        if 'PACE' in team_stats.columns and len(team_stats) > 0:
-            return round(team_stats['PACE'].iloc[0], 1)
+        bulk = get_bulk_team_stats(season)
+        if bulk is not None and len(bulk) > 0 and 'TEAM_ID' in bulk.columns and 'PACE' in bulk.columns:
+            row = bulk[bulk['TEAM_ID'] == team_id]
+            if len(row) > 0:
+                return round(row['PACE'].iloc[0], 1)
     except Exception as e:
         print(f"Error fetching pace for team {team_id}: {e}")
-    
     return 100.0  # League average default
 
 
@@ -420,20 +531,16 @@ def get_opponent_ft_rate(opponent_team_id: int) -> Dict[str, float]:
 def get_team_defensive_rating(team_id: int, season: str = CURRENT_SEASON) -> float:
     """
     Get team's defensive rating (points allowed per 100 possessions).
+    Uses bulk league stats (one API call for all teams) then looks up by team_id.
     """
     try:
-        team_stats = endpoints.TeamDashboardByGeneralSplits(
-            team_id=team_id,
-            season=season,
-            measure_type_detailed_defense='Advanced',
-            per_mode_detailed='PerGame'
-        ).get_data_frames()[0]
-        
-        if 'DEF_RATING' in team_stats.columns and len(team_stats) > 0:
-            return round(team_stats['DEF_RATING'].iloc[0], 1)
+        bulk = get_bulk_team_stats(season)
+        if bulk is not None and len(bulk) > 0 and 'TEAM_ID' in bulk.columns and 'DEF_RATING' in bulk.columns:
+            row = bulk[bulk['TEAM_ID'] == team_id]
+            if len(row) > 0:
+                return round(row['DEF_RATING'].iloc[0], 1)
     except Exception as e:
         print(f"Error fetching def rating for team {team_id}: {e}")
-    
     return 110.0  # League average default
 
 
@@ -445,28 +552,16 @@ def get_team_defensive_rating_last_n(
 ) -> float:
     """
     Get team's defensive rating over last N games.
-    Uses LeagueDashTeamStats with last_n_games parameter (same approach as Teams page).
+    Uses bulk get_bulk_team_stats_last_n (one API call for all teams) then looks up by team_id.
     """
     try:
-        # Use LeagueDashTeamStats with last_n_games parameter (same as Teams page)
-        league_stats = endpoints.LeagueDashTeamStats(
-            league_id_nullable='00',
-            measure_type_detailed_defense='Advanced',
-            pace_adjust='N',
-            per_mode_detailed='PerGame',
-            season=season,
-            season_type_all_star='Regular Season',
-            last_n_games=n_games
-        ).get_data_frames()[0]
-        
-        # Filter by team_id
-        team_stats = league_stats[league_stats['TEAM_ID'] == team_id]
-        
-        if 'DEF_RATING' in team_stats.columns and len(team_stats) > 0:
-            return round(team_stats['DEF_RATING'].iloc[0], 1)
+        bulk = get_bulk_team_stats_last_n(n_games=n_games, season=season)
+        if bulk is not None and len(bulk) > 0 and 'TEAM_ID' in bulk.columns and 'DEF_RATING' in bulk.columns:
+            row = bulk[bulk['TEAM_ID'] == team_id]
+            if len(row) > 0:
+                return round(row['DEF_RATING'].iloc[0], 1)
     except Exception as e:
         print(f"Error fetching L{n_games} def rating for team {team_id}: {e}")
-    
     return 110.0  # Default
 
 
@@ -476,20 +571,16 @@ def get_league_averages(season: str = CURRENT_SEASON) -> Dict[str, float]:
     Get league average stats for normalization.
     """
     try:
-        league_stats = endpoints.LeagueDashTeamStats(
-            season=season,
-            measure_type_detailed_defense='Advanced',
-            per_mode_detailed='PerGame'
-        ).get_data_frames()[0]
-        
-        return {
-            'pace': round(league_stats['PACE'].mean(), 1),
-            'def_rating': round(league_stats['DEF_RATING'].mean(), 1),
-            'off_rating': round(league_stats['OFF_RATING'].mean(), 1),
-        }
+        league_stats = get_bulk_team_stats(season)
+        if league_stats is not None and len(league_stats) > 0:
+            return {
+                'pace': round(league_stats['PACE'].mean(), 1),
+                'def_rating': round(league_stats['DEF_RATING'].mean(), 1),
+                'off_rating': round(league_stats['OFF_RATING'].mean(), 1) if 'OFF_RATING' in league_stats.columns else 110.0,
+            }
     except Exception as e:
         print(f"Error fetching league averages: {e}")
-        return {'pace': 100.0, 'def_rating': 110.0, 'off_rating': 110.0}
+    return {'pace': 100.0, 'def_rating': 110.0, 'off_rating': 110.0}
 
 
 @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
@@ -505,7 +596,8 @@ def get_bulk_team_stats(season: str = CURRENT_SEASON) -> pd.DataFrame:
         league_stats = endpoints.LeagueDashTeamStats(
             season=season,
             measure_type_detailed_defense='Advanced',
-            per_mode_detailed='PerGame'
+            per_mode_detailed='PerGame',
+            timeout=90
         ).get_data_frames()[0]
         
         return league_stats
@@ -531,7 +623,8 @@ def get_bulk_team_stats_last_n(n_games: int = 5, season: str = CURRENT_SEASON) -
             per_mode_detailed='PerGame',
             season=season,
             season_type_all_star='Regular Season',
-            last_n_games=n_games
+            last_n_games=n_games,
+            timeout=90
         ).get_data_frames()[0]
         
         return league_stats

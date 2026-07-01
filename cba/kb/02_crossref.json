@@ -1,0 +1,4161 @@
+{
+  "_meta": {
+    "description": "Cross-reference index for the 2023 NBA CBA transaction-rules knowledge base. Lets the app pull in related rules and defined terms when answering a question.",
+    "rule_count": 234,
+    "glossary_term_count": 148,
+    "buckets": [
+      "aprons_and_hard_caps",
+      "contracts",
+      "exceptions",
+      "free_agency",
+      "roster_rules",
+      "salary_cap",
+      "trades"
+    ],
+    "notes": "rule_to_rules: each rule -> its resolved related rule_ids. rule_to_terms: each rule -> the glossary terms it depends on (after case/plural/alias normalization). term_to_rules: reverse index (defined term -> rules that depend on it). unresolved_term_references: depends_on_terms strings with no glossary match even after normalization; these are generic phrases, exhibit-form names, or out-of-scope terms (audit/arbitration/award names) intentionally not in the transaction glossary. dangling_rule_references: related_rule_ids pointing to no existing rule (should be empty)."
+  },
+  "rule_to_rules": {
+    "APRON-001": [
+      "APRON-002",
+      "APRON-003"
+    ],
+    "APRON-002": [
+      "APRON-001",
+      "APRON-003"
+    ],
+    "APRON-003": [
+      "APRON-001",
+      "APRON-002",
+      "APRON-004"
+    ],
+    "APRON-004": [
+      "APRON-005",
+      "APRON-021",
+      "APRON-022"
+    ],
+    "APRON-005": [
+      "APRON-004",
+      "APRON-021"
+    ],
+    "APRON-006": [
+      "APRON-004"
+    ],
+    "APRON-007": [
+      "APRON-004",
+      "APRON-016"
+    ],
+    "APRON-008": [
+      "APRON-004",
+      "APRON-013",
+      "APRON-018"
+    ],
+    "APRON-009": [
+      "APRON-004"
+    ],
+    "APRON-010": [
+      "APRON-004",
+      "APRON-017"
+    ],
+    "APRON-011": [
+      "APRON-004"
+    ],
+    "APRON-012": [
+      "APRON-004",
+      "APRON-021"
+    ],
+    "APRON-013": [
+      "APRON-004",
+      "APRON-021"
+    ],
+    "APRON-014": [
+      "APRON-004",
+      "APRON-019",
+      "APRON-021"
+    ],
+    "APRON-015": [
+      "APRON-004",
+      "APRON-008",
+      "APRON-021"
+    ],
+    "APRON-016": [
+      "APRON-004",
+      "APRON-020",
+      "APRON-023"
+    ],
+    "APRON-017": [
+      "APRON-004",
+      "APRON-010"
+    ],
+    "APRON-018": [
+      "APRON-008",
+      "APRON-015"
+    ],
+    "APRON-019": [
+      "APRON-014"
+    ],
+    "APRON-020": [
+      "APRON-004",
+      "APRON-016"
+    ],
+    "APRON-021": [
+      "APRON-004",
+      "APRON-005",
+      "APRON-011",
+      "APRON-012",
+      "APRON-013",
+      "APRON-014",
+      "APRON-015"
+    ],
+    "APRON-022": [
+      "APRON-023",
+      "APRON-024"
+    ],
+    "APRON-023": [
+      "APRON-022",
+      "APRON-024"
+    ],
+    "APRON-024": [
+      "APRON-022",
+      "APRON-023"
+    ],
+    "APRON-025": [
+      "APRON-010",
+      "APRON-011",
+      "APRON-017"
+    ],
+    "CONTRACT-001": [
+      "CONTRACT-002",
+      "CONTRACT-003",
+      "CONTRACT-004"
+    ],
+    "CONTRACT-002": [
+      "CONTRACT-001",
+      "CONTRACT-026"
+    ],
+    "CONTRACT-003": [
+      "CONTRACT-001",
+      "CONTRACT-027"
+    ],
+    "CONTRACT-004": [
+      "CONTRACT-001",
+      "CONTRACT-022"
+    ],
+    "CONTRACT-005": [
+      "CONTRACT-001",
+      "CONTRACT-020",
+      "CONTRACT-021"
+    ],
+    "CONTRACT-006": [
+      "CONTRACT-002",
+      "CONTRACT-021"
+    ],
+    "CONTRACT-007": [
+      "CONTRACT-008",
+      "CONTRACT-009",
+      "CONTRACT-035"
+    ],
+    "CONTRACT-008": [
+      "CONTRACT-007"
+    ],
+    "CONTRACT-009": [
+      "CONTRACT-007"
+    ],
+    "CONTRACT-010": [
+      "CONTRACT-011",
+      "CONTRACT-012",
+      "CONTRACT-013"
+    ],
+    "CONTRACT-011": [
+      "CONTRACT-010",
+      "CONTRACT-026"
+    ],
+    "CONTRACT-012": [
+      "CONTRACT-013",
+      "CONTRACT-020",
+      "CONTRACT-021"
+    ],
+    "CONTRACT-013": [
+      "CONTRACT-012"
+    ],
+    "CONTRACT-014": [
+      "CONTRACT-015",
+      "CONTRACT-020",
+      "CONTRACT-021",
+      "CONTRACT-031"
+    ],
+    "CONTRACT-015": [
+      "CONTRACT-014"
+    ],
+    "CONTRACT-016": [
+      "CONTRACT-017",
+      "CONTRACT-018",
+      "CONTRACT-019",
+      "CONTRACT-028"
+    ],
+    "CONTRACT-017": [
+      "CONTRACT-016",
+      "CONTRACT-018",
+      "CONTRACT-019"
+    ],
+    "CONTRACT-018": [
+      "CONTRACT-017",
+      "CONTRACT-019",
+      "CONTRACT-024"
+    ],
+    "CONTRACT-019": [
+      "CONTRACT-016",
+      "CONTRACT-017",
+      "CONTRACT-018"
+    ],
+    "CONTRACT-020": [
+      "CONTRACT-005",
+      "CONTRACT-012",
+      "CONTRACT-014",
+      "CONTRACT-021"
+    ],
+    "CONTRACT-021": [
+      "CONTRACT-005",
+      "CONTRACT-012",
+      "CONTRACT-020"
+    ],
+    "CONTRACT-022": [
+      "CONTRACT-005",
+      "CONTRACT-012",
+      "CONTRACT-023",
+      "CONTRACT-028"
+    ],
+    "CONTRACT-023": [
+      "CONTRACT-002",
+      "CONTRACT-022"
+    ],
+    "CONTRACT-024": [
+      "CONTRACT-003",
+      "CONTRACT-005",
+      "CONTRACT-021"
+    ],
+    "CONTRACT-025": [
+      "CONTRACT-026",
+      "CONTRACT-027",
+      "CONTRACT-028",
+      "CONTRACT-030"
+    ],
+    "CONTRACT-026": [
+      "CONTRACT-025",
+      "CONTRACT-027"
+    ],
+    "CONTRACT-027": [
+      "CONTRACT-025",
+      "CONTRACT-026",
+      "CONTRACT-030"
+    ],
+    "CONTRACT-028": [
+      "CONTRACT-025",
+      "CONTRACT-027"
+    ],
+    "CONTRACT-029": [
+      "CONTRACT-025",
+      "CONTRACT-030"
+    ],
+    "CONTRACT-030": [
+      "CONTRACT-025",
+      "CONTRACT-029"
+    ],
+    "CONTRACT-031": [
+      "CONTRACT-014",
+      "CONTRACT-032",
+      "CONTRACT-033"
+    ],
+    "CONTRACT-032": [
+      "CONTRACT-031",
+      "CONTRACT-033"
+    ],
+    "CONTRACT-033": [
+      "CONTRACT-031",
+      "CONTRACT-032"
+    ],
+    "CONTRACT-034": [
+      "CONTRACT-007",
+      "CONTRACT-035"
+    ],
+    "CONTRACT-035": [
+      "CONTRACT-007",
+      "CONTRACT-034"
+    ],
+    "CONTRACT-036": [
+      "CONTRACT-037"
+    ],
+    "CONTRACT-037": [
+      "CONTRACT-036"
+    ],
+    "CONTRACT-038": [
+      "CONTRACT-014"
+    ],
+    "CONTRACT-039": [
+      "CONTRACT-004",
+      "CONTRACT-020"
+    ],
+    "CONTRACT-040": [
+      "CONTRACT-021",
+      "CONTRACT-039"
+    ],
+    "CONTRACT-041": [
+      "CONTRACT-031",
+      "CONTRACT-033",
+      "CONTRACT-042"
+    ],
+    "CONTRACT-042": [
+      "CONTRACT-033",
+      "CONTRACT-041"
+    ],
+    "CONTRACT-043": [
+      "CONTRACT-041"
+    ],
+    "EXC-002": [
+      "EXC-003",
+      "EXC-004",
+      "EXC-024"
+    ],
+    "EXC-003": [
+      "EXC-002",
+      "EXC-004"
+    ],
+    "EXC-004": [
+      "EXC-002",
+      "EXC-003"
+    ],
+    "EXC-005": [
+      "EXC-006",
+      "EXC-007",
+      "EXC-008",
+      "EXC-009",
+      "EXC-019",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "EXC-006": [
+      "EXC-005",
+      "EXC-008"
+    ],
+    "EXC-007": [
+      "EXC-005",
+      "EXC-010"
+    ],
+    "EXC-008": [
+      "EXC-005",
+      "EXC-006"
+    ],
+    "EXC-009": [
+      "EXC-005",
+      "EXC-010"
+    ],
+    "EXC-010": [
+      "EXC-005",
+      "EXC-009"
+    ],
+    "EXC-011": [
+      "EXC-012",
+      "EXC-013",
+      "EXC-014",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "EXC-012": [
+      "EXC-011",
+      "EXC-013",
+      "EXC-014",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "EXC-013": [
+      "EXC-012",
+      "EXC-014",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "EXC-014": [
+      "EXC-011",
+      "EXC-012",
+      "EXC-013"
+    ],
+    "EXC-017": [
+      "EXC-018",
+      "EXC-019",
+      "EXC-020",
+      "EXC-021",
+      "EXC-022",
+      "EXC-023",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "EXC-018": [
+      "EXC-017",
+      "EXC-019",
+      "EXC-020",
+      "EXC-021",
+      "EXC-022",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "EXC-019": [
+      "EXC-017",
+      "EXC-018",
+      "EXC-020",
+      "EXC-022",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "EXC-020": [
+      "EXC-017",
+      "EXC-018",
+      "EXC-021",
+      "EXC-022",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "EXC-021": [
+      "EXC-017",
+      "EXC-018",
+      "EXC-019",
+      "EXC-020",
+      "EXC-025"
+    ],
+    "EXC-022": [
+      "EXC-018",
+      "EXC-019",
+      "EXC-020"
+    ],
+    "EXC-023": [
+      "EXC-002",
+      "EXC-004",
+      "EXC-016",
+      "EXC-017",
+      "EXC-018"
+    ],
+    "EXC-024": [
+      "EXC-005",
+      "EXC-017",
+      "EXC-018"
+    ],
+    "EXC-025": [
+      "EXC-016"
+    ],
+    "EXC-027": [
+      "EXC-017",
+      "EXC-018",
+      "EXC-020"
+    ],
+    "EXC-028": [
+      "EXC-005",
+      "EXC-011",
+      "EXC-012",
+      "EXC-013",
+      "EXC-017",
+      "EXC-029"
+    ],
+    "EXC-029": [
+      "EXC-005",
+      "EXC-011",
+      "EXC-012",
+      "EXC-013",
+      "EXC-017",
+      "EXC-028"
+    ],
+    "FA-001": [
+      "FA-003",
+      "FA-004",
+      "FA-005"
+    ],
+    "FA-002": [
+      "FA-001",
+      "FA-003",
+      "FA-013"
+    ],
+    "FA-003": [
+      "FA-001",
+      "FA-002",
+      "FA-004"
+    ],
+    "FA-004": [
+      "FA-001",
+      "FA-003"
+    ],
+    "FA-005": [
+      "FA-001",
+      "FA-002"
+    ],
+    "FA-006": [
+      "FA-001",
+      "FA-002"
+    ],
+    "FA-007": [
+      "FA-013",
+      "FA-016"
+    ],
+    "FA-008": [
+      "FA-009",
+      "FA-010",
+      "FA-011",
+      "FA-012",
+      "FA-018"
+    ],
+    "FA-009": [
+      "FA-008",
+      "FA-017"
+    ],
+    "FA-010": [
+      "FA-008",
+      "FA-012"
+    ],
+    "FA-011": [
+      "FA-008",
+      "FA-009"
+    ],
+    "FA-012": [
+      "FA-008",
+      "FA-009",
+      "FA-011"
+    ],
+    "FA-013": [
+      "FA-002",
+      "FA-016"
+    ],
+    "FA-014": [
+      "FA-007"
+    ],
+    "FA-016": [
+      "FA-008",
+      "FA-017",
+      "FA-019",
+      "FA-020"
+    ],
+    "FA-017": [
+      "FA-016",
+      "FA-018",
+      "FA-021"
+    ],
+    "FA-018": [
+      "FA-008",
+      "FA-010",
+      "FA-016"
+    ],
+    "FA-019": [
+      "FA-008",
+      "FA-016",
+      "FA-018",
+      "FA-022"
+    ],
+    "FA-020": [
+      "FA-008",
+      "FA-017"
+    ],
+    "FA-021": [
+      "FA-017",
+      "FA-019",
+      "FA-031"
+    ],
+    "FA-022": [
+      "FA-017",
+      "FA-023",
+      "FA-026",
+      "FA-029"
+    ],
+    "FA-023": [
+      "EXC-002",
+      "EXC-003",
+      "EXC-004",
+      "FA-022",
+      "FA-026"
+    ],
+    "FA-024": [
+      "FA-022",
+      "FA-023",
+      "FA-025"
+    ],
+    "FA-025": [
+      "FA-022",
+      "FA-026"
+    ],
+    "FA-026": [
+      "FA-022",
+      "FA-025",
+      "FA-027",
+      "FA-028",
+      "FA-030"
+    ],
+    "FA-027": [
+      "FA-026",
+      "FA-029"
+    ],
+    "FA-028": [
+      "FA-026"
+    ],
+    "FA-029": [
+      "FA-026",
+      "FA-027"
+    ],
+    "FA-030": [
+      "FA-026",
+      "FA-027",
+      "FA-031"
+    ],
+    "FA-031": [
+      "FA-022",
+      "FA-032"
+    ],
+    "FA-032": [
+      "FA-019",
+      "FA-030",
+      "FA-031",
+      "FA-037"
+    ],
+    "FA-033": [
+      "FA-029"
+    ],
+    "FA-034": [
+      "FA-022",
+      "FA-035"
+    ],
+    "FA-035": [
+      "FA-019",
+      "FA-032",
+      "FA-034"
+    ],
+    "FA-036": [
+      "FA-022"
+    ],
+    "FA-037": [
+      "FA-021",
+      "FA-022"
+    ],
+    "FA-038": [
+      "FA-022",
+      "FA-026"
+    ],
+    "FA-039": [
+      "FA-002",
+      "FA-023",
+      "FA-024"
+    ],
+    "ROSTER-001": [
+      "ROSTER-002",
+      "ROSTER-003",
+      "ROSTER-013"
+    ],
+    "ROSTER-002": [
+      "ROSTER-001",
+      "ROSTER-003"
+    ],
+    "ROSTER-003": [
+      "ROSTER-001"
+    ],
+    "ROSTER-004": [
+      "ROSTER-001",
+      "ROSTER-005"
+    ],
+    "ROSTER-005": [
+      "ROSTER-004",
+      "ROSTER-009"
+    ],
+    "ROSTER-006": [
+      "ROSTER-007",
+      "ROSTER-008"
+    ],
+    "ROSTER-007": [
+      "ROSTER-006",
+      "ROSTER-008"
+    ],
+    "ROSTER-008": [
+      "ROSTER-006",
+      "ROSTER-007"
+    ],
+    "ROSTER-009": [
+      "ROSTER-010",
+      "ROSTER-011",
+      "ROSTER-012"
+    ],
+    "ROSTER-010": [
+      "ROSTER-009",
+      "ROSTER-011"
+    ],
+    "ROSTER-011": [
+      "ROSTER-009",
+      "ROSTER-010",
+      "ROSTER-015"
+    ],
+    "ROSTER-012": [
+      "ROSTER-009",
+      "ROSTER-013",
+      "ROSTER-014"
+    ],
+    "ROSTER-013": [
+      "ROSTER-012",
+      "ROSTER-014"
+    ],
+    "ROSTER-014": [
+      "ROSTER-013",
+      "ROSTER-016"
+    ],
+    "ROSTER-015": [
+      "ROSTER-009",
+      "ROSTER-014"
+    ],
+    "ROSTER-016": [
+      "ROSTER-009",
+      "ROSTER-014"
+    ],
+    "ROSTER-017": [
+      "ROSTER-015",
+      "ROSTER-018"
+    ],
+    "ROSTER-018": [
+      "ROSTER-017",
+      "ROSTER-019"
+    ],
+    "ROSTER-019": [
+      "ROSTER-016",
+      "ROSTER-018"
+    ],
+    "ROSTER-020": [
+      "ROSTER-009",
+      "ROSTER-015"
+    ],
+    "CAP-001": [
+      "CAP-002",
+      "CAP-003",
+      "CAP-004"
+    ],
+    "CAP-002": [
+      "CAP-001"
+    ],
+    "CAP-003": [
+      "CAP-001",
+      "CAP-014"
+    ],
+    "CAP-004": [
+      "CAP-001",
+      "CAP-019",
+      "CAP-027"
+    ],
+    "CAP-005": [
+      "CAP-001",
+      "CAP-006",
+      "CAP-007"
+    ],
+    "CAP-006": [
+      "CAP-005",
+      "CAP-007",
+      "CAP-008",
+      "CAP-009"
+    ],
+    "CAP-007": [
+      "CAP-005",
+      "CAP-006",
+      "CAP-008",
+      "CAP-009"
+    ],
+    "CAP-008": [
+      "CAP-009",
+      "CAP-010"
+    ],
+    "CAP-009": [
+      "CAP-008",
+      "CAP-010"
+    ],
+    "CAP-010": [
+      "CAP-001",
+      "CAP-008",
+      "CAP-009"
+    ],
+    "CAP-011": [
+      "CAP-005",
+      "CAP-012"
+    ],
+    "CAP-012": [
+      "CAP-011",
+      "CAP-013",
+      "CAP-016"
+    ],
+    "CAP-013": [
+      "CAP-012",
+      "CAP-024",
+      "CAP-025"
+    ],
+    "CAP-014": [
+      "CAP-001",
+      "CAP-003"
+    ],
+    "CAP-016": [
+      "CAP-017",
+      "CAP-022"
+    ],
+    "CAP-017": [
+      "CAP-016"
+    ],
+    "CAP-018": [
+      "CAP-019",
+      "CAP-020",
+      "CAP-021"
+    ],
+    "CAP-019": [
+      "CAP-004",
+      "CAP-018"
+    ],
+    "CAP-020": [
+      "CAP-018",
+      "CAP-019"
+    ],
+    "CAP-021": [
+      "CAP-016",
+      "CAP-018"
+    ],
+    "CAP-022": [
+      "CAP-016"
+    ],
+    "CAP-023": [
+      "CAP-012",
+      "CAP-018",
+      "CAP-021"
+    ],
+    "CAP-024": [
+      "CAP-006",
+      "CAP-007",
+      "CAP-013",
+      "CAP-031",
+      "CAP-033"
+    ],
+    "CAP-025": [
+      "CAP-007",
+      "CAP-024"
+    ],
+    "CAP-026": [
+      "CAP-001",
+      "CAP-004",
+      "CAP-027"
+    ],
+    "CAP-027": [
+      "CAP-004",
+      "CAP-026"
+    ],
+    "CAP-028": [
+      "CAP-029"
+    ],
+    "CAP-029": [
+      "CAP-028"
+    ],
+    "CAP-030": [
+      "CAP-035"
+    ],
+    "CAP-031": [
+      "CAP-013",
+      "CAP-024"
+    ],
+    "CAP-032": [
+      "CAP-030"
+    ],
+    "CAP-033": [
+      "CAP-013"
+    ],
+    "CAP-034": [
+      "CAP-019",
+      "CAP-035",
+      "CAP-036",
+      "CAP-037"
+    ],
+    "CAP-035": [
+      "CAP-034",
+      "CAP-038"
+    ],
+    "CAP-036": [
+      "CAP-034"
+    ],
+    "CAP-037": [
+      "CAP-034"
+    ],
+    "CAP-038": [
+      "CAP-034",
+      "CAP-035"
+    ],
+    "CAP-039": [
+      "CAP-034"
+    ],
+    "CAP-040": [
+      "CAP-034",
+      "CAP-037"
+    ],
+    "TRADE-002": [
+      "TRADE-018"
+    ],
+    "TRADE-003": [
+      "TRADE-024"
+    ],
+    "TRADE-005": [
+      "TRADE-006",
+      "TRADE-007"
+    ],
+    "TRADE-006": [
+      "TRADE-005",
+      "TRADE-007",
+      "TRADE-019"
+    ],
+    "TRADE-007": [
+      "TRADE-006"
+    ],
+    "TRADE-008": [
+      "TRADE-006",
+      "TRADE-021",
+      "TRADE-024"
+    ],
+    "TRADE-009": [
+      "TRADE-008",
+      "TRADE-010"
+    ],
+    "TRADE-010": [
+      "TRADE-008",
+      "TRADE-009"
+    ],
+    "TRADE-011": [
+      "TRADE-009",
+      "TRADE-012"
+    ],
+    "TRADE-012": [
+      "TRADE-011"
+    ],
+    "TRADE-016": [
+      "TRADE-002"
+    ],
+    "TRADE-017": [
+      "TRADE-018",
+      "TRADE-019",
+      "TRADE-020",
+      "TRADE-021",
+      "TRADE-027",
+      "TRADE-029"
+    ],
+    "TRADE-018": [
+      "TRADE-017",
+      "TRADE-027",
+      "TRADE-028",
+      "TRADE-029"
+    ],
+    "TRADE-019": [
+      "TRADE-017",
+      "TRADE-020",
+      "TRADE-027",
+      "TRADE-029"
+    ],
+    "TRADE-020": [
+      "TRADE-017",
+      "TRADE-019",
+      "TRADE-027",
+      "TRADE-029"
+    ],
+    "TRADE-021": [
+      "TRADE-017",
+      "TRADE-022",
+      "TRADE-029"
+    ],
+    "TRADE-022": [
+      "TRADE-019",
+      "TRADE-020",
+      "TRADE-021"
+    ],
+    "TRADE-023": [
+      "TRADE-018",
+      "TRADE-019",
+      "TRADE-020",
+      "TRADE-024"
+    ],
+    "TRADE-024": [
+      "TRADE-023"
+    ],
+    "TRADE-025": [
+      "TRADE-008",
+      "TRADE-017",
+      "TRADE-031"
+    ],
+    "TRADE-026": [
+      "TRADE-017",
+      "TRADE-018"
+    ],
+    "TRADE-027": [
+      "TRADE-017"
+    ],
+    "TRADE-028": [
+      "TRADE-017"
+    ],
+    "TRADE-029": [
+      "TRADE-017",
+      "TRADE-018",
+      "TRADE-019",
+      "TRADE-020",
+      "TRADE-021"
+    ],
+    "TRADE-030": [
+      "TRADE-017",
+      "TRADE-021"
+    ],
+    "TRADE-031": [
+      "TRADE-025"
+    ],
+    "TRADE-032": [
+      "TRADE-033",
+      "TRADE-034"
+    ],
+    "TRADE-033": [
+      "TRADE-032",
+      "TRADE-034"
+    ],
+    "TRADE-034": [
+      "TRADE-033"
+    ],
+    "TRADE-035": [
+      "TRADE-033",
+      "TRADE-036"
+    ],
+    "TRADE-036": [
+      "TRADE-035"
+    ],
+    "TRADE-037": [
+      "TRADE-002"
+    ],
+    "TRADE-038": [
+      "TRADE-025",
+      "TRADE-031"
+    ]
+  },
+  "rule_to_terms": {
+    "APRON-001": [
+      "First Apron Level",
+      "Salary Cap",
+      "Salary Cap Year",
+      "Tax Level"
+    ],
+    "APRON-002": [
+      "Salary Cap",
+      "Salary Cap Year",
+      "Second Apron Level",
+      "Tax Level"
+    ],
+    "APRON-003": [
+      "Apron Team Salary",
+      "First Refusal Exercise Notice",
+      "First Round Pick",
+      "Maximum Qualifying Offer",
+      "Performance Bonus",
+      "Qualifying Offer",
+      "Required Tender",
+      "Restricted Free Agent",
+      "Team Salary"
+    ],
+    "APRON-004": [
+      "Applicable Apron Level",
+      "Apron Team Salary",
+      "First Apron Level",
+      "Second Apron Level",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-005": [
+      "Applicable Apron Level",
+      "Apron Team Salary",
+      "First Apron Level",
+      "Second Apron Level",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-006": [
+      "Apron Team Salary",
+      "Bi-annual Exception",
+      "First Apron Level",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-007": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-008": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Transaction Restrictions Table",
+      "Veteran Free Agent"
+    ],
+    "APRON-009": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-010": [
+      "Apron Team Salary",
+      "Expanded Traded Player Exception",
+      "First Apron Level",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-011": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Standard Traded Player Exception",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-012": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Transaction Restrictions Table",
+      "Transition Traded Player Exception"
+    ],
+    "APRON-013": [
+      "Aggregated Standard Traded Player Exception",
+      "Apron Team Salary",
+      "Second Apron Level",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-014": [
+      "Apron Team Salary",
+      "Second Apron Level",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-015": [
+      "Apron Team Salary",
+      "Second Apron Level",
+      "Traded Player Exception",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-016": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Second Apron Level",
+      "Taxpayer Mid-Level Salary Exception",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-017": [
+      "Apron Team Salary",
+      "Expanded Traded Player Exception",
+      "First Apron Level",
+      "Standard Traded Player Exception"
+    ],
+    "APRON-018": [
+      "First Apron Level",
+      "Mid-Level Salary Exception for Room Teams",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Prior Team",
+      "Room",
+      "Veteran Free Agent"
+    ],
+    "APRON-019": [
+      "Salary Cap",
+      "Salary Cap Year"
+    ],
+    "APRON-020": [
+      "First Apron Level",
+      "Taxpayer Mid-Level Salary Exception",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-021": [
+      "Applicable Apron Level",
+      "Apron Team Salary",
+      "Transaction Restrictions Table"
+    ],
+    "APRON-022": [
+      "Apron Team Salary",
+      "Second Apron Level",
+      "Second Apron Team"
+    ],
+    "APRON-023": [
+      "Draft Pick Penalty",
+      "Second Apron Team"
+    ],
+    "APRON-024": [
+      "Draft Pick Penalty",
+      "Second Apron Team"
+    ],
+    "APRON-025": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Traded Player Exception"
+    ],
+    "CONTRACT-001": [
+      "Maximum Annual Salary",
+      "Minimum Player Salary",
+      "Salary",
+      "Salary Cap",
+      "Unlikely Bonus",
+      "Years of Service"
+    ],
+    "CONTRACT-002": [
+      "5th Year Eligible Player",
+      "Higher Max Criteria",
+      "Prior Team",
+      "Salary Cap",
+      "Years of Service"
+    ],
+    "CONTRACT-003": [
+      "Designated Veteran Player Contract",
+      "Higher Max Criteria",
+      "Prior Team",
+      "Salary Cap",
+      "Years of Service"
+    ],
+    "CONTRACT-004": [
+      "Renegotiation",
+      "Salary",
+      "Salary Cap",
+      "Unlikely Bonus",
+      "Years of Service"
+    ],
+    "CONTRACT-005": [
+      "Base Compensation",
+      "Designated Veteran Player Extension",
+      "Extension",
+      "Higher Max Criteria",
+      "Likely Bonus",
+      "Rookie Scale Extension",
+      "Salary",
+      "Salary Cap",
+      "Unlikely Bonus",
+      "Years of Service"
+    ],
+    "CONTRACT-006": [
+      "5th Year Eligible Player",
+      "Option Year",
+      "Rookie Scale Contract",
+      "Rookie Scale Extension",
+      "Salary Cap",
+      "Unlikely Bonus"
+    ],
+    "CONTRACT-007": [
+      "Minimum Annual Salary Scale",
+      "Minimum Player Salary",
+      "Salary",
+      "Salary Cap Year"
+    ],
+    "CONTRACT-008": [
+      "Minimum Annual Salary Scale",
+      "Minimum Player Salary",
+      "Years of Service"
+    ],
+    "CONTRACT-009": [
+      "Minimum Annual Salary Scale",
+      "Minimum Player Salary",
+      "Salary Cap Year",
+      "Two-Way Contract"
+    ],
+    "CONTRACT-010": [
+      "Early Qualifying Veteran Free Agent",
+      "Incentive Compensation",
+      "Prior Team",
+      "Qualifying Veteran Free Agent",
+      "Regular Salary",
+      "Salary",
+      "Salary Cap Year"
+    ],
+    "CONTRACT-011": [
+      "Early Qualifying Veteran Free Agent",
+      "Incentive Compensation",
+      "Prior Team",
+      "Qualifying Veteran Free Agent",
+      "Regular Salary",
+      "Salary",
+      "Salary Cap Year"
+    ],
+    "CONTRACT-012": [
+      "Extension",
+      "Incentive Compensation",
+      "Regular Salary",
+      "Salary",
+      "Salary Cap Year"
+    ],
+    "CONTRACT-013": [
+      "Extension",
+      "Incentive Compensation",
+      "Regular Salary",
+      "Salary",
+      "Salary Cap Year"
+    ],
+    "CONTRACT-014": [
+      "Designated Veteran Player Extension",
+      "Option Year",
+      "Player Contract",
+      "Prior Team",
+      "Qualifying Veteran Free Agent",
+      "Rookie Scale Extension",
+      "Veteran Extension"
+    ],
+    "CONTRACT-015": [
+      "Extension",
+      "Player Contract",
+      "Season"
+    ],
+    "CONTRACT-016": [
+      "Base Compensation",
+      "Incentive Compensation",
+      "Likely Bonus",
+      "Option",
+      "Option Year",
+      "Salary",
+      "Second Round Pick Exception",
+      "Unlikely Bonus"
+    ],
+    "CONTRACT-017": [
+      "Base Compensation",
+      "Incentive Compensation",
+      "Likely Bonus",
+      "Option",
+      "Option Year",
+      "Salary",
+      "Unlikely Bonus"
+    ],
+    "CONTRACT-018": [
+      "Early Termination Option",
+      "Extension",
+      "Rookie Scale Contract",
+      "Season"
+    ],
+    "CONTRACT-019": [
+      "Early Termination Option",
+      "Effective Season",
+      "Option",
+      "Option Year",
+      "Restricted Free Agent"
+    ],
+    "CONTRACT-020": [
+      "Designated Veteran Player Extension",
+      "Early Termination Option",
+      "Extension",
+      "Option Year",
+      "Qualifying Veteran Free Agent",
+      "Veteran Extension"
+    ],
+    "CONTRACT-021": [
+      "Designated Veteran Player Extension",
+      "Estimated Average Player Salary",
+      "Incentive Compensation",
+      "Likely Bonus",
+      "Regular Salary",
+      "Unlikely Bonus",
+      "Veteran Extension"
+    ],
+    "CONTRACT-022": [
+      "First Round Pick",
+      "Moratorium Period",
+      "Option Year",
+      "Qualifying Veteran Free Agent",
+      "Rookie Scale Contract",
+      "Rookie Scale Extension",
+      "Unlikely Bonus"
+    ],
+    "CONTRACT-023": [
+      "First Round Pick",
+      "Higher Max Criteria",
+      "Incentive Compensation",
+      "Maximum Annual Salary",
+      "Rookie Scale Extension",
+      "Salary Cap"
+    ],
+    "CONTRACT-024": [
+      "Designated Veteran Player Extension",
+      "Incentive Compensation",
+      "Maximum Annual Salary",
+      "Salary Cap"
+    ],
+    "CONTRACT-025": [
+      "First Round Pick",
+      "Option",
+      "Option Year",
+      "Rookie Salary Scale",
+      "Rookie Scale Amounts",
+      "Rookie Scale Contract"
+    ],
+    "CONTRACT-026": [
+      "Option Year",
+      "Qualifying Offer",
+      "Rookie Salary Scale",
+      "Rookie Scale Amounts"
+    ],
+    "CONTRACT-027": [
+      "Current Base Compensation",
+      "Excluded International Player Payment Amount",
+      "Minimum Player Salary",
+      "Rookie Scale Amounts",
+      "Rookie Scale Contract",
+      "Unlikely Bonus"
+    ],
+    "CONTRACT-028": [
+      "Base Compensation",
+      "Incentive Compensation",
+      "Option Year",
+      "Rookie Salary Scale",
+      "Rookie Scale Contract",
+      "Salary"
+    ],
+    "CONTRACT-029": [
+      "Base Compensation",
+      "First Round Pick",
+      "Option Year",
+      "Rookie Scale Amounts",
+      "Rookie Scale Contract",
+      "Room"
+    ],
+    "CONTRACT-030": [
+      "First Round Pick",
+      "Required Tender",
+      "Rookie Free Agent"
+    ],
+    "CONTRACT-031": [
+      "Early Termination Option",
+      "Incentive Compensation",
+      "Minimum Annual Salary",
+      "Option Year",
+      "Two-Way Contract",
+      "Two-Way Player Salary",
+      "Years of Service"
+    ],
+    "CONTRACT-032": [
+      "Minimum Player Salary",
+      "Standard NBA Contract",
+      "Standard NBA Contract Conversion Option",
+      "Two-Way Contract"
+    ],
+    "CONTRACT-033": [
+      "Conversion Protection Amount",
+      "Exhibit 10",
+      "Exhibit 10 Bonus",
+      "Minimum Player Salary",
+      "Salary Cap",
+      "Two-Way Contract",
+      "Two-Way Player Conversion Option"
+    ],
+    "CONTRACT-034": [
+      "10-Day Contract",
+      "Active List",
+      "Inactive List",
+      "Minimum Player Salary",
+      "Two-Way Player"
+    ],
+    "CONTRACT-035": [
+      "Minimum Player Salary",
+      "Rest-of-Season Contract",
+      "Two-Way Contract"
+    ],
+    "CONTRACT-036": [
+      "Compensation",
+      "Extension",
+      "Incentive Compensation",
+      "Offer Sheet",
+      "Regular Salary"
+    ],
+    "CONTRACT-037": [
+      "Extension",
+      "Regular Salary",
+      "Renegotiation",
+      "Room",
+      "Salary Cap Year",
+      "Unlikely Bonus"
+    ],
+    "CONTRACT-038": [
+      "First Round Pick",
+      "Player Contract",
+      "Qualifying Offer",
+      "Required Tender",
+      "Rookie Scale Contract",
+      "Season"
+    ],
+    "CONTRACT-039": [
+      "Extension",
+      "Likely Bonus",
+      "Regular Salary",
+      "Renegotiation",
+      "Room",
+      "Salary Cap",
+      "Unlikely Bonus"
+    ],
+    "CONTRACT-040": [
+      "Extension",
+      "Incentive Compensation",
+      "Likely Bonus",
+      "Regular Salary",
+      "Renegotiation",
+      "Salary",
+      "Unlikely Bonus"
+    ],
+    "CONTRACT-041": [
+      "Early Termination Option",
+      "Exhibit 10",
+      "Non-Guaranteed, Training Camp Contract",
+      "Option Year",
+      "Two-Way Contract",
+      "Uniform Player Contract"
+    ],
+    "CONTRACT-042": [
+      "Base Compensation",
+      "Minimum Player Salary",
+      "Non-Guaranteed, Training Camp Contract",
+      "Two-Way Player Salary"
+    ],
+    "CONTRACT-043": [
+      "Base Compensation"
+    ],
+    "EXC-001": [
+      "Player Contract",
+      "Salary Cap",
+      "Team Salary"
+    ],
+    "EXC-002": [
+      "Maximum Annual Salary",
+      "Moratorium Period",
+      "Prior Team",
+      "Qualifying Veteran Free Agent",
+      "Salary Cap Year",
+      "Unlikely Bonus",
+      "Veteran Free Agent"
+    ],
+    "EXC-003": [
+      "Likely Bonus",
+      "Minimum Annual Salary",
+      "Non-Qualifying Veteran Free Agent",
+      "Qualifying Offer",
+      "Regular Salary",
+      "Restricted Free Agent",
+      "Salary Cap Year",
+      "Unlikely Bonus",
+      "Veteran Free Agent"
+    ],
+    "EXC-004": [
+      "Average Player Salary",
+      "Early Qualifying Veteran Free Agent",
+      "Estimated Total Salaries",
+      "Likely Bonus",
+      "Offer Sheet",
+      "Option Year",
+      "Prior Team",
+      "Regular Salary",
+      "Total Salaries",
+      "Unlikely Bonus",
+      "Veteran Free Agent",
+      "Years of Service"
+    ],
+    "EXC-005": [
+      "Disabled Player Exception",
+      "Disabling Injury or Illness",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Replacement Player",
+      "Salary Cap Year",
+      "Unlikely Bonus"
+    ],
+    "EXC-006": [
+      "Disabling Injury or Illness"
+    ],
+    "EXC-007": [
+      "Disabling Injury or Illness"
+    ],
+    "EXC-008": [
+      "Disabling Injury or Illness",
+      "Salary Cap Year"
+    ],
+    "EXC-009": [
+      "Disabled Player Exception",
+      "Disabling Injury or Illness"
+    ],
+    "EXC-010": [
+      "Disabled Player Exception",
+      "Disabling Injury or Illness"
+    ],
+    "EXC-011": [
+      "Mid-Level Salary Exception for Room Teams",
+      "Salary Cap",
+      "Salary Cap Year",
+      "Unlikely Bonus"
+    ],
+    "EXC-012": [
+      "Mid-Level Salary Exception for Room Teams",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Offer Sheet",
+      "Prior Team",
+      "Salary Cap",
+      "Salary Cap Year",
+      "Unlikely Bonus",
+      "Veteran Free Agent",
+      "Years of Service"
+    ],
+    "EXC-013": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Mid-Level Salary Exception for Room Teams",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Salary Cap",
+      "Salary Cap Year",
+      "Taxpayer Mid-Level Salary Exception",
+      "Unlikely Bonus"
+    ],
+    "EXC-014": [
+      "Bi-annual Exception",
+      "Mid-Level Salary Exception for Room Teams",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Salary Cap",
+      "Salary Cap Year",
+      "Taxpayer Mid-Level Salary Exception",
+      "Team Salary",
+      "Unlikely Bonus"
+    ],
+    "EXC-015": [
+      "Rookie Scale Contract",
+      "Salary Cap"
+    ],
+    "EXC-016": [
+      "Minimum Player Salary",
+      "Player Contract"
+    ],
+    "EXC-017": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Replacement Player",
+      "Salary Cap Year",
+      "Traded Player"
+    ],
+    "EXC-018": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Replacement Player",
+      "Salary Cap Year",
+      "Traded Player"
+    ],
+    "EXC-019": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Replacement Player",
+      "Salary Cap Year",
+      "Traded Player"
+    ],
+    "EXC-020": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Replacement Player",
+      "Salary Cap",
+      "Salary Cap Year",
+      "Traded Player"
+    ],
+    "EXC-021": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Salary Cap",
+      "Team Salary"
+    ],
+    "EXC-022": [
+      "Minimum Player Salary",
+      "Minimum Traded Player",
+      "Replacement Player",
+      "Salary Cap Year",
+      "Traded Player"
+    ],
+    "EXC-023": [
+      "Base Compensation",
+      "Early Qualifying Veteran Free Agent",
+      "Minimum Player Salary",
+      "Non-Qualifying Veteran Free Agent",
+      "Qualifying Veteran Free Agent",
+      "Salary",
+      "Salary Cap Year",
+      "Traded Player",
+      "Unlikely Bonus"
+    ],
+    "EXC-024": [
+      "Disabled Player Exception",
+      "Salary Cap Year",
+      "Traded Player",
+      "Two-Way Player"
+    ],
+    "EXC-025": [
+      "Minimum Annual Salary Scale",
+      "Minimum Player Salary",
+      "Option Year",
+      "Salary Cap Year",
+      "Second Round Pick",
+      "Unlikely Bonus",
+      "Years of Service"
+    ],
+    "EXC-026": [
+      "Player Contract",
+      "Salary Cap",
+      "Team Salary",
+      "Unlikely Bonus"
+    ],
+    "EXC-027": [
+      "Player Contract"
+    ],
+    "EXC-028": [
+      "Bi-annual Exception",
+      "Disabled Player Exception",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Salary Cap",
+      "Taxpayer Mid-Level Salary Exception",
+      "Team Salary",
+      "Traded Player"
+    ],
+    "EXC-029": [
+      "Bi-annual Exception",
+      "Disabled Player Exception",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Replacement Player",
+      "Salary Cap",
+      "Taxpayer Mid-Level Salary Exception",
+      "Team Salary",
+      "Traded Player"
+    ],
+    "FA-001": [
+      "Moratorium Period",
+      "Player Contract",
+      "Unrestricted Free Agent"
+    ],
+    "FA-002": [
+      "Moratorium Period",
+      "Offer Sheet",
+      "Player Contract",
+      "Prior Team",
+      "Restricted Free Agent"
+    ],
+    "FA-003": [
+      "Early Termination Option",
+      "Option",
+      "Player Contract",
+      "Restricted Free Agent",
+      "Unrestricted Free Agent"
+    ],
+    "FA-004": [
+      "Non-Draft Rookie",
+      "Player Contract"
+    ],
+    "FA-006": [
+      "Moratorium Period",
+      "Player Contract"
+    ],
+    "FA-007": [
+      "Free Agent",
+      "Restricted Free Agent",
+      "Right of First Refusal"
+    ],
+    "FA-008": [
+      "Base Compensation",
+      "Incentive Compensation",
+      "Likely Bonus",
+      "Qualifying Offer",
+      "Two-Way Contract",
+      "Uniform Player Contract",
+      "Unlikely Bonus"
+    ],
+    "FA-009": [
+      "First Round Pick",
+      "Qualifying Offer",
+      "Rookie Salary Scale",
+      "Rookie Scale Amounts",
+      "Rookie Scale Contract",
+      "Salary Cap Year",
+      "Starter Criteria"
+    ],
+    "FA-010": [
+      "Minimum Player Salary",
+      "Qualifying Offer",
+      "Salary Cap Year",
+      "Standard NBA Contract",
+      "Two-Way Contract",
+      "Two-Way Player Salary",
+      "Two-Way Qualifying Offer"
+    ],
+    "FA-011": [
+      "Minimum Annual Salary",
+      "Minimum-Plus Qualifying Offer Amount",
+      "Prior Salary Qualifying Offer Amount",
+      "Qualifying Offer",
+      "Right of First Refusal",
+      "Rookie Scale Amounts",
+      "Salary Cap Year",
+      "Starter Criteria",
+      "Years of Service"
+    ],
+    "FA-012": [
+      "Qualifying Offer",
+      "Starter Criteria",
+      "Uniform Player Contract"
+    ],
+    "FA-013": [
+      "Offer Sheet",
+      "Player Contract",
+      "Restricted Free Agent"
+    ],
+    "FA-014": [
+      "Player Contract",
+      "Right of First Refusal",
+      "Salary Cap Year"
+    ],
+    "FA-015": [
+      "Player Contract",
+      "Veteran Free Agent"
+    ],
+    "FA-016": [
+      "First Round Pick",
+      "Option Year",
+      "Qualifying Offer",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Right of First Refusal",
+      "Rookie Scale Contract",
+      "Unrestricted Free Agent"
+    ],
+    "FA-017": [
+      "Base Compensation",
+      "Early Termination Option",
+      "Maximum Annual Salary",
+      "Maximum Qualifying Offer",
+      "Offer Sheet",
+      "Option Year",
+      "Qualifying Offer",
+      "Rookie Scale Contract"
+    ],
+    "FA-018": [
+      "First Round Pick",
+      "Option Year",
+      "Prior Team",
+      "Qualifying Offer",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Right of First Refusal",
+      "Two-Way Contract",
+      "Unrestricted Free Agent",
+      "Veteran Free Agent",
+      "Years of Service"
+    ],
+    "FA-019": [
+      "Qualifying Offer",
+      "ROFR Team",
+      "Right of First Refusal",
+      "Unrestricted Free Agent"
+    ],
+    "FA-020": [
+      "Maximum Qualifying Offer",
+      "Qualifying Offer"
+    ],
+    "FA-021": [
+      "Maximum Qualifying Offer",
+      "Offer Sheet",
+      "Qualifying Offer",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Right of First Refusal"
+    ],
+    "FA-022": [
+      "Maximum Qualifying Offer",
+      "New Team",
+      "Offer Sheet",
+      "Option Year",
+      "Principal Terms",
+      "Qualifying Offer",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Room",
+      "Two-Way Contract",
+      "Uniform Player Contract"
+    ],
+    "FA-023": [
+      "First Refusal Exercise Notice",
+      "Minimum Player Salary Exception",
+      "Offer Sheet",
+      "ROFR Team",
+      "Right of First Refusal",
+      "Room",
+      "Salary Cap Year",
+      "Unlikely Bonus",
+      "Veteran Free Agent Exception"
+    ],
+    "FA-024": [
+      "Base Compensation",
+      "First Refusal Exercise Notice",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Offer Sheet",
+      "Restricted Free Agent",
+      "Room",
+      "Salary Cap",
+      "Salary Cap Year",
+      "Team Salary",
+      "Unlikely Bonus",
+      "Years of Service"
+    ],
+    "FA-025": [
+      "Base Compensation",
+      "Incentive Compensation",
+      "Likely Bonus",
+      "New Team",
+      "Offer Sheet",
+      "Principal Terms",
+      "ROFR Team",
+      "Uniform Player Contract"
+    ],
+    "FA-026": [
+      "First Refusal Exercise Notice",
+      "Offer Sheet",
+      "Player Contract",
+      "Principal Terms",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Uniform Player Contract"
+    ],
+    "FA-027": [
+      "First Refusal Exercise Notice",
+      "New Team",
+      "Offer Sheet",
+      "Player Contract",
+      "ROFR Team",
+      "Right of First Refusal",
+      "Uniform Player Contract"
+    ],
+    "FA-028": [
+      "First Refusal Exercise Notice",
+      "Moratorium Period",
+      "Offer Sheet",
+      "ROFR Team"
+    ],
+    "FA-029": [
+      "Offer Sheet",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Right of First Refusal"
+    ],
+    "FA-030": [
+      "First Refusal Exercise Notice",
+      "Maximum Qualifying Offer",
+      "New Team",
+      "Offer Sheet",
+      "Player Contract",
+      "Principal Terms",
+      "Qualifying Offer",
+      "ROFR Team",
+      "Right of First Refusal",
+      "Salary Cap Year"
+    ],
+    "FA-031": [
+      "New Team",
+      "Offer Sheet",
+      "ROFR Team",
+      "Right of First Refusal"
+    ],
+    "FA-032": [
+      "Free Agent Amount",
+      "Maximum Qualifying Offer",
+      "New Team",
+      "Offer Sheet",
+      "Qualifying Offer",
+      "ROFR Team",
+      "Right of First Refusal",
+      "Team Salary"
+    ],
+    "FA-033": [
+      "Player Contract",
+      "ROFR Team",
+      "Right of First Refusal"
+    ],
+    "FA-034": [
+      "New Team",
+      "Offer Sheet",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Right of First Refusal"
+    ],
+    "FA-035": [
+      "Qualifying Offer",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Right of First Refusal",
+      "Unrestricted Free Agent"
+    ],
+    "FA-036": [
+      "New Team",
+      "Offer Sheet",
+      "ROFR Team"
+    ],
+    "FA-037": [
+      "Offer Sheet",
+      "Qualifying Offer",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Right of First Refusal"
+    ],
+    "FA-038": [
+      "First Refusal Exercise Notice",
+      "Maximum Qualifying Offer",
+      "Offer Sheet",
+      "Qualifying Offer",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Right of First Refusal",
+      "Salary Cap Year"
+    ],
+    "FA-039": [
+      "Average Player Salary",
+      "Early Qualifying Veteran Free Agent",
+      "Likely Bonus",
+      "Maximum Annual Salary",
+      "Minimum Annual Salary",
+      "Moratorium Period",
+      "Non-Qualifying Veteran Free Agent",
+      "Offer Sheet",
+      "Prior Team",
+      "Qualifying Veteran Free Agent",
+      "Regular Salary",
+      "Salary Cap",
+      "Unlikely Bonus",
+      "Veteran Free Agent Exception",
+      "Years of Service"
+    ],
+    "ROSTER-001": [
+      "Active List",
+      "Inactive List",
+      "NBAGL Season",
+      "NBAGL Work Assignment",
+      "Two-Way Player",
+      "Years of Service"
+    ],
+    "ROSTER-002": [
+      "NBAGL Work Assignment",
+      "Uniform Player Contract"
+    ],
+    "ROSTER-003": [
+      "NBAGL Work Assignment"
+    ],
+    "ROSTER-004": [
+      "Base Compensation",
+      "Inactive List",
+      "NBAGL Work Assignment"
+    ],
+    "ROSTER-005": [
+      "Active List",
+      "Base Compensation",
+      "Inactive List",
+      "Two-Way List",
+      "Two-Way Player"
+    ],
+    "ROSTER-006": [
+      "10-Day Contract",
+      "Minimum Player Salary",
+      "Regular Season",
+      "Two-Way Contract"
+    ],
+    "ROSTER-007": [
+      "10-Day Contract",
+      "Active List",
+      "Inactive List",
+      "Two-Way Player"
+    ],
+    "ROSTER-008": [
+      "10-Day Contract",
+      "Regular Season"
+    ],
+    "ROSTER-009": [
+      "Two-Way Contract",
+      "Two-Way Player"
+    ],
+    "ROSTER-010": [
+      "Active List",
+      "Regular Season",
+      "Two-Way Contract"
+    ],
+    "ROSTER-011": [
+      "Active List",
+      "Regular Season",
+      "Standard NBA Contract",
+      "Two-Way Player"
+    ],
+    "ROSTER-012": [
+      "Regular Season",
+      "Salary Cap Year",
+      "Two-Way Contract",
+      "Years of Service"
+    ],
+    "ROSTER-013": [
+      "Early Termination Option",
+      "Option Year",
+      "Two-Way Contract"
+    ],
+    "ROSTER-014": [
+      "Exhibit 10",
+      "Minimum Player Salary",
+      "Salary Cap Year",
+      "Standard NBA Contract",
+      "Standard NBA Contract Conversion Option",
+      "Two-Way Contract",
+      "Two-Way Player"
+    ],
+    "ROSTER-015": [
+      "Exception",
+      "Room",
+      "Team Salary",
+      "Two-Way Contract",
+      "Two-Way Player Salary"
+    ],
+    "ROSTER-016": [
+      "Conversion Protection Amount",
+      "Exhibit 10",
+      "Regular Season",
+      "Two-Way Contract",
+      "Two-Way Player Conversion Option",
+      "Two-Way Player Salary"
+    ],
+    "ROSTER-017": [
+      "First Round Pick",
+      "Free Agent",
+      "Minimum Annual Salary",
+      "Offer Sheet",
+      "Salary Cap Year",
+      "Team Salary",
+      "Years of Service"
+    ],
+    "ROSTER-018": [
+      "Minimum Player Salary",
+      "Non-Guaranteed, Training Camp Contract",
+      "Regular Season",
+      "Two-Way Contract",
+      "Two-Way Player Salary"
+    ],
+    "ROSTER-019": [
+      "Conversion Protection Amount",
+      "Exhibit 10",
+      "Exhibit 10 Bonus",
+      "Minimum Player Salary",
+      "Two-Way Player Conversion Option"
+    ],
+    "ROSTER-020": [
+      "Free Agent Amount",
+      "Minimum Annual Salary",
+      "Standard NBA Contract",
+      "Two-Way Contract",
+      "Two-Way Player",
+      "Years of Service"
+    ],
+    "CAP-001": [
+      "Expansion Team",
+      "Projected BRI",
+      "Salary Cap",
+      "Salary Cap Year"
+    ],
+    "CAP-002": [
+      "Expansion Team",
+      "Projected BRI",
+      "Projected Local Expansion Team BRI",
+      "Salary Cap",
+      "Salary Cap Year"
+    ],
+    "CAP-003": [
+      "Basketball Related Income",
+      "Salary Cap",
+      "Salary Cap Year",
+      "Total Salaries and Benefits"
+    ],
+    "CAP-004": [
+      "Minimum Team Salary",
+      "Salary Cap",
+      "Salary Cap Year"
+    ],
+    "CAP-005": [
+      "Salary Cap",
+      "Salary Cap Year",
+      "Tax Level"
+    ],
+    "CAP-006": [
+      "First Apron Level",
+      "Salary Cap",
+      "Salary Cap Year",
+      "Tax Level"
+    ],
+    "CAP-007": [
+      "Salary Cap",
+      "Salary Cap Year",
+      "Second Apron Level",
+      "Tax Level"
+    ],
+    "CAP-008": [
+      "First Apron Level",
+      "Minimum Team Salary",
+      "Salary Cap",
+      "Second Apron Level",
+      "Tax Level"
+    ],
+    "CAP-009": [
+      "Basketball Related Income",
+      "First Apron Level",
+      "Minimum Team Salary",
+      "Projected BRI",
+      "Salary Cap",
+      "Second Apron Level",
+      "Tax Level",
+      "Total Salaries and Benefits"
+    ],
+    "CAP-010": [
+      "First Apron Level",
+      "Minimum Team Salary",
+      "Salary Cap",
+      "Salary Cap Year",
+      "Second Apron Level",
+      "Tax Level"
+    ],
+    "CAP-011": [
+      "Salary Cap",
+      "Salary Cap Year",
+      "Tax Bracket Amount"
+    ],
+    "CAP-012": [
+      "Repeater Tax Rates",
+      "Salary Cap Year",
+      "Standard Tax Rates",
+      "Tax Bracket Amount",
+      "Tax Level",
+      "Tax Team Salary"
+    ],
+    "CAP-013": [
+      "Free Agent",
+      "Incentive Compensation",
+      "Minimum Player Salary",
+      "Standard NBA Contract",
+      "Tax Team Salary",
+      "Team Salary",
+      "Two-Way Player",
+      "Years of Service"
+    ],
+    "CAP-014": [
+      "Estimated BRI",
+      "Estimated Total Salaries and Benefits",
+      "First Apron Level",
+      "Interim Projected BRI",
+      "Minimum Team Salary",
+      "Projected BRI",
+      "Salary Cap",
+      "Second Apron Level",
+      "Tax Level"
+    ],
+    "CAP-015": [
+      "First Apron Level",
+      "Minimum Team Salary",
+      "Salary Cap",
+      "Salary Cap Year",
+      "Second Apron Level",
+      "Tax Level"
+    ],
+    "CAP-016": [
+      "Exception",
+      "Salary Cap",
+      "Team Salary"
+    ],
+    "CAP-017": [
+      "Player Contract",
+      "Room",
+      "Salary",
+      "Salary Cap Year"
+    ],
+    "CAP-018": [
+      "MTS Cap Hold Team Salary",
+      "MTS Payment Team Salary",
+      "Minimum Team Salary",
+      "Salary",
+      "Salary Cap Year"
+    ],
+    "CAP-019": [
+      "MTS Cap Hold Team Salary",
+      "MTS Threshold",
+      "Minimum Team Salary",
+      "Regular Season",
+      "Salary Cap Year",
+      "Team Salary"
+    ],
+    "CAP-020": [
+      "Incentive Compensation",
+      "MTS Cap Hold Team Salary",
+      "Minimum Team Salary"
+    ],
+    "CAP-021": [
+      "MTS Payment Team Salary",
+      "Minimum Team Salary",
+      "Salary Cap Year"
+    ],
+    "CAP-022": [
+      "Exception",
+      "Minimum Team Salary",
+      "Salary Cap",
+      "Team Salary"
+    ],
+    "CAP-023": [
+      "Team Salary"
+    ],
+    "CAP-024": [
+      "Apron Team Salary",
+      "Exception",
+      "First Refusal Exercise Notice",
+      "First Round Pick",
+      "Free Agent Amount",
+      "Maximum Qualifying Offer",
+      "Performance Bonus",
+      "Qualifying Offer",
+      "Required Tender",
+      "Restricted Free Agent",
+      "Team Salary",
+      "Unlikely Bonus"
+    ],
+    "CAP-025": [
+      "Apron Team Salary",
+      "Draft Pick Penalty",
+      "Regular Season",
+      "Salary Cap Year",
+      "Second Apron Level",
+      "Second Apron Team"
+    ],
+    "CAP-026": [
+      "Expansion Team",
+      "First Year Expansion Team Salary Cap",
+      "Minimum Team Salary",
+      "Salary Cap"
+    ],
+    "CAP-027": [
+      "Expansion Team",
+      "Minimum Team Salary",
+      "Salary Cap",
+      "Second Year Expansion Team Salary Cap"
+    ],
+    "CAP-028": [
+      "Deferred Compensation",
+      "Salary",
+      "Salary Cap Year"
+    ],
+    "CAP-029": [
+      "Moratorium Period",
+      "Over 38 Contract",
+      "Qualifying Veteran Free Agent",
+      "Salary",
+      "Salary Cap Year",
+      "Zero Year"
+    ],
+    "CAP-030": [
+      "Base Compensation",
+      "Early Termination Option",
+      "Excluded International Player Payment Amount",
+      "Salary",
+      "Salary Cap Year"
+    ],
+    "CAP-031": [
+      "Incentive Compensation",
+      "Performance Bonus",
+      "Salary",
+      "Salary Cap Year",
+      "Team Salary"
+    ],
+    "CAP-032": [
+      "Excluded International Player Payment Amount",
+      "Minimum Team Salary",
+      "Salary",
+      "Salary Cap Year",
+      "Two-Way Contract"
+    ],
+    "CAP-033": [
+      "Base Compensation",
+      "Minimum Player Salary",
+      "Salary"
+    ],
+    "CAP-034": [
+      "Exception",
+      "First Round Pick",
+      "Free Agent Amount",
+      "Minimum Team Salary",
+      "Offer Sheet",
+      "Salary",
+      "Team Salary"
+    ],
+    "CAP-035": [
+      "Early Qualifying Veteran Free Agent",
+      "Estimated Average Player Salary",
+      "Free Agent Amount",
+      "Maximum Annual Salary",
+      "Minimum Player Salary",
+      "Non-Qualifying Veteran Free Agent",
+      "Qualifying Veteran Free Agent",
+      "Team Salary",
+      "Veteran Free Agent"
+    ],
+    "CAP-036": [
+      "First Round Pick",
+      "Required Tender",
+      "Rookie Scale Amounts",
+      "Rookie Scale Cap Hold Amount",
+      "Salary Cap Year",
+      "Team Salary"
+    ],
+    "CAP-037": [
+      "First Round Pick",
+      "Minimum Annual Salary",
+      "Offer Sheet",
+      "Team Salary"
+    ],
+    "CAP-038": [
+      "Free Agent Amount",
+      "Offer Sheet",
+      "Restricted Free Agent",
+      "Room",
+      "Salary Cap",
+      "Team Salary",
+      "Veteran Free Agent"
+    ],
+    "CAP-039": [
+      "Regular Season",
+      "Salary",
+      "Salary Cap Year",
+      "Team Salary"
+    ],
+    "CAP-040": [
+      "Exhibit 10 Bonus",
+      "Minimum Player Salary Exception",
+      "Regular Season",
+      "Room",
+      "Salary",
+      "Salary Cap Year",
+      "Second Round Pick Exception",
+      "Summer Contract",
+      "Team Salary",
+      "Two-Way Player"
+    ],
+    "TRADE-001": [
+      "Player Contract"
+    ],
+    "TRADE-002": [
+      "Compensation",
+      "Salary Cap",
+      "Salary Cap Year"
+    ],
+    "TRADE-003": [
+      "Early Qualifying Veteran Free Agent",
+      "Free Agent",
+      "Option Year",
+      "Qualifying Veteran Free Agent",
+      "Two-Way Player"
+    ],
+    "TRADE-004": [
+      "Early Termination Option",
+      "Option"
+    ],
+    "TRADE-005": [
+      "Standard NBA Contract",
+      "Two-Way Contract"
+    ],
+    "TRADE-006": [
+      "Free Agent",
+      "Salary Cap Year",
+      "Standard NBA Contract",
+      "Two-Way Contract"
+    ],
+    "TRADE-007": [
+      "Early Qualifying Veteran Free Agent",
+      "Minimum Player Salary",
+      "Qualifying Veteran Free Agent",
+      "Salary Cap",
+      "Team Salary"
+    ],
+    "TRADE-008": [
+      "Higher Max Criteria",
+      "Mid-Level Salary Exception for Room Teams",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Option Year",
+      "Prior Team",
+      "Room",
+      "Salary Cap",
+      "Unlikely Bonus",
+      "Veteran Free Agent"
+    ],
+    "TRADE-009": [
+      "Early Termination Option",
+      "Extension",
+      "Option",
+      "Renegotiation",
+      "Salary Cap Year",
+      "Unlikely Bonus"
+    ],
+    "TRADE-010": [
+      "Extension",
+      "Player Contract"
+    ],
+    "TRADE-011": [
+      "Designated Veteran Player Extension",
+      "Extension",
+      "Renegotiation",
+      "Salary Cap Year",
+      "Unlikely Bonus"
+    ],
+    "TRADE-012": [
+      "Designated Veteran Player Contract",
+      "Designated Veteran Player Extension"
+    ],
+    "TRADE-013": [
+      "Base Compensation",
+      "Extension",
+      "Higher Max Criteria",
+      "Maximum Annual Salary",
+      "Rookie Scale Contract",
+      "Room",
+      "Salary Cap"
+    ],
+    "TRADE-014": [
+      "Player Contract"
+    ],
+    "TRADE-015": [
+      "Compensation",
+      "Player Contract"
+    ],
+    "TRADE-017": [
+      "Replacement Player",
+      "Salary",
+      "Salary Cap Year",
+      "Traded Player",
+      "Traded Player Exception"
+    ],
+    "TRADE-018": [
+      "Replacement Player",
+      "Salary",
+      "Salary Cap Year",
+      "Traded Player",
+      "Traded Player Exception"
+    ],
+    "TRADE-019": [
+      "Replacement Player",
+      "Salary",
+      "Salary Cap Year",
+      "Traded Player",
+      "Traded Player Exception"
+    ],
+    "TRADE-020": [
+      "Replacement Player",
+      "Salary",
+      "Salary Cap",
+      "Salary Cap Year",
+      "Traded Player",
+      "Traded Player Exception"
+    ],
+    "TRADE-021": [
+      "Salary",
+      "Salary Cap",
+      "Team Salary"
+    ],
+    "TRADE-022": [
+      "Salary Cap",
+      "Team Salary",
+      "Traded Player Exception"
+    ],
+    "TRADE-023": [
+      "Salary Cap Year",
+      "Traded Player",
+      "Traded Player Exception"
+    ],
+    "TRADE-024": [
+      "Minimum Player Salary",
+      "Replacement Player",
+      "Salary Cap Year",
+      "Traded Player"
+    ],
+    "TRADE-025": [
+      "Early Qualifying Veteran Free Agent",
+      "Non-Qualifying Veteran Free Agent",
+      "Qualifying Veteran Free Agent",
+      "Salary Cap",
+      "Team Salary",
+      "Traded Player Exception",
+      "Unlikely Bonus"
+    ],
+    "TRADE-026": [
+      "Base Compensation",
+      "Minimum Player Salary",
+      "Salary",
+      "Traded Player",
+      "Traded Player Exception"
+    ],
+    "TRADE-027": [
+      "Disabled Player Exception",
+      "Salary Cap Year",
+      "Traded Player Exception"
+    ],
+    "TRADE-028": [
+      "Traded Player Exception",
+      "Two-Way Player"
+    ],
+    "TRADE-029": [
+      "Apron Team Salary",
+      "First Apron Level",
+      "Traded Player Exception"
+    ],
+    "TRADE-030": [
+      "Salary Cap",
+      "Team Salary",
+      "Traded Player Exception"
+    ],
+    "TRADE-031": [
+      "Early Qualifying Veteran Free Agent",
+      "Qualifying Veteran Free Agent",
+      "Traded Player Exception"
+    ],
+    "TRADE-032": [
+      "Base Compensation",
+      "Salary",
+      "Salary Cap Year"
+    ],
+    "TRADE-033": [
+      "Base Compensation",
+      "Compensation",
+      "Option Year"
+    ],
+    "TRADE-034": [
+      "Base Compensation",
+      "Extension",
+      "Option Year"
+    ],
+    "TRADE-035": [
+      "Player Contract"
+    ],
+    "TRADE-036": [
+      "Player Contract",
+      "Years of Service"
+    ],
+    "TRADE-037": [
+      "Extension",
+      "Maximum Annual Salary",
+      "Player Contract",
+      "Renegotiation",
+      "Salary Cap"
+    ],
+    "TRADE-038": [
+      "Traded Player Exception"
+    ]
+  },
+  "term_to_rules": {
+    "10-Day Contract": [
+      "CONTRACT-034",
+      "ROSTER-006",
+      "ROSTER-007",
+      "ROSTER-008"
+    ],
+    "5th Year Eligible Player": [
+      "CONTRACT-002",
+      "CONTRACT-006"
+    ],
+    "Active List": [
+      "CONTRACT-034",
+      "ROSTER-001",
+      "ROSTER-005",
+      "ROSTER-007",
+      "ROSTER-010",
+      "ROSTER-011"
+    ],
+    "Aggregated Standard Traded Player Exception": [
+      "APRON-013"
+    ],
+    "Applicable Apron Level": [
+      "APRON-004",
+      "APRON-005",
+      "APRON-021"
+    ],
+    "Apron Team Salary": [
+      "APRON-003",
+      "APRON-004",
+      "APRON-005",
+      "APRON-006",
+      "APRON-007",
+      "APRON-008",
+      "APRON-009",
+      "APRON-010",
+      "APRON-011",
+      "APRON-012",
+      "APRON-013",
+      "APRON-014",
+      "APRON-015",
+      "APRON-016",
+      "APRON-017",
+      "APRON-021",
+      "APRON-022",
+      "APRON-025",
+      "CAP-024",
+      "CAP-025",
+      "EXC-013",
+      "EXC-017",
+      "EXC-018",
+      "EXC-019",
+      "EXC-020",
+      "EXC-021",
+      "TRADE-029"
+    ],
+    "Average Player Salary": [
+      "EXC-004",
+      "FA-039"
+    ],
+    "Base Compensation": [
+      "CAP-030",
+      "CAP-033",
+      "CONTRACT-005",
+      "CONTRACT-016",
+      "CONTRACT-017",
+      "CONTRACT-028",
+      "CONTRACT-029",
+      "CONTRACT-042",
+      "CONTRACT-043",
+      "EXC-023",
+      "FA-008",
+      "FA-017",
+      "FA-024",
+      "FA-025",
+      "ROSTER-004",
+      "ROSTER-005",
+      "TRADE-013",
+      "TRADE-026",
+      "TRADE-032",
+      "TRADE-033",
+      "TRADE-034"
+    ],
+    "Basketball Related Income": [
+      "CAP-003",
+      "CAP-009"
+    ],
+    "Bi-annual Exception": [
+      "APRON-006",
+      "EXC-014",
+      "EXC-028",
+      "EXC-029"
+    ],
+    "Compensation": [
+      "CONTRACT-036",
+      "TRADE-002",
+      "TRADE-015",
+      "TRADE-033"
+    ],
+    "Conversion Protection Amount": [
+      "CONTRACT-033",
+      "ROSTER-016",
+      "ROSTER-019"
+    ],
+    "Current Base Compensation": [
+      "CONTRACT-027"
+    ],
+    "Deferred Compensation": [
+      "CAP-028"
+    ],
+    "Designated Veteran Player Contract": [
+      "CONTRACT-003",
+      "TRADE-012"
+    ],
+    "Designated Veteran Player Extension": [
+      "CONTRACT-005",
+      "CONTRACT-014",
+      "CONTRACT-020",
+      "CONTRACT-021",
+      "CONTRACT-024",
+      "TRADE-011",
+      "TRADE-012"
+    ],
+    "Disabled Player Exception": [
+      "EXC-005",
+      "EXC-009",
+      "EXC-010",
+      "EXC-024",
+      "EXC-028",
+      "EXC-029",
+      "TRADE-027"
+    ],
+    "Disabling Injury or Illness": [
+      "EXC-005",
+      "EXC-006",
+      "EXC-007",
+      "EXC-008",
+      "EXC-009",
+      "EXC-010"
+    ],
+    "Draft Pick Penalty": [
+      "APRON-023",
+      "APRON-024",
+      "CAP-025"
+    ],
+    "Early Qualifying Veteran Free Agent": [
+      "CAP-035",
+      "CONTRACT-010",
+      "CONTRACT-011",
+      "EXC-004",
+      "EXC-023",
+      "FA-039",
+      "TRADE-003",
+      "TRADE-007",
+      "TRADE-025",
+      "TRADE-031"
+    ],
+    "Early Termination Option": [
+      "CAP-030",
+      "CONTRACT-018",
+      "CONTRACT-019",
+      "CONTRACT-020",
+      "CONTRACT-031",
+      "CONTRACT-041",
+      "FA-003",
+      "FA-017",
+      "ROSTER-013",
+      "TRADE-004",
+      "TRADE-009"
+    ],
+    "Effective Season": [
+      "CONTRACT-019"
+    ],
+    "Estimated Average Player Salary": [
+      "CAP-035",
+      "CONTRACT-021"
+    ],
+    "Estimated BRI": [
+      "CAP-014"
+    ],
+    "Estimated Total Salaries": [
+      "EXC-004"
+    ],
+    "Estimated Total Salaries and Benefits": [
+      "CAP-014"
+    ],
+    "Exception": [
+      "CAP-016",
+      "CAP-022",
+      "CAP-024",
+      "CAP-034",
+      "ROSTER-015"
+    ],
+    "Excluded International Player Payment Amount": [
+      "CAP-030",
+      "CAP-032",
+      "CONTRACT-027"
+    ],
+    "Exhibit 10": [
+      "CONTRACT-033",
+      "CONTRACT-041",
+      "ROSTER-014",
+      "ROSTER-016",
+      "ROSTER-019"
+    ],
+    "Exhibit 10 Bonus": [
+      "CAP-040",
+      "CONTRACT-033",
+      "ROSTER-019"
+    ],
+    "Expanded Traded Player Exception": [
+      "APRON-010",
+      "APRON-017"
+    ],
+    "Expansion Team": [
+      "CAP-001",
+      "CAP-002",
+      "CAP-026",
+      "CAP-027"
+    ],
+    "Extension": [
+      "CONTRACT-005",
+      "CONTRACT-012",
+      "CONTRACT-013",
+      "CONTRACT-015",
+      "CONTRACT-018",
+      "CONTRACT-020",
+      "CONTRACT-036",
+      "CONTRACT-037",
+      "CONTRACT-039",
+      "CONTRACT-040",
+      "TRADE-009",
+      "TRADE-010",
+      "TRADE-011",
+      "TRADE-013",
+      "TRADE-034",
+      "TRADE-037"
+    ],
+    "First Apron Level": [
+      "APRON-001",
+      "APRON-004",
+      "APRON-005",
+      "APRON-006",
+      "APRON-007",
+      "APRON-008",
+      "APRON-009",
+      "APRON-010",
+      "APRON-011",
+      "APRON-012",
+      "APRON-016",
+      "APRON-017",
+      "APRON-018",
+      "APRON-020",
+      "APRON-025",
+      "CAP-006",
+      "CAP-008",
+      "CAP-009",
+      "CAP-010",
+      "CAP-014",
+      "CAP-015",
+      "EXC-013",
+      "EXC-017",
+      "EXC-018",
+      "EXC-019",
+      "EXC-020",
+      "EXC-021",
+      "TRADE-029"
+    ],
+    "First Refusal Exercise Notice": [
+      "APRON-003",
+      "CAP-024",
+      "FA-023",
+      "FA-024",
+      "FA-026",
+      "FA-027",
+      "FA-028",
+      "FA-030",
+      "FA-038"
+    ],
+    "First Round Pick": [
+      "APRON-003",
+      "CAP-024",
+      "CAP-034",
+      "CAP-036",
+      "CAP-037",
+      "CONTRACT-022",
+      "CONTRACT-023",
+      "CONTRACT-025",
+      "CONTRACT-029",
+      "CONTRACT-030",
+      "CONTRACT-038",
+      "FA-009",
+      "FA-016",
+      "FA-018",
+      "ROSTER-017"
+    ],
+    "First Year Expansion Team Salary Cap": [
+      "CAP-026"
+    ],
+    "Free Agent": [
+      "CAP-013",
+      "FA-007",
+      "ROSTER-017",
+      "TRADE-003",
+      "TRADE-006"
+    ],
+    "Free Agent Amount": [
+      "CAP-024",
+      "CAP-034",
+      "CAP-035",
+      "CAP-038",
+      "FA-032",
+      "ROSTER-020"
+    ],
+    "Higher Max Criteria": [
+      "CONTRACT-002",
+      "CONTRACT-003",
+      "CONTRACT-005",
+      "CONTRACT-023",
+      "TRADE-008",
+      "TRADE-013"
+    ],
+    "Inactive List": [
+      "CONTRACT-034",
+      "ROSTER-001",
+      "ROSTER-004",
+      "ROSTER-005",
+      "ROSTER-007"
+    ],
+    "Incentive Compensation": [
+      "CAP-013",
+      "CAP-020",
+      "CAP-031",
+      "CONTRACT-010",
+      "CONTRACT-011",
+      "CONTRACT-012",
+      "CONTRACT-013",
+      "CONTRACT-016",
+      "CONTRACT-017",
+      "CONTRACT-021",
+      "CONTRACT-023",
+      "CONTRACT-024",
+      "CONTRACT-028",
+      "CONTRACT-031",
+      "CONTRACT-036",
+      "CONTRACT-040",
+      "FA-008",
+      "FA-025"
+    ],
+    "Interim Projected BRI": [
+      "CAP-014"
+    ],
+    "Likely Bonus": [
+      "CONTRACT-005",
+      "CONTRACT-016",
+      "CONTRACT-017",
+      "CONTRACT-021",
+      "CONTRACT-039",
+      "CONTRACT-040",
+      "EXC-003",
+      "EXC-004",
+      "FA-008",
+      "FA-025",
+      "FA-039"
+    ],
+    "MTS Cap Hold Team Salary": [
+      "CAP-018",
+      "CAP-019",
+      "CAP-020"
+    ],
+    "MTS Payment Team Salary": [
+      "CAP-018",
+      "CAP-021"
+    ],
+    "MTS Threshold": [
+      "CAP-019"
+    ],
+    "Maximum Annual Salary": [
+      "CAP-035",
+      "CONTRACT-001",
+      "CONTRACT-023",
+      "CONTRACT-024",
+      "EXC-002",
+      "FA-017",
+      "FA-039",
+      "TRADE-013",
+      "TRADE-037"
+    ],
+    "Maximum Qualifying Offer": [
+      "APRON-003",
+      "CAP-024",
+      "FA-017",
+      "FA-020",
+      "FA-021",
+      "FA-022",
+      "FA-030",
+      "FA-032",
+      "FA-038"
+    ],
+    "Mid-Level Salary Exception for Room Teams": [
+      "APRON-018",
+      "EXC-011",
+      "EXC-012",
+      "EXC-013",
+      "EXC-014",
+      "TRADE-008"
+    ],
+    "Minimum Annual Salary": [
+      "CAP-037",
+      "CONTRACT-031",
+      "EXC-003",
+      "FA-011",
+      "FA-039",
+      "ROSTER-017",
+      "ROSTER-020"
+    ],
+    "Minimum Annual Salary Scale": [
+      "CONTRACT-007",
+      "CONTRACT-008",
+      "CONTRACT-009",
+      "EXC-025"
+    ],
+    "Minimum Player Salary": [
+      "CAP-013",
+      "CAP-033",
+      "CAP-035",
+      "CONTRACT-001",
+      "CONTRACT-007",
+      "CONTRACT-008",
+      "CONTRACT-009",
+      "CONTRACT-027",
+      "CONTRACT-032",
+      "CONTRACT-033",
+      "CONTRACT-034",
+      "CONTRACT-035",
+      "CONTRACT-042",
+      "EXC-016",
+      "EXC-022",
+      "EXC-023",
+      "EXC-025",
+      "FA-010",
+      "ROSTER-006",
+      "ROSTER-014",
+      "ROSTER-018",
+      "ROSTER-019",
+      "TRADE-007",
+      "TRADE-024",
+      "TRADE-026"
+    ],
+    "Minimum Player Salary Exception": [
+      "CAP-040",
+      "FA-023"
+    ],
+    "Minimum Team Salary": [
+      "CAP-004",
+      "CAP-008",
+      "CAP-009",
+      "CAP-010",
+      "CAP-014",
+      "CAP-015",
+      "CAP-018",
+      "CAP-019",
+      "CAP-020",
+      "CAP-021",
+      "CAP-022",
+      "CAP-026",
+      "CAP-027",
+      "CAP-032",
+      "CAP-034"
+    ],
+    "Minimum Traded Player": [
+      "EXC-022"
+    ],
+    "Minimum-Plus Qualifying Offer Amount": [
+      "FA-011"
+    ],
+    "Moratorium Period": [
+      "CAP-029",
+      "CONTRACT-022",
+      "EXC-002",
+      "FA-001",
+      "FA-002",
+      "FA-006",
+      "FA-028",
+      "FA-039"
+    ],
+    "NBAGL Season": [
+      "ROSTER-001"
+    ],
+    "NBAGL Work Assignment": [
+      "ROSTER-001",
+      "ROSTER-002",
+      "ROSTER-003",
+      "ROSTER-004"
+    ],
+    "New Team": [
+      "FA-022",
+      "FA-025",
+      "FA-027",
+      "FA-030",
+      "FA-031",
+      "FA-032",
+      "FA-034",
+      "FA-036"
+    ],
+    "Non-Draft Rookie": [
+      "FA-004"
+    ],
+    "Non-Guaranteed, Training Camp Contract": [
+      "CONTRACT-041",
+      "CONTRACT-042",
+      "ROSTER-018"
+    ],
+    "Non-Qualifying Veteran Free Agent": [
+      "CAP-035",
+      "EXC-003",
+      "EXC-023",
+      "FA-039",
+      "TRADE-025"
+    ],
+    "Non-Taxpayer Mid-Level Salary Exception": [
+      "APRON-007",
+      "APRON-009",
+      "APRON-018",
+      "EXC-005",
+      "EXC-012",
+      "EXC-013",
+      "EXC-014",
+      "EXC-028",
+      "EXC-029",
+      "FA-024",
+      "TRADE-008"
+    ],
+    "Offer Sheet": [
+      "CAP-034",
+      "CAP-037",
+      "CAP-038",
+      "CONTRACT-036",
+      "EXC-004",
+      "EXC-012",
+      "FA-002",
+      "FA-013",
+      "FA-017",
+      "FA-021",
+      "FA-022",
+      "FA-023",
+      "FA-024",
+      "FA-025",
+      "FA-026",
+      "FA-027",
+      "FA-028",
+      "FA-029",
+      "FA-030",
+      "FA-031",
+      "FA-032",
+      "FA-034",
+      "FA-036",
+      "FA-037",
+      "FA-038",
+      "FA-039",
+      "ROSTER-017"
+    ],
+    "Option": [
+      "CONTRACT-016",
+      "CONTRACT-017",
+      "CONTRACT-019",
+      "CONTRACT-025",
+      "FA-003",
+      "TRADE-004",
+      "TRADE-009"
+    ],
+    "Option Year": [
+      "CONTRACT-006",
+      "CONTRACT-014",
+      "CONTRACT-016",
+      "CONTRACT-017",
+      "CONTRACT-019",
+      "CONTRACT-020",
+      "CONTRACT-022",
+      "CONTRACT-025",
+      "CONTRACT-026",
+      "CONTRACT-028",
+      "CONTRACT-029",
+      "CONTRACT-031",
+      "CONTRACT-041",
+      "EXC-004",
+      "EXC-025",
+      "FA-016",
+      "FA-017",
+      "FA-018",
+      "FA-022",
+      "ROSTER-013",
+      "TRADE-003",
+      "TRADE-008",
+      "TRADE-033",
+      "TRADE-034"
+    ],
+    "Over 38 Contract": [
+      "CAP-029"
+    ],
+    "Performance Bonus": [
+      "APRON-003",
+      "CAP-024",
+      "CAP-031"
+    ],
+    "Player Contract": [
+      "CAP-017",
+      "CONTRACT-014",
+      "CONTRACT-015",
+      "CONTRACT-038",
+      "EXC-001",
+      "EXC-016",
+      "EXC-026",
+      "EXC-027",
+      "FA-001",
+      "FA-002",
+      "FA-003",
+      "FA-004",
+      "FA-006",
+      "FA-013",
+      "FA-014",
+      "FA-015",
+      "FA-026",
+      "FA-027",
+      "FA-030",
+      "FA-033",
+      "TRADE-001",
+      "TRADE-010",
+      "TRADE-014",
+      "TRADE-015",
+      "TRADE-035",
+      "TRADE-036",
+      "TRADE-037"
+    ],
+    "Principal Terms": [
+      "FA-022",
+      "FA-025",
+      "FA-026",
+      "FA-030"
+    ],
+    "Prior Salary Qualifying Offer Amount": [
+      "FA-011"
+    ],
+    "Prior Team": [
+      "APRON-018",
+      "CONTRACT-002",
+      "CONTRACT-003",
+      "CONTRACT-010",
+      "CONTRACT-011",
+      "CONTRACT-014",
+      "EXC-002",
+      "EXC-004",
+      "EXC-012",
+      "FA-002",
+      "FA-018",
+      "FA-039",
+      "TRADE-008"
+    ],
+    "Projected BRI": [
+      "CAP-001",
+      "CAP-002",
+      "CAP-009",
+      "CAP-014"
+    ],
+    "Projected Local Expansion Team BRI": [
+      "CAP-002"
+    ],
+    "Qualifying Offer": [
+      "APRON-003",
+      "CAP-024",
+      "CONTRACT-026",
+      "CONTRACT-038",
+      "EXC-003",
+      "FA-008",
+      "FA-009",
+      "FA-010",
+      "FA-011",
+      "FA-012",
+      "FA-016",
+      "FA-017",
+      "FA-018",
+      "FA-019",
+      "FA-020",
+      "FA-021",
+      "FA-022",
+      "FA-030",
+      "FA-032",
+      "FA-035",
+      "FA-037",
+      "FA-038"
+    ],
+    "Qualifying Veteran Free Agent": [
+      "CAP-029",
+      "CAP-035",
+      "CONTRACT-010",
+      "CONTRACT-011",
+      "CONTRACT-014",
+      "CONTRACT-020",
+      "CONTRACT-022",
+      "EXC-002",
+      "EXC-023",
+      "FA-039",
+      "TRADE-003",
+      "TRADE-007",
+      "TRADE-025",
+      "TRADE-031"
+    ],
+    "ROFR Team": [
+      "FA-016",
+      "FA-018",
+      "FA-019",
+      "FA-021",
+      "FA-022",
+      "FA-023",
+      "FA-025",
+      "FA-026",
+      "FA-027",
+      "FA-028",
+      "FA-029",
+      "FA-030",
+      "FA-031",
+      "FA-032",
+      "FA-033",
+      "FA-034",
+      "FA-035",
+      "FA-036",
+      "FA-037",
+      "FA-038"
+    ],
+    "Regular Salary": [
+      "CONTRACT-010",
+      "CONTRACT-011",
+      "CONTRACT-012",
+      "CONTRACT-013",
+      "CONTRACT-021",
+      "CONTRACT-036",
+      "CONTRACT-037",
+      "CONTRACT-039",
+      "CONTRACT-040",
+      "EXC-003",
+      "EXC-004",
+      "FA-039"
+    ],
+    "Regular Season": [
+      "CAP-019",
+      "CAP-025",
+      "CAP-039",
+      "CAP-040",
+      "ROSTER-006",
+      "ROSTER-008",
+      "ROSTER-010",
+      "ROSTER-011",
+      "ROSTER-012",
+      "ROSTER-016",
+      "ROSTER-018"
+    ],
+    "Renegotiation": [
+      "CONTRACT-004",
+      "CONTRACT-037",
+      "CONTRACT-039",
+      "CONTRACT-040",
+      "TRADE-009",
+      "TRADE-011",
+      "TRADE-037"
+    ],
+    "Repeater Tax Rates": [
+      "CAP-012"
+    ],
+    "Replacement Player": [
+      "EXC-005",
+      "EXC-017",
+      "EXC-018",
+      "EXC-019",
+      "EXC-020",
+      "EXC-022",
+      "EXC-029",
+      "TRADE-017",
+      "TRADE-018",
+      "TRADE-019",
+      "TRADE-020",
+      "TRADE-024"
+    ],
+    "Required Tender": [
+      "APRON-003",
+      "CAP-024",
+      "CAP-036",
+      "CONTRACT-030",
+      "CONTRACT-038"
+    ],
+    "Rest-of-Season Contract": [
+      "CONTRACT-035"
+    ],
+    "Restricted Free Agent": [
+      "APRON-003",
+      "CAP-024",
+      "CAP-038",
+      "CONTRACT-019",
+      "EXC-003",
+      "FA-002",
+      "FA-003",
+      "FA-007",
+      "FA-013",
+      "FA-016",
+      "FA-018",
+      "FA-021",
+      "FA-022",
+      "FA-024",
+      "FA-026",
+      "FA-029",
+      "FA-034",
+      "FA-035",
+      "FA-037",
+      "FA-038"
+    ],
+    "Right of First Refusal": [
+      "FA-007",
+      "FA-011",
+      "FA-014",
+      "FA-016",
+      "FA-018",
+      "FA-019",
+      "FA-021",
+      "FA-023",
+      "FA-027",
+      "FA-029",
+      "FA-030",
+      "FA-031",
+      "FA-032",
+      "FA-033",
+      "FA-034",
+      "FA-035",
+      "FA-037",
+      "FA-038"
+    ],
+    "Rookie Free Agent": [
+      "CONTRACT-030"
+    ],
+    "Rookie Salary Scale": [
+      "CONTRACT-025",
+      "CONTRACT-026",
+      "CONTRACT-028",
+      "FA-009"
+    ],
+    "Rookie Scale Amounts": [
+      "CAP-036",
+      "CONTRACT-025",
+      "CONTRACT-026",
+      "CONTRACT-027",
+      "CONTRACT-029",
+      "FA-009",
+      "FA-011"
+    ],
+    "Rookie Scale Cap Hold Amount": [
+      "CAP-036"
+    ],
+    "Rookie Scale Contract": [
+      "CONTRACT-006",
+      "CONTRACT-018",
+      "CONTRACT-022",
+      "CONTRACT-025",
+      "CONTRACT-027",
+      "CONTRACT-028",
+      "CONTRACT-029",
+      "CONTRACT-038",
+      "EXC-015",
+      "FA-009",
+      "FA-016",
+      "FA-017",
+      "TRADE-013"
+    ],
+    "Rookie Scale Extension": [
+      "CONTRACT-005",
+      "CONTRACT-006",
+      "CONTRACT-014",
+      "CONTRACT-022",
+      "CONTRACT-023"
+    ],
+    "Room": [
+      "APRON-018",
+      "CAP-017",
+      "CAP-038",
+      "CAP-040",
+      "CONTRACT-029",
+      "CONTRACT-037",
+      "CONTRACT-039",
+      "FA-022",
+      "FA-023",
+      "FA-024",
+      "ROSTER-015",
+      "TRADE-008",
+      "TRADE-013"
+    ],
+    "Salary": [
+      "CAP-017",
+      "CAP-018",
+      "CAP-028",
+      "CAP-029",
+      "CAP-030",
+      "CAP-031",
+      "CAP-032",
+      "CAP-033",
+      "CAP-034",
+      "CAP-039",
+      "CAP-040",
+      "CONTRACT-001",
+      "CONTRACT-004",
+      "CONTRACT-005",
+      "CONTRACT-007",
+      "CONTRACT-010",
+      "CONTRACT-011",
+      "CONTRACT-012",
+      "CONTRACT-013",
+      "CONTRACT-016",
+      "CONTRACT-017",
+      "CONTRACT-028",
+      "CONTRACT-040",
+      "EXC-023",
+      "TRADE-017",
+      "TRADE-018",
+      "TRADE-019",
+      "TRADE-020",
+      "TRADE-021",
+      "TRADE-026",
+      "TRADE-032"
+    ],
+    "Salary Cap": [
+      "APRON-001",
+      "APRON-002",
+      "APRON-019",
+      "CAP-001",
+      "CAP-002",
+      "CAP-003",
+      "CAP-004",
+      "CAP-005",
+      "CAP-006",
+      "CAP-007",
+      "CAP-008",
+      "CAP-009",
+      "CAP-010",
+      "CAP-011",
+      "CAP-014",
+      "CAP-015",
+      "CAP-016",
+      "CAP-022",
+      "CAP-026",
+      "CAP-027",
+      "CAP-038",
+      "CONTRACT-001",
+      "CONTRACT-002",
+      "CONTRACT-003",
+      "CONTRACT-004",
+      "CONTRACT-005",
+      "CONTRACT-006",
+      "CONTRACT-023",
+      "CONTRACT-024",
+      "CONTRACT-033",
+      "CONTRACT-039",
+      "EXC-001",
+      "EXC-011",
+      "EXC-012",
+      "EXC-013",
+      "EXC-014",
+      "EXC-015",
+      "EXC-020",
+      "EXC-021",
+      "EXC-026",
+      "EXC-028",
+      "EXC-029",
+      "FA-024",
+      "FA-039",
+      "TRADE-002",
+      "TRADE-007",
+      "TRADE-008",
+      "TRADE-013",
+      "TRADE-020",
+      "TRADE-021",
+      "TRADE-022",
+      "TRADE-025",
+      "TRADE-030",
+      "TRADE-037"
+    ],
+    "Salary Cap Year": [
+      "APRON-001",
+      "APRON-002",
+      "APRON-019",
+      "CAP-001",
+      "CAP-002",
+      "CAP-003",
+      "CAP-004",
+      "CAP-005",
+      "CAP-006",
+      "CAP-007",
+      "CAP-010",
+      "CAP-011",
+      "CAP-012",
+      "CAP-015",
+      "CAP-017",
+      "CAP-018",
+      "CAP-019",
+      "CAP-021",
+      "CAP-025",
+      "CAP-028",
+      "CAP-029",
+      "CAP-030",
+      "CAP-031",
+      "CAP-032",
+      "CAP-036",
+      "CAP-039",
+      "CAP-040",
+      "CONTRACT-007",
+      "CONTRACT-009",
+      "CONTRACT-010",
+      "CONTRACT-011",
+      "CONTRACT-012",
+      "CONTRACT-013",
+      "CONTRACT-037",
+      "EXC-002",
+      "EXC-003",
+      "EXC-005",
+      "EXC-008",
+      "EXC-011",
+      "EXC-012",
+      "EXC-013",
+      "EXC-014",
+      "EXC-017",
+      "EXC-018",
+      "EXC-019",
+      "EXC-020",
+      "EXC-022",
+      "EXC-023",
+      "EXC-024",
+      "EXC-025",
+      "FA-009",
+      "FA-010",
+      "FA-011",
+      "FA-014",
+      "FA-023",
+      "FA-024",
+      "FA-030",
+      "FA-038",
+      "ROSTER-012",
+      "ROSTER-014",
+      "ROSTER-017",
+      "TRADE-002",
+      "TRADE-006",
+      "TRADE-009",
+      "TRADE-011",
+      "TRADE-017",
+      "TRADE-018",
+      "TRADE-019",
+      "TRADE-020",
+      "TRADE-023",
+      "TRADE-024",
+      "TRADE-027",
+      "TRADE-032"
+    ],
+    "Season": [
+      "CONTRACT-015",
+      "CONTRACT-018",
+      "CONTRACT-038"
+    ],
+    "Second Apron Level": [
+      "APRON-002",
+      "APRON-004",
+      "APRON-005",
+      "APRON-013",
+      "APRON-014",
+      "APRON-015",
+      "APRON-016",
+      "APRON-022",
+      "CAP-007",
+      "CAP-008",
+      "CAP-009",
+      "CAP-010",
+      "CAP-014",
+      "CAP-015",
+      "CAP-025"
+    ],
+    "Second Apron Team": [
+      "APRON-022",
+      "APRON-023",
+      "APRON-024",
+      "CAP-025"
+    ],
+    "Second Round Pick": [
+      "EXC-025"
+    ],
+    "Second Round Pick Exception": [
+      "CAP-040",
+      "CONTRACT-016"
+    ],
+    "Second Year Expansion Team Salary Cap": [
+      "CAP-027"
+    ],
+    "Standard NBA Contract": [
+      "CAP-013",
+      "CONTRACT-032",
+      "FA-010",
+      "ROSTER-011",
+      "ROSTER-014",
+      "ROSTER-020",
+      "TRADE-005",
+      "TRADE-006"
+    ],
+    "Standard NBA Contract Conversion Option": [
+      "CONTRACT-032",
+      "ROSTER-014"
+    ],
+    "Standard Tax Rates": [
+      "CAP-012"
+    ],
+    "Standard Traded Player Exception": [
+      "APRON-011",
+      "APRON-017"
+    ],
+    "Starter Criteria": [
+      "FA-009",
+      "FA-011",
+      "FA-012"
+    ],
+    "Summer Contract": [
+      "CAP-040"
+    ],
+    "Tax Bracket Amount": [
+      "CAP-011",
+      "CAP-012"
+    ],
+    "Tax Level": [
+      "APRON-001",
+      "APRON-002",
+      "CAP-005",
+      "CAP-006",
+      "CAP-007",
+      "CAP-008",
+      "CAP-009",
+      "CAP-010",
+      "CAP-012",
+      "CAP-014",
+      "CAP-015"
+    ],
+    "Tax Team Salary": [
+      "CAP-012",
+      "CAP-013"
+    ],
+    "Taxpayer Mid-Level Salary Exception": [
+      "APRON-016",
+      "APRON-020",
+      "EXC-013",
+      "EXC-014",
+      "EXC-028",
+      "EXC-029"
+    ],
+    "Team Salary": [
+      "APRON-003",
+      "CAP-013",
+      "CAP-016",
+      "CAP-019",
+      "CAP-022",
+      "CAP-023",
+      "CAP-024",
+      "CAP-031",
+      "CAP-034",
+      "CAP-035",
+      "CAP-036",
+      "CAP-037",
+      "CAP-038",
+      "CAP-039",
+      "CAP-040",
+      "EXC-001",
+      "EXC-014",
+      "EXC-021",
+      "EXC-026",
+      "EXC-028",
+      "EXC-029",
+      "FA-024",
+      "FA-032",
+      "ROSTER-015",
+      "ROSTER-017",
+      "TRADE-007",
+      "TRADE-021",
+      "TRADE-022",
+      "TRADE-025",
+      "TRADE-030"
+    ],
+    "Total Salaries": [
+      "EXC-004"
+    ],
+    "Total Salaries and Benefits": [
+      "CAP-003",
+      "CAP-009"
+    ],
+    "Traded Player": [
+      "EXC-017",
+      "EXC-018",
+      "EXC-019",
+      "EXC-020",
+      "EXC-022",
+      "EXC-023",
+      "EXC-024",
+      "EXC-028",
+      "EXC-029",
+      "TRADE-017",
+      "TRADE-018",
+      "TRADE-019",
+      "TRADE-020",
+      "TRADE-023",
+      "TRADE-024",
+      "TRADE-026"
+    ],
+    "Traded Player Exception": [
+      "APRON-015",
+      "APRON-025",
+      "TRADE-017",
+      "TRADE-018",
+      "TRADE-019",
+      "TRADE-020",
+      "TRADE-022",
+      "TRADE-023",
+      "TRADE-025",
+      "TRADE-026",
+      "TRADE-027",
+      "TRADE-028",
+      "TRADE-029",
+      "TRADE-030",
+      "TRADE-031",
+      "TRADE-038"
+    ],
+    "Transaction Restrictions Table": [
+      "APRON-004",
+      "APRON-005",
+      "APRON-006",
+      "APRON-007",
+      "APRON-008",
+      "APRON-009",
+      "APRON-010",
+      "APRON-011",
+      "APRON-012",
+      "APRON-013",
+      "APRON-014",
+      "APRON-015",
+      "APRON-016",
+      "APRON-020",
+      "APRON-021"
+    ],
+    "Transition Traded Player Exception": [
+      "APRON-012"
+    ],
+    "Two-Way Contract": [
+      "CAP-032",
+      "CONTRACT-009",
+      "CONTRACT-031",
+      "CONTRACT-032",
+      "CONTRACT-033",
+      "CONTRACT-035",
+      "CONTRACT-041",
+      "FA-008",
+      "FA-010",
+      "FA-018",
+      "FA-022",
+      "ROSTER-006",
+      "ROSTER-009",
+      "ROSTER-010",
+      "ROSTER-012",
+      "ROSTER-013",
+      "ROSTER-014",
+      "ROSTER-015",
+      "ROSTER-016",
+      "ROSTER-018",
+      "ROSTER-020",
+      "TRADE-005",
+      "TRADE-006"
+    ],
+    "Two-Way List": [
+      "ROSTER-005"
+    ],
+    "Two-Way Player": [
+      "CAP-013",
+      "CAP-040",
+      "CONTRACT-034",
+      "EXC-024",
+      "ROSTER-001",
+      "ROSTER-005",
+      "ROSTER-007",
+      "ROSTER-009",
+      "ROSTER-011",
+      "ROSTER-014",
+      "ROSTER-020",
+      "TRADE-003",
+      "TRADE-028"
+    ],
+    "Two-Way Player Conversion Option": [
+      "CONTRACT-033",
+      "ROSTER-016",
+      "ROSTER-019"
+    ],
+    "Two-Way Player Salary": [
+      "CONTRACT-031",
+      "CONTRACT-042",
+      "FA-010",
+      "ROSTER-015",
+      "ROSTER-016",
+      "ROSTER-018"
+    ],
+    "Two-Way Qualifying Offer": [
+      "FA-010"
+    ],
+    "Uniform Player Contract": [
+      "CONTRACT-041",
+      "FA-008",
+      "FA-012",
+      "FA-022",
+      "FA-025",
+      "FA-026",
+      "FA-027",
+      "ROSTER-002"
+    ],
+    "Unlikely Bonus": [
+      "CAP-024",
+      "CONTRACT-001",
+      "CONTRACT-004",
+      "CONTRACT-005",
+      "CONTRACT-006",
+      "CONTRACT-016",
+      "CONTRACT-017",
+      "CONTRACT-021",
+      "CONTRACT-022",
+      "CONTRACT-027",
+      "CONTRACT-037",
+      "CONTRACT-039",
+      "CONTRACT-040",
+      "EXC-002",
+      "EXC-003",
+      "EXC-004",
+      "EXC-005",
+      "EXC-011",
+      "EXC-012",
+      "EXC-013",
+      "EXC-014",
+      "EXC-023",
+      "EXC-025",
+      "EXC-026",
+      "FA-008",
+      "FA-023",
+      "FA-024",
+      "FA-039",
+      "TRADE-008",
+      "TRADE-009",
+      "TRADE-011",
+      "TRADE-025"
+    ],
+    "Unrestricted Free Agent": [
+      "FA-001",
+      "FA-003",
+      "FA-016",
+      "FA-018",
+      "FA-019",
+      "FA-035"
+    ],
+    "Veteran Extension": [
+      "CONTRACT-014",
+      "CONTRACT-020",
+      "CONTRACT-021"
+    ],
+    "Veteran Free Agent": [
+      "APRON-008",
+      "APRON-018",
+      "CAP-035",
+      "CAP-038",
+      "EXC-002",
+      "EXC-003",
+      "EXC-004",
+      "EXC-012",
+      "FA-015",
+      "FA-018",
+      "TRADE-008"
+    ],
+    "Veteran Free Agent Exception": [
+      "FA-023",
+      "FA-039"
+    ],
+    "Years of Service": [
+      "CAP-013",
+      "CONTRACT-001",
+      "CONTRACT-002",
+      "CONTRACT-003",
+      "CONTRACT-004",
+      "CONTRACT-005",
+      "CONTRACT-008",
+      "CONTRACT-031",
+      "EXC-004",
+      "EXC-012",
+      "EXC-025",
+      "FA-011",
+      "FA-018",
+      "FA-024",
+      "FA-039",
+      "ROSTER-001",
+      "ROSTER-012",
+      "ROSTER-017",
+      "ROSTER-020",
+      "TRADE-036"
+    ],
+    "Zero Year": [
+      "CAP-029"
+    ]
+  },
+  "unresolved_term_references": {
+    "signing bonus": [
+      "CONTRACT-005",
+      "CONTRACT-027",
+      "CONTRACT-036",
+      "CONTRACT-039"
+    ],
+    "All-NBA": [
+      "CONTRACT-002",
+      "CONTRACT-023"
+    ],
+    "NBA MVP": [
+      "CONTRACT-002",
+      "CONTRACT-023"
+    ],
+    "Renegotiation Season": [
+      "CONTRACT-004",
+      "CONTRACT-039"
+    ],
+    "Exhibit 9": [
+      "CONTRACT-041",
+      "CONTRACT-042"
+    ],
+    "Players Association": [
+      "EXC-008",
+      "ROSTER-003"
+    ],
+    "System Arbitrator": [
+      "FA-005",
+      "FA-036"
+    ],
+    "Play-In": [
+      "CAP-039",
+      "ROSTER-012"
+    ],
+    "Projected Benefits": [
+      "CAP-001",
+      "CAP-002"
+    ],
+    "Interim Audit Report": [
+      "CAP-003",
+      "CAP-014"
+    ],
+    "Audit Report": [
+      "CAP-003",
+      "CAP-014"
+    ],
+    "Tax": [
+      "CAP-021",
+      "CAP-023"
+    ],
+    "Base Year Compensation": [
+      "TRADE-031",
+      "TRADE-038"
+    ],
+    "Subsequent Salary Cap Year": [
+      "APRON-005"
+    ],
+    "Defensive Player of the Year": [
+      "CONTRACT-002"
+    ],
+    "Subsequent Draft": [
+      "CONTRACT-030"
+    ],
+    "Maximum Exhibit 10 Bonus Amount": [
+      "CONTRACT-033"
+    ],
+    "Exhibit 1": [
+      "CONTRACT-041"
+    ],
+    "Exhibit 1A": [
+      "CONTRACT-041"
+    ],
+    "Exhibit 1B": [
+      "CONTRACT-041"
+    ],
+    "Exhibit 2": [
+      "CONTRACT-041"
+    ],
+    "death": [
+      "CONTRACT-043"
+    ],
+    "Compensation protection": [
+      "CONTRACT-043"
+    ],
+    "Fourth Year Salary": [
+      "FA-009"
+    ],
+    "Standard/Two-Way QO Protection Amount": [
+      "FA-010"
+    ],
+    "Maximum Two-Way Protection Amount": [
+      "FA-010"
+    ],
+    "Generally Recognized League Honors": [
+      "FA-025"
+    ],
+    "One Penalty": [
+      "ROSTER-003"
+    ],
+    "Under-Fifteen Game": [
+      "ROSTER-011"
+    ],
+    "Shortfall Amount": [
+      "CAP-008"
+    ],
+    "Carryover Amount": [
+      "CAP-008"
+    ],
+    "Overage Amount": [
+      "CAP-009"
+    ],
+    "Governing Audit Report": [
+      "CAP-020"
+    ],
+    "First Zero Year": [
+      "CAP-029"
+    ],
+    "Adjustment Salary": [
+      "CAP-033"
+    ],
+    "Fitness-to-Play Panel": [
+      "CAP-039"
+    ],
+    "Draft Rookie": [
+      "TRADE-005"
+    ]
+  },
+  "dangling_rule_references": {}
+}

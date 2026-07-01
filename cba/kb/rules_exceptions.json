@@ -1,0 +1,1192 @@
+[
+  {
+    "rule_id": "EXC-001",
+    "bucket": "exceptions",
+    "title": "Existing Contracts Exception",
+    "summary": "A team may exceed the Salary Cap by the amount of its current contractual commitments.",
+    "detail_paraphrase": "A team is permitted to exceed the Salary Cap to the extent of the contracts it already has in place, so long as those contracts complied with this CBA when signed, or were signed before this CBA took effect under the rules then in force.",
+    "conditions": [
+      "Each existing contract must have satisfied the CBA in effect at the time it was entered into."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Salary Cap",
+      "Team Salary",
+      "Player Contract"
+    ],
+    "related_rule_ids": [],
+    "applies_to": [
+      "all teams"
+    ],
+    "thresholds": "Up to the team's total existing contractual commitments.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(a)",
+      "pages": [
+        231
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-002",
+    "bucket": "exceptions",
+    "title": "Veteran Free Agent Exception — Qualifying Veteran Free Agent (Bird)",
+    "summary": "A team may re-sign its own Qualifying Veteran Free Agent up to the player's individual maximum salary.",
+    "detail_paraphrase": "Starting at 12:01 p.m. ET on the last day of the Moratorium Period after the final season of a veteran free agent's contract, a team may re-sign a player who qualifies as a Qualifying Veteran Free Agent (commonly called Bird rights). The new contract's first-year Salary plus Unlikely Bonuses can go up to the player's individual maximum amount set in Article II, Section 7. Year-over-year raises and reductions follow the larger raise schedule of Section 5(a)(2).",
+    "conditions": [
+      "Player must be a Qualifying Veteran Free Agent of his Prior Team (or the team that selected him in that year's Expansion Draft).",
+      "Signing window opens at 12:01 p.m. ET on the last day of the Moratorium Period.",
+      "First-year Salary plus Unlikely Bonuses capped at the player's Article II, Section 7 maximum.",
+      "Subject to the Other Rules of Section 6(n)."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Qualifying Veteran Free Agent",
+      "Veteran Free Agent",
+      "Moratorium Period",
+      "Prior Team",
+      "Unlikely Bonuses",
+      "Salary Cap Year",
+      "Maximum Annual Salary"
+    ],
+    "related_rule_ids": [
+      "EXC-003",
+      "EXC-004",
+      "EXC-024"
+    ],
+    "applies_to": [
+      "team re-signing its own qualifying veteran free agent"
+    ],
+    "thresholds": "First-year Salary + Unlikely Bonuses up to the Article II §7 individual maximum; raises/decreases per §5(a)(2).",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(b)(1)",
+      "pages": [
+        231
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-003",
+    "bucket": "exceptions",
+    "title": "Veteran Free Agent Exception — Non-Qualifying Veteran Free Agent (Non-Bird)",
+    "summary": "A team may re-sign a Non-Qualifying Veteran Free Agent up to the greater of 120% of prior salary, 120% of the minimum, or a required qualifying offer amount.",
+    "detail_paraphrase": "A team re-signing its own Non-Qualifying Veteran Free Agent may offer, in the first salary cap year, the greatest of: (i) 120% of the player's Regular Salary for the last year of his prior contract plus 120% of any Likely and Unlikely Bonuses from that final year; (ii) Salary plus Unlikely Bonuses equal to 120% of the player's then-current Minimum Annual Salary; or (iii) for a team's own Restricted Free Agent, the Salary and Unlikely Bonuses required in a Qualifying Offer. Raises and decreases follow the smaller raise schedule of Section 5(a)(1).",
+    "conditions": [
+      "Player must be a Non-Qualifying Veteran Free Agent of the signing team.",
+      "Option (iii) applies only when the team is signing its own Restricted Free Agent.",
+      "Subject to Article II, Section 7."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Non-Qualifying Veteran Free Agent",
+      "Veteran Free Agent",
+      "Regular Salary",
+      "Likely Bonuses",
+      "Unlikely Bonuses",
+      "Minimum Annual Salary",
+      "Restricted Free Agent",
+      "Qualifying Offer",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "EXC-002",
+      "EXC-004"
+    ],
+    "applies_to": [
+      "team re-signing its own non-qualifying veteran free agent"
+    ],
+    "thresholds": "Greater of: 120% of prior final-year Regular Salary + 120% of prior final-year Likely/Unlikely Bonuses; or 120% of the player's Minimum Annual Salary; or (for own RFA) the Qualifying Offer amount. Raises/decreases per §5(a)(1).",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(b)(2)",
+      "pages": [
+        231
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-004",
+    "bucket": "exceptions",
+    "title": "Veteran Free Agent Exception — Early Qualifying Veteran Free Agent (Early Bird)",
+    "summary": "A team may re-sign an Early Qualifying Veteran Free Agent to a 2+ year deal up to the greater of 175% of prior salary or 105% of the prior-year average player salary.",
+    "detail_paraphrase": "A team re-signing its own Early Qualifying Veteran Free Agent must sign the player to a contract covering at least two seasons (not counting any option year). The first-year amount can be the greater of: (A) 175% of the player's Regular Salary for the final year of his prior contract plus 175% of any Likely and Unlikely Bonuses from that year, or (B) Salary plus Unlikely Bonuses equal to 105% of the Average Player Salary for the prior salary cap year (if that year's Audit Report is not yet finished, 105% of the prior-year Average Player Salary computed using Estimated Total Salaries in place of Total Salaries). Raises and decreases follow the larger raise schedule of Section 5(a)(2).",
+    "conditions": [
+      "Player must be an Early Qualifying Veteran Free Agent of the signing team.",
+      "Contract must cover at least two seasons, excluding any option year.",
+      "Subject to Article II, Section 7."
+    ],
+    "exceptions": [
+      "Per §6(b)(3)(ii): notwithstanding the standard raise rules, if an Early Qualifying Veteran Free Agent with two Years of Service receives an Offer Sheet under Article XI §5(d), his Prior Team may use the Early Bird exception to match that Offer Sheet."
+    ],
+    "depends_on_terms": [
+      "Early Qualifying Veteran Free Agent",
+      "Veteran Free Agent",
+      "Regular Salary",
+      "Likely Bonuses",
+      "Unlikely Bonuses",
+      "Average Player Salary",
+      "Estimated Total Salaries",
+      "Total Salaries",
+      "Years of Service",
+      "Offer Sheet",
+      "Prior Team",
+      "Option Year"
+    ],
+    "related_rule_ids": [
+      "EXC-002",
+      "EXC-003"
+    ],
+    "applies_to": [
+      "team re-signing its own early qualifying veteran free agent"
+    ],
+    "thresholds": "Minimum 2-season term (excluding option year). First-year amount = greater of 175% of prior final-year Regular Salary + 175% of prior Likely/Unlikely Bonuses, or 105% of prior-year Average Player Salary. Raises/decreases per §5(a)(2).",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(b)(3)",
+      "pages": [
+        232
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-005",
+    "bucket": "exceptions",
+    "title": "Disabled Player Exception — Amount and Mechanics",
+    "summary": "A team may sign or acquire one replacement player for a player with a season-ending disabling injury or illness.",
+    "detail_paraphrase": "A team may sign or acquire a single replacement for a player who, due to a Disabling Injury or Illness, cannot play (the Disabled Player). The exception application may be filed for a salary cap year at any time from July 1 through January 15 of that year, regardless of when the injury occurred. A replacement player signed under this exception gets a one-season contract with first-year Salary plus Unlikely Bonuses up to the lesser of (A) 50% of the Disabled Player's salary for that year, or (B) the Non-Taxpayer Mid-Level Salary Exception amount for that year. A replacement player acquired by trade must have only one season left on his contract, and his post-assignment salary may be up to that same lesser amount plus an additional $100,000.",
+    "conditions": [
+      "The replaced player must have a Disabling Injury or Illness making him unable to render playing services.",
+      "Application window: July 1 through January 15 of the salary cap year.",
+      "Signed replacement: one-season contract only.",
+      "Acquired replacement: must have only one season remaining on his contract.",
+      "Subject to the Other Rules of Section 6(n)."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Disabled Player",
+      "Disabling Injury or Illness",
+      "Replacement Player",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Unlikely Bonuses",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "EXC-006",
+      "EXC-007",
+      "EXC-008",
+      "EXC-009",
+      "EXC-019",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "applies_to": [
+      "team that lost a player to a disabling injury or illness"
+    ],
+    "thresholds": "Signed replacement: lesser of 50% of Disabled Player's salary or the Non-Taxpayer MLE amount. Acquired replacement: that lesser amount + $100,000. One-season term for signings.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(c)(1)",
+      "pages": [
+        232,
+        233
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-006",
+    "bucket": "exceptions",
+    "title": "Disabled Player Exception — Disabling Injury or Illness Definition",
+    "summary": "Defines a Disabling Injury or Illness as one likely to keep the player out through the following June 15.",
+    "detail_paraphrase": "For this exception, a Disabling Injury or Illness means any injury or illness that, per the opinion of the designated physician, makes it substantially more likely than not that the player will be unable to play through the following June 15.",
+    "conditions": [
+      "Determination rests on the opinion of the physician described in §6(c)(4)."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Disabling Injury or Illness"
+    ],
+    "related_rule_ids": [
+      "EXC-005",
+      "EXC-008"
+    ],
+    "applies_to": [
+      "disabled player exception applications"
+    ],
+    "thresholds": "Substantially more likely than not the player cannot play through the following June 15.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(c)(2)",
+      "pages": [
+        233
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-007",
+    "bucket": "exceptions",
+    "title": "Disabled Player Exception — Expiration",
+    "summary": "The Disabled Player Exception expires on the March 10 after it is granted.",
+    "detail_paraphrase": "Once granted, a Disabled Player Exception expires on the following March 10.",
+    "conditions": [],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Disabling Injury or Illness"
+    ],
+    "related_rule_ids": [
+      "EXC-005",
+      "EXC-010"
+    ],
+    "applies_to": [
+      "team holding a granted disabled player exception"
+    ],
+    "thresholds": "Expires March 10 following the grant.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(c)(3)",
+      "pages": [
+        233
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-008",
+    "bucket": "exceptions",
+    "title": "Disabled Player Exception — Medical Determination Process",
+    "summary": "An NBA-designated physician determines disability, subject to a neutral physician appeal by the Players Association.",
+    "detail_paraphrase": "Whether a player has a Disabling Injury or Illness is decided by an NBA-designated physician who reviews the medical information and may examine the player. The NBA must tell the Players Association of its physician's determination within one business day. If the Players Association disputes it, the matter goes immediately to a neutral physician (selected by the parties at the start of each salary cap year) who, within three business days of receiving the information (and examining the player if requested), makes a final, binding, unappealable determination. The NBA pays for its own physician; the cost of the neutral physician is shared equally by the NBA and the Players Association.",
+    "conditions": [
+      "NBA must notify the Players Association within one business day of its physician's determination.",
+      "Neutral physician must issue a final determination within three business days of receiving the information.",
+      "The player must cooperate, appear for examination, and not misrepresent or withhold relevant information (per §6(c)(5))."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Disabling Injury or Illness",
+      "Players Association",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "EXC-005",
+      "EXC-006"
+    ],
+    "applies_to": [
+      "disabled player exception applications"
+    ],
+    "thresholds": "Neutral physician determination is final, binding, and unappealable.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(c)(4)-(5)",
+      "pages": [
+        233,
+        234
+      ]
+    },
+    "review_flag": false,
+    "notes": "Combines the §6(c)(4) physician process and the §6(c)(5) player-cooperation duty, which are operationally part of the same medical determination workflow."
+  },
+  {
+    "rule_id": "EXC-009",
+    "bucket": "exceptions",
+    "title": "Disabled Player Exception — Eligibility, Return, and Extinguishment",
+    "summary": "Only the team holding the disabled player's contract is eligible; the exception is extinguished if the player returns or is traded before it is used.",
+    "detail_paraphrase": "The Disabled Player Exception is available only to the team that held the player's contract when the disabling injury or illness became known (or reasonably should have). The disabled player must remain on the team's roster from the time of application through the date the exception is granted. The player may resume playing after recovering, but if he resumes playing or is traded before the team uses the exception, the exception is extinguished.",
+    "conditions": [
+      "Available only to the team under whose contract the player was rostered when the injury/illness became known.",
+      "The disabled player must stay on the roster from application through grant.",
+      "Exception is extinguished if the player resumes play or is traded before it is used."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Disabled Player",
+      "Disabling Injury or Illness"
+    ],
+    "related_rule_ids": [
+      "EXC-005",
+      "EXC-010"
+    ],
+    "applies_to": [
+      "team holding the disabled player's contract"
+    ],
+    "thresholds": "",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(c)(6)-(7)",
+      "pages": [
+        234
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-010",
+    "bucket": "exceptions",
+    "title": "Disabled Player Exception — Re-application After Denial or for Subsequent Seasons",
+    "summary": "After a denial, a team may not re-apply for the same player for 90 days absent a new or aggravated injury; renewals for subsequent seasons are permitted.",
+    "detail_paraphrase": "If a team's request to replace a disabled player is denied, it cannot make a new request for the same player unless 90 days have passed since the first denial and it shows the new request is based on a new injury or an aggravation of the same injury. Separately, whether a season's request is granted or denied, a team may apply again for an exception for that same player in a subsequent season under the same rules.",
+    "conditions": [
+      "After a denial: 90 days must pass and a new injury or aggravation must be shown before re-applying for the same player.",
+      "Subsequent-season renewals require a fresh application for that player for that season."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Disabled Player",
+      "Disabling Injury or Illness"
+    ],
+    "related_rule_ids": [
+      "EXC-005",
+      "EXC-009"
+    ],
+    "applies_to": [
+      "team reapplying for a disabled player exception"
+    ],
+    "thresholds": "90-day waiting period after a denial before re-application for the same player.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(c)(8)",
+      "pages": [
+        234,
+        235
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-011",
+    "bucket": "exceptions",
+    "title": "Bi-annual Exception",
+    "summary": "A team may use the Bi-annual Exception for up to 3.32% of the Salary Cap, with a two-season term limit, not in consecutive years.",
+    "detail_paraphrase": "During a salary cap year a team may use the Bi-annual Exception to sign and/or acquire by trade one or more contracts whose aggregate first-year Salaries and Unlikely Bonuses (or post-assignment amounts for trades) total up to 3.32% of that year's Salary Cap. Before the start of the 2024-25 salary cap year, the exception could not be used to acquire a contract by trade. Contracts signed (or remaining terms acquired) under this exception may not exceed two seasons. A team cannot use any part of it if it has already used the Room Mid-Level Exception that year, nor in two consecutive salary cap years (a prohibition that applied retroactively from 2022-23). Two-season contracts may raise or reduce salary in the second year per Section 5(a)(1).",
+    "conditions": [
+      "Aggregate first-year amount capped at 3.32% of the Salary Cap.",
+      "Contract term (signed or remaining acquired) may not exceed two seasons.",
+      "Cannot be used if the team has already used the Room Mid-Level Exception that salary cap year.",
+      "Cannot be used in two consecutive salary cap years.",
+      "Subject to §2(e) and the Other Rules of §6(n)."
+    ],
+    "exceptions": [
+      "Before the first day of the 2024-25 salary cap year, the Bi-annual Exception could not be used to acquire a contract by assignment."
+    ],
+    "depends_on_terms": [
+      "Salary Cap",
+      "Unlikely Bonuses",
+      "Salary Cap Year",
+      "Mid-Level Salary Exception for Room Teams"
+    ],
+    "related_rule_ids": [
+      "EXC-012",
+      "EXC-013",
+      "EXC-014",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "applies_to": [
+      "over-cap teams (per §6(n))"
+    ],
+    "thresholds": "Up to 3.32% of the Salary Cap; max 2-season term; not usable in consecutive salary cap years.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(d)",
+      "pages": [
+        235,
+        236
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-012",
+    "bucket": "exceptions",
+    "title": "Non-Taxpayer Mid-Level Salary Exception",
+    "summary": "A team may use the Non-Taxpayer MLE for up to 9.12% of the Salary Cap, with a four-season term limit.",
+    "detail_paraphrase": "Each salary cap year a team may use the Non-Taxpayer Mid-Level Salary Exception to sign and/or acquire by trade one or more contracts whose aggregate first-year Salaries and Unlikely Bonuses (or post-assignment amounts) total up to 9.12% of that year's Salary Cap. Before the 2024-25 salary cap year, it could not be used to acquire a contract by trade. Contracts signed (or remaining terms acquired) under it may not exceed four seasons. It cannot be used if the team already used the Room Mid-Level Exception that year. Annual raises and decreases follow Section 5(a)(1). The exception arises on the first day of each salary cap year and expires at the start of the team's last regular-season game that year.",
+    "conditions": [
+      "Aggregate first-year amount capped at 9.12% of the Salary Cap.",
+      "Contract term (signed or remaining acquired) may not exceed four seasons.",
+      "Cannot be used if the team has already used the Room Mid-Level Exception that salary cap year.",
+      "Subject to §2(e) and the Other Rules of §6(n)."
+    ],
+    "exceptions": [
+      "Before the first day of the 2024-25 salary cap year, the Non-Taxpayer MLE could not be used to acquire a contract by assignment.",
+      "Per §6(e)(5): if a Veteran Free Agent with one or two Years of Service receives an Offer Sheet under Article XI §5(d), his Prior Team may use the Non-Taxpayer MLE to match it even if it has used the Room MLE."
+    ],
+    "depends_on_terms": [
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Salary Cap",
+      "Unlikely Bonuses",
+      "Salary Cap Year",
+      "Mid-Level Salary Exception for Room Teams",
+      "Veteran Free Agent",
+      "Years of Service",
+      "Offer Sheet",
+      "Prior Team"
+    ],
+    "related_rule_ids": [
+      "EXC-013",
+      "EXC-014",
+      "EXC-011",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "applies_to": [
+      "over-cap teams below the first apron (per §6(n))"
+    ],
+    "thresholds": "Up to 9.12% of the Salary Cap; max 4-season term; arises first day of salary cap year, expires at start of team's last regular-season game.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(e)",
+      "pages": [
+        236,
+        237
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-013",
+    "bucket": "exceptions",
+    "title": "Taxpayer Mid-Level Salary Exception",
+    "summary": "A team may use the Taxpayer MLE for a fixed dollar amount ($5M in 2023-24, indexed thereafter) with a two-season term limit, only if it remains above the first apron.",
+    "detail_paraphrase": "Each salary cap year a team may use the Taxpayer Mid-Level Salary Exception to sign one or more contracts no longer than two seasons whose aggregate first-year Salaries and Unlikely Bonuses total up to a set amount, provided the team's Apron Team Salary right after using it still exceeds the First Apron Level. For 2023-24 the amount is $5 million; for each later year it is $5 million scaled by the ratio of that year's Salary Cap to the 2023-24 Salary Cap. It cannot be used if the team already used the Room Mid-Level Exception that year. Annual raises and decreases follow Section 5(a)(1). The exception arises on the first day of each salary cap year and expires at the start of the team's last regular-season game that year.",
+    "conditions": [
+      "Team's Apron Team Salary immediately after use must exceed the First Apron Level.",
+      "Contract term may not exceed two seasons.",
+      "Cannot be used if the team has already used the Room Mid-Level Exception that salary cap year.",
+      "Subject to §2(e) and the Other Rules of §6(n)."
+    ],
+    "exceptions": [
+      "Per §6(f)(5): a team that signed via the Non-Taxpayer MLE (with no assignment acquisitions and within the Taxpayer MLE dollar/term limits) and then makes a transaction pushing Apron Team Salary over the First Apron Level is deemed to have used the Taxpayer MLE instead, extinguishing its Non-Taxpayer MLE for that year."
+    ],
+    "depends_on_terms": [
+      "Taxpayer Mid-Level Salary Exception",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Apron Team Salary",
+      "First Apron Level",
+      "Salary Cap",
+      "Unlikely Bonuses",
+      "Salary Cap Year",
+      "Mid-Level Salary Exception for Room Teams"
+    ],
+    "related_rule_ids": [
+      "EXC-012",
+      "EXC-014",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "applies_to": [
+      "teams above the first apron (per §6(n) and §6(f)(1))"
+    ],
+    "thresholds": "$5 million for 2023-24; for later years $5M x (that year's Salary Cap / 2023-24 Salary Cap). Max 2-season term. Apron Team Salary must exceed the First Apron Level after use.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(f)",
+      "pages": [
+        237,
+        238
+      ]
+    },
+    "review_flag": false,
+    "notes": "Use of the Taxpayer MLE relates to the first apron; apron-side hard-cap consequences are covered in the aprons bucket."
+  },
+  {
+    "rule_id": "EXC-014",
+    "bucket": "exceptions",
+    "title": "Mid-Level Salary Exception for Room Teams (Room MLE)",
+    "summary": "A team that goes under the cap may use the Room MLE for up to 5.678% of the Salary Cap, with a three-season term limit.",
+    "detail_paraphrase": "When a team's Team Salary is below the Salary Cap such that it cannot use the Bi-annual, Non-Taxpayer MLE, or Taxpayer MLE, and it has not yet used any of those three exceptions that year, it may use the Mid-Level Salary Exception for Room Teams to sign and/or acquire by trade one or more contracts whose aggregate first-year Salaries and Unlikely Bonuses (or post-assignment amounts) total up to 5.678% of that year's Salary Cap. Before the 2024-25 salary cap year it could not be used to acquire a contract by trade. Contracts signed (or remaining terms acquired) may not exceed three seasons. Once a team uses the Room MLE, it is barred from using the Non-Taxpayer MLE, Taxpayer MLE, or Bi-annual Exception for the rest of that year. Annual raises and decreases follow Section 5(a)(1). It arises when the team's salary falls below the cap (so it is ineligible for the other exceptions) and expires at the start of the team's last regular-season game.",
+    "conditions": [
+      "Team Salary must be below the Salary Cap such that the team cannot use the Bi-annual, Non-Taxpayer MLE, or Taxpayer MLE.",
+      "Team must not have already used any of those three exceptions that salary cap year.",
+      "Aggregate first-year amount capped at 5.678% of the Salary Cap.",
+      "Contract term (signed or remaining acquired) may not exceed three seasons.",
+      "Using it bars use of the Non-Taxpayer MLE, Taxpayer MLE, and Bi-annual Exception for the rest of that year.",
+      "Subject to the Other Rules of §6(n)."
+    ],
+    "exceptions": [
+      "Before the first day of the 2024-25 salary cap year, the Room MLE could not be used to acquire a contract by assignment."
+    ],
+    "depends_on_terms": [
+      "Mid-Level Salary Exception for Room Teams",
+      "Team Salary",
+      "Salary Cap",
+      "Bi-annual Exception",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Taxpayer Mid-Level Salary Exception",
+      "Unlikely Bonuses",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "EXC-011",
+      "EXC-012",
+      "EXC-013"
+    ],
+    "applies_to": [
+      "under-cap (room) teams"
+    ],
+    "thresholds": "Up to 5.678% of the Salary Cap; max 3-season term; arises when team falls below the cap and ineligible for other exceptions, expires at start of team's last regular-season game.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(g)",
+      "pages": [
+        238,
+        239
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-015",
+    "bucket": "exceptions",
+    "title": "Rookie Scale Exception",
+    "summary": "A team may sign a first-round pick to a Rookie Scale Contract above the cap.",
+    "detail_paraphrase": "A team may enter into a Rookie Scale Contract as provided in Article VIII, Section 1, as an exception to the Salary Cap.",
+    "conditions": [
+      "Contract must conform to Article VIII, Section 1 (rookie scale)."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Rookie Scale Contract",
+      "Salary Cap"
+    ],
+    "related_rule_ids": [],
+    "applies_to": [
+      "teams signing a first-round draft pick"
+    ],
+    "thresholds": "Per the Rookie Scale set in Article VIII, Section 1.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(h)",
+      "pages": [
+        239
+      ]
+    },
+    "review_flag": false,
+    "notes": "Amount mechanics are defined in Article VIII, Section 1, which is outside the scope of this source file."
+  },
+  {
+    "rule_id": "EXC-016",
+    "bucket": "exceptions",
+    "title": "Minimum Player Salary Exception",
+    "summary": "A team may sign or acquire a player at the minimum salary (no bonuses) for up to two seasons.",
+    "detail_paraphrase": "A team may sign a player to, or acquire by trade, a contract of no more than two seasons that pays the applicable Minimum Player Salary in the first season with no bonuses of any kind. If the contract covers two seasons, the second season must also pay that player's applicable Minimum Player Salary for that season, again with no bonuses.",
+    "conditions": [
+      "Contract term may not exceed two seasons.",
+      "First-season salary equals the player's applicable Minimum Player Salary, with no bonuses of any kind.",
+      "If two seasons, second-season salary equals the applicable Minimum Player Salary for that season, with no bonuses."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Minimum Player Salary",
+      "Player Contract"
+    ],
+    "related_rule_ids": [],
+    "applies_to": [
+      "all teams"
+    ],
+    "thresholds": "Minimum Player Salary in each covered season; max 2-season term; no bonuses.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(i)",
+      "pages": [
+        240
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-017",
+    "bucket": "exceptions",
+    "title": "Traded Player Exception — Standard",
+    "summary": "Replace one traded player with replacements totaling up to 100% of his pre-trade salary plus $250,000.",
+    "detail_paraphrase": "Under the Standard Traded Player Exception, a team may replace one Traded Player with one or more Replacement Players acquired simultaneously or non-simultaneously, whose aggregate post-assignment salaries for the acquisition year are no more than 100% of the traded player's pre-trade salary plus $250,000. Any contract acquired non-simultaneously must be acquired within one year of the original trade.",
+    "conditions": [
+      "Replaces exactly one Traded Player.",
+      "Aggregate replacement salaries capped at 100% of the traded player's pre-trade salary + $250,000.",
+      "Non-simultaneous acquisitions must occur within one year of the original trade.",
+      "Subject to §2(e), §6(j)(6), and the Other Rules of §6(n)."
+    ],
+    "exceptions": [
+      "Per §6(j)(3): if the team's post-assignment Apron Team Salary would exceed the First Apron Level, the $250,000 allowance is reduced to $0."
+    ],
+    "depends_on_terms": [
+      "Traded Player",
+      "Replacement Player",
+      "Apron Team Salary",
+      "First Apron Level",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "EXC-018",
+      "EXC-019",
+      "EXC-020",
+      "EXC-021",
+      "EXC-022",
+      "EXC-023",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "applies_to": [
+      "teams trading away a single player"
+    ],
+    "thresholds": "Up to 100% of the traded player's pre-trade salary + $250,000; non-simultaneous window of one year; $250,000 reduced to $0 if post-trade Apron Team Salary exceeds the First Apron Level.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(j)(1)(i)",
+      "pages": [
+        240,
+        241
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-018",
+    "bucket": "exceptions",
+    "title": "Traded Player Exception — Aggregated Standard",
+    "summary": "Replace two or more simultaneously traded players with replacements totaling up to 100% of their combined pre-trade salaries plus $250,000.",
+    "detail_paraphrase": "Under the Aggregated Standard Traded Player Exception, a team may replace two or more Traded Players with one or more Replacement Players acquired simultaneously, whose aggregate post-trade salaries for the current year are no more than 100% of the combined pre-trade salaries of the traded players plus $250,000.",
+    "conditions": [
+      "Replaces two or more Traded Players.",
+      "Replacement contracts must be acquired simultaneously.",
+      "Aggregate replacement salaries capped at 100% of combined pre-trade salaries + $250,000.",
+      "Subject to §2(e), the aggregation rules of §6(j)(4), §6(j)(6), and the Other Rules of §6(n)."
+    ],
+    "exceptions": [
+      "Per §6(j)(3): if the team's post-assignment Apron Team Salary would exceed the First Apron Level, the $250,000 allowance is reduced to $0."
+    ],
+    "depends_on_terms": [
+      "Traded Player",
+      "Replacement Player",
+      "Apron Team Salary",
+      "First Apron Level",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "EXC-017",
+      "EXC-019",
+      "EXC-020",
+      "EXC-021",
+      "EXC-022",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "applies_to": [
+      "teams aggregating two or more traded players"
+    ],
+    "thresholds": "Up to 100% of combined pre-trade salaries + $250,000 (reduced to $0 if post-trade Apron Team Salary exceeds the First Apron Level).",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(j)(1)(ii)",
+      "pages": [
+        240,
+        241
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-019",
+    "bucket": "exceptions",
+    "title": "Traded Player Exception — Transition (2023-24 only)",
+    "summary": "During 2023-24 only, replace traded players with replacements totaling up to 110% of pre-trade salaries plus $250,000.",
+    "detail_paraphrase": "For the 2023-24 salary cap year only, a team may use the Transition Traded Player Exception to replace one or more Traded Players with one or more Replacement Players acquired simultaneously, whose aggregate post-trade salaries for 2023-24 are no more than 110% of the traded players' pre-trade salaries plus $250,000.",
+    "conditions": [
+      "Available only during the 2023-24 salary cap year.",
+      "Replacement contracts must be acquired simultaneously.",
+      "Aggregate replacement salaries capped at 110% of pre-trade salaries + $250,000.",
+      "Subject to §2(e), the aggregation rules of §6(j)(4), §6(j)(6), and the Other Rules of §6(n)."
+    ],
+    "exceptions": [
+      "Per §6(j)(3): if the team's post-assignment Apron Team Salary would exceed the First Apron Level, the $250,000 allowance is reduced to $0."
+    ],
+    "depends_on_terms": [
+      "Traded Player",
+      "Replacement Player",
+      "Apron Team Salary",
+      "First Apron Level",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "EXC-017",
+      "EXC-018",
+      "EXC-020",
+      "EXC-022",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "applies_to": [
+      "teams trading players during the 2023-24 salary cap year"
+    ],
+    "thresholds": "Up to 110% of pre-trade salaries + $250,000 (reduced to $0 if post-trade Apron Team Salary exceeds the First Apron Level); 2023-24 only.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(j)(1)(iii)",
+      "pages": [
+        241
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-020",
+    "bucket": "exceptions",
+    "title": "Traded Player Exception — Expanded",
+    "summary": "Replace traded players with replacements totaling up to the greater of 200%+$250K (capped) or 125% of pre-trade salaries plus $250,000.",
+    "detail_paraphrase": "Under the Expanded Traded Player Exception, a team may replace one or more Traded Players with one or more Replacement Players acquired simultaneously, whose aggregate post-trade salaries for the current year are no more than the greater of: (y) the lesser of (A) 200% of the combined pre-trade salaries plus $250,000, or (B) 100% of the combined pre-trade salaries plus an amount equal to $7.5 million scaled by the ratio of the current year's Salary Cap to the 2023-24 Salary Cap; or (z) 125% of the combined pre-trade salaries plus $250,000.",
+    "conditions": [
+      "Replacement contracts must be acquired simultaneously.",
+      "Aggregate replacement salaries capped at the greater of the (y) and (z) formulas described.",
+      "Subject to §2(e), the aggregation rules of §6(j)(4), §6(j)(6), and the Other Rules of §6(n)."
+    ],
+    "exceptions": [
+      "Per §6(j)(3): if the team's post-assignment Apron Team Salary would exceed the First Apron Level, the $250,000 allowance is reduced to $0."
+    ],
+    "depends_on_terms": [
+      "Traded Player",
+      "Replacement Player",
+      "Salary Cap",
+      "Apron Team Salary",
+      "First Apron Level",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "EXC-017",
+      "EXC-018",
+      "EXC-021",
+      "EXC-022",
+      "EXC-024",
+      "EXC-025"
+    ],
+    "applies_to": [
+      "teams trading players (expanded matching for under-cap or eligible teams)"
+    ],
+    "thresholds": "Greater of [lesser of (200% of pre-trade salaries + $250,000) or (100% of pre-trade salaries + $7.5M x current Salary Cap / 2023-24 Salary Cap)] or [125% of pre-trade salaries + $250,000]; $250,000 reduced to $0 if post-trade Apron Team Salary exceeds the First Apron Level.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(j)(1)(iv)",
+      "pages": [
+        241
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-021",
+    "bucket": "exceptions",
+    "title": "Traded Player Exception — Room Under Salary Cap Plus $250,000",
+    "summary": "An under-cap team may acquire players totaling up to its cap room plus $250,000, but cannot combine this with the other traded-player exceptions in the same trade.",
+    "detail_paraphrase": "Notwithstanding the Other Rules of §6(n), a team with Team Salary below the Salary Cap may acquire one or more players by trade whose aggregate post-assignment salaries are no more than the team's room under the cap plus $250,000. A team that uses this provision (or simply uses its cap room without the extra $250,000) may not simultaneously acquire players under the Standard, Aggregated Standard, Transition, or Expanded traded-player exceptions (§6(j)(1)(i)-(iv)).",
+    "conditions": [
+      "Team Salary must be below the Salary Cap.",
+      "Aggregate acquired salaries capped at the team's cap room + $250,000.",
+      "Cannot be combined in the same trade with the §6(j)(1)(i)-(iv) traded-player exceptions.",
+      "Operates notwithstanding §6(n), except as limited by §6(j)(2)."
+    ],
+    "exceptions": [
+      "Per §6(j)(3): if the team's post-assignment Apron Team Salary would exceed the First Apron Level, the $250,000 allowance is reduced to $0.",
+      "Per §6(j)(2): in lieu of trading under this provision, an under-cap team may instead trade under the Transition or Expanded traded-player exceptions (§6(j)(1)(iii)-(iv))."
+    ],
+    "depends_on_terms": [
+      "Team Salary",
+      "Salary Cap",
+      "Apron Team Salary",
+      "First Apron Level"
+    ],
+    "related_rule_ids": [
+      "EXC-017",
+      "EXC-018",
+      "EXC-019",
+      "EXC-020",
+      "EXC-025"
+    ],
+    "applies_to": [
+      "under-cap (room) teams"
+    ],
+    "thresholds": "Up to the team's room under the Salary Cap + $250,000 ($250,000 reduced to $0 if post-trade Apron Team Salary exceeds the First Apron Level).",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(j)(1)(v)",
+      "pages": [
+        241,
+        242
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-022",
+    "bucket": "exceptions",
+    "title": "Traded Player Exception — Aggregation Restrictions",
+    "summary": "Rules limiting which traded players can be aggregated, including a recently-acquired-player restriction and a minimum-player aggregation limit.",
+    "detail_paraphrase": "When aggregating two or more traded players under the Aggregated Standard, Transition, or Expanded exceptions, two rules apply. First, a player acquired via an exception in the two months before a trade cannot be among the players being aggregated (for example, a player acquired by exception on Nov 20, 2023 could not be aggregated until Jan 20, 2024); however, if the player's contract was acquired by exception on or before December 16 of a salary cap year, that restriction does not apply if he is later traded on or after the day before that year's trade deadline. Second, outside the window from December 15 through the trade deadline, if a team aggregates three or more traded players and acquires fewer replacement players than traded players, no more than one of the traded players may be a Minimum Traded Player (a player on his applicable Minimum Player Salary for the year of the trade, or for the following year if traded after the regular season).",
+    "conditions": [
+      "Applies to aggregation under §6(j)(1)(ii), (iii), or (iv).",
+      "A player acquired by exception in the prior two months cannot be aggregated, subject to the December 16 / trade-deadline carve-out.",
+      "Outside Dec 15 through the trade deadline, when aggregating three or more traded players and acquiring fewer replacements, at most one may be a Minimum Traded Player."
+    ],
+    "exceptions": [
+      "Two-month aggregation block does not apply if the contract was acquired by exception on or before December 16 and the player is traded on or after the day before the trade deadline."
+    ],
+    "depends_on_terms": [
+      "Traded Player",
+      "Replacement Player",
+      "Minimum Traded Player",
+      "Minimum Player Salary",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "EXC-018",
+      "EXC-019",
+      "EXC-020"
+    ],
+    "applies_to": [
+      "teams aggregating multiple traded players"
+    ],
+    "thresholds": "Two-month no-aggregation period for exception-acquired players; at most one Minimum Traded Player when aggregating 3+ players with fewer replacements (outside Dec 15-trade deadline).",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(j)(4)",
+      "pages": [
+        242,
+        243
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-023",
+    "bucket": "exceptions",
+    "title": "Traded Player Exception — Outgoing Salary Valuation Rules",
+    "summary": "Special rules for valuing a traded player's salary when calculating the generated exception, including sign-and-trade and unprotected-compensation adjustments.",
+    "detail_paraphrase": "When calculating the exception generated by trading a player, special valuation rules apply. (a) In a sign-and-trade of a Qualifying or Early Qualifying Veteran Free Agent signed above what a Non-Qualifying deal would have allowed (with the team over the cap after signing), the player's outgoing salary is deemed the greater of his prior-contract final-season salary or 50% of his new first-season salary. (b) A traded player's salary is reduced by any unearned Base Compensation not fully protected for lack of skill and injury/illness at the time of the trade. From January 8 through the end of the regular season, such Base Compensation is deemed fully protected (no reduction). For minimum-salary one-year contracts, the reimbursed portion of the minimum is excluded from the unearned amount. For trades from the day after the regular season through June 30, the player's salary equals the lesser of his current-year salary or his next-year salary reduced by its unprotected unearned Base Compensation. The text gives worked dollar examples ($8M contract scenarios W, X, Y, Z).",
+    "conditions": [
+      "Applies when computing a team's Traded Player Exception under §6(j).",
+      "Sign-and-trade deeming applies to QVFA/EQVFA signed-and-traded above the Non-Qualifying limit with the team over the cap.",
+      "Unprotected unearned Base Compensation reduces outgoing salary except as deemed protected Jan 8 through end of regular season.",
+      "Post-regular-season (through June 30) trades use the lesser of current-year or next-year (net of unprotected) salary."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Traded Player",
+      "Qualifying Veteran Free Agent",
+      "Early Qualifying Veteran Free Agent",
+      "Non-Qualifying Veteran Free Agent",
+      "Base Compensation",
+      "Minimum Player Salary",
+      "Salary",
+      "Unlikely Bonuses",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "EXC-017",
+      "EXC-018",
+      "EXC-002",
+      "EXC-004",
+      "EXC-016"
+    ],
+    "applies_to": [
+      "teams generating a traded player exception"
+    ],
+    "thresholds": "Sign-and-trade: outgoing salary = greater of prior final-season salary or 50% of new first-season salary. Unprotected unearned Base Compensation reduces outgoing salary; deemed fully protected Jan 8 through end of regular season.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(j)(5)-(6)",
+      "pages": [
+        243,
+        244,
+        245
+      ]
+    },
+    "review_flag": false,
+    "notes": "Combines §6(j)(5) (sign-and-trade valuation) and §6(j)(6) (unprotected-compensation reduction with worked examples) as the outgoing-salary valuation mechanics for the Traded Player Exception."
+  },
+  {
+    "rule_id": "EXC-024",
+    "bucket": "exceptions",
+    "title": "Traded Player Exception — No Stacking with Disabled Player Exception; Two-Way Exclusion",
+    "summary": "No traded player exception arises for a player already covered by a Disabled Player Exception that year, and none arises from trading a Two-Way Player.",
+    "detail_paraphrase": "No Traded Player Exception arises from trading a player during a salary cap year if the team has already used (or simultaneously uses) a Disabled Player Exception for that same player that year. Additionally, the traded-player rules of §6(j) do not apply to Two-Way Players, so trading a Two-Way Player generates no Traded Player Exception.",
+    "conditions": [
+      "No TPE arises for a player if a Disabled Player Exception was used (or is simultaneously used) for that player that salary cap year.",
+      "No TPE arises from trading a Two-Way Player."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Traded Player",
+      "Disabled Player",
+      "Two-Way Player",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "EXC-005",
+      "EXC-017",
+      "EXC-018"
+    ],
+    "applies_to": [
+      "teams trading players"
+    ],
+    "thresholds": "",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(j)(7)-(8)",
+      "pages": [
+        245,
+        246
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-025",
+    "bucket": "exceptions",
+    "title": "Second Round Pick Exception",
+    "summary": "A team holding a second-round pick's rights may sign that player to a 2+1 or 3+1 contract at minimum-scale amounts.",
+    "detail_paraphrase": "A team holding the draft rights to a Second Round Pick may sign that player using the Second Round Pick Exception. The contract must be either (i) two seasons plus a team option for a third, or (ii) three seasons plus a team option for a fourth. For a 2+1 deal: first-season Salary plus Unlikely Bonuses up to the Minimum Player Salary for a player with one Year of Service, and the player's applicable Minimum Player Salary for the second season and option year. For a 3+1 deal: first-season Salary plus Unlikely Bonuses up to the Minimum Player Salary for a player with two Years of Service; second-season Salary plus Unlikely Bonuses up to the Year 2 column for a two-Years-of-Service player on the Minimum Annual Salary Scale; and the applicable Minimum Player Salary for the third season and option year. Amounts are those in the Minimum Annual Scale for the year the contract is signed; for 3+1 deals, year-one-to-year-two raises/decreases follow Section 5(a)(1).",
+    "conditions": [
+      "Team must hold the draft rights to the Second Round Pick.",
+      "Term must be 2 seasons + team option for a 3rd, or 3 seasons + team option for a 4th.",
+      "Salary amounts follow the Minimum Annual Scale for the year signed."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Second Round Pick",
+      "Minimum Player Salary",
+      "Minimum Annual Salary Scale",
+      "Years of Service",
+      "Unlikely Bonuses",
+      "Option Year",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "EXC-016"
+    ],
+    "applies_to": [
+      "teams holding a second-round pick's draft rights"
+    ],
+    "thresholds": "2+1: first year up to 1-YOS minimum; remaining at applicable minimums. 3+1: first year up to 2-YOS minimum; second year up to the 2-YOS Year 2 scale amount; remaining at applicable minimums.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(k)",
+      "pages": [
+        246
+      ]
+    },
+    "review_flag": false,
+    "notes": "Page corrected to printed p.246 (subsection (k)) after source verification; prior draft cited 242-243."
+  },
+  {
+    "rule_id": "EXC-026",
+    "bucket": "exceptions",
+    "title": "Reinstatement Exception",
+    "summary": "A team may re-sign a player reinstated after dismissal under the Anti-Drug Agreement even while at or over the cap.",
+    "detail_paraphrase": "If a player was dismissed and disqualified from the NBA and later reinstated under Article XXXIII (Anti-Drug Agreement), the team for which he last played may sign him under the applicable rules of Article XXXIII, Section 13(f) or (g), even if that team is at or above the Salary Cap or the signing pushes it over the cap. If the resulting contract covers more than one season, annual raises and decreases follow Section 5(a)(1).",
+    "conditions": [
+      "Player must have been dismissed/disqualified and then reinstated under Article XXXIII.",
+      "Only the team for which the player last played may sign him.",
+      "Signing must follow Article XXXIII, Section 13(f) or (g)."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Salary Cap",
+      "Team Salary",
+      "Player Contract",
+      "Unlikely Bonuses"
+    ],
+    "related_rule_ids": [],
+    "applies_to": [
+      "the team for which the reinstated player last played"
+    ],
+    "thresholds": "Per Article XXXIII, Section 13(f) or (g); raises/decreases per §5(a)(1) if multi-season.",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(l)",
+      "pages": [
+        247
+      ]
+    },
+    "review_flag": false,
+    "notes": "Dollar amount/term mechanics are governed by Article XXXIII, which is outside this source file."
+  },
+  {
+    "rule_id": "EXC-027",
+    "bucket": "exceptions",
+    "title": "Non-Aggregation of Exceptions",
+    "summary": "Except in trades under §6(j), a team may not combine exceptions to sign or acquire a player above any single exception's limit.",
+    "detail_paraphrase": "Other than under the traded-player rules of §6(j), a team may not aggregate or combine the salary-cap exceptions to sign or acquire players at salaries greater than any single exception permits. If a team has more than one exception available at once, it may choose which one to use for a given signing or acquisition.",
+    "conditions": [
+      "No combining of exceptions to exceed a single exception's limit, except as allowed within §6(j).",
+      "A team with multiple available exceptions chooses which to use."
+    ],
+    "exceptions": [
+      "The traded-player exceptions of §6(j) may combine/aggregate as expressly provided there."
+    ],
+    "depends_on_terms": [
+      "Player Contract"
+    ],
+    "related_rule_ids": [
+      "EXC-017",
+      "EXC-018",
+      "EXC-020"
+    ],
+    "applies_to": [
+      "all teams"
+    ],
+    "thresholds": "",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(m)",
+      "pages": [
+        247
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-028",
+    "bucket": "exceptions",
+    "title": "Other Rules — Over-Cap Eligibility for Exceptions",
+    "summary": "The Disabled Player, Bi-annual, Non-Taxpayer MLE, Taxpayer MLE, and Traded Player exceptions are available only to teams at or near/above the cap.",
+    "detail_paraphrase": "A team may use the Disabled Player, Bi-annual, Non-Taxpayer MLE, Taxpayer MLE, and Traded Player exceptions (§6(c), (d), (e), (f), (j)) — except for the room-based traded-player provisions of §6(j)(1)(v) and §6(j)(2) — only if, at the time the exception arises and until it is used, the team's Team Salary (excluding the amounts of these exceptions per §6(n)(2)) is at or above the Salary Cap, or below the cap by less than the amount of the team's exception(s). The Taxpayer MLE amount is excluded from this calculation unless the team can no longer use the Non-Taxpayer MLE but can still use the Taxpayer MLE, in which case the Taxpayer MLE amount is included.",
+    "conditions": [
+      "Applies to the §6(c), (d), (e), (f), and (j) exceptions, except §6(j)(1)(v) and §6(j)(2).",
+      "Team Salary (excluding the exception amounts) must be at or above the cap, or below it by less than the exception amount.",
+      "Taxpayer MLE amount included in the test only when the team can use the Taxpayer MLE but not the Non-Taxpayer MLE."
+    ],
+    "exceptions": [
+      "The Room Under Salary Cap Plus $250,000 provision (§6(j)(1)(v)) and the under-cap alternative trade (§6(j)(2)) are exempt from this over-cap eligibility test."
+    ],
+    "depends_on_terms": [
+      "Team Salary",
+      "Salary Cap",
+      "Disabled Player",
+      "Bi-annual Exception",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Taxpayer Mid-Level Salary Exception",
+      "Traded Player"
+    ],
+    "related_rule_ids": [
+      "EXC-005",
+      "EXC-011",
+      "EXC-012",
+      "EXC-013",
+      "EXC-017",
+      "EXC-029"
+    ],
+    "applies_to": [
+      "over-cap or near-cap teams"
+    ],
+    "thresholds": "Team Salary at/above cap, or below cap by less than the exception amount(s).",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(n)(1)",
+      "pages": [
+        247,
+        248
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "EXC-029",
+    "bucket": "exceptions",
+    "title": "Other Rules — Exception Amounts Charged to Team Salary; Renouncement",
+    "summary": "When an exception arises for an under-cap team, the exception amount is charged to Team Salary, removing the room; using it substitutes the actual salary plus any unused portion.",
+    "detail_paraphrase": "When a Disabled Player, Bi-annual, Non-Taxpayer MLE (or Taxpayer MLE where applicable), or Traded Player exception arises while a team's Team Salary is below the cap (or later falls below it before the exception expires) by less than the exception amount, the team's Team Salary is increased to include the exception (or its unused portion) until the exception is used or the team loses the right to use it, and the remaining cap room is thereby extinguished. When the Disabled Player Exception is used, the replacement player's actual salary (not the exception amount) is counted in Team Salary. When a Bi-annual, Non-Taxpayer MLE, Taxpayer MLE, or Traded Player exception is used, the actual first-season salary of the signed contract (or current-year salary of an acquired contract) plus any still-unused portion of the exception is counted in Team Salary instead of the full exception amount. A team may renounce its right to an exception at any time, after which the exception (or its unused portion) is no longer counted in Team Salary.",
+    "conditions": [
+      "Applies when one of the listed exceptions arises while the team is (or becomes) below the cap by less than the exception amount.",
+      "The exception amount (or unused portion) is held in Team Salary until used or forfeited, extinguishing the room.",
+      "Upon use, actual salary (plus any unused portion, except for the DPE) replaces the held exception amount.",
+      "A team may renounce an exception at any time to remove it from Team Salary."
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Team Salary",
+      "Salary Cap",
+      "Disabled Player",
+      "Bi-annual Exception",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Taxpayer Mid-Level Salary Exception",
+      "Traded Player",
+      "Replacement Player"
+    ],
+    "related_rule_ids": [
+      "EXC-005",
+      "EXC-011",
+      "EXC-012",
+      "EXC-013",
+      "EXC-017",
+      "EXC-028"
+    ],
+    "applies_to": [
+      "under-cap teams holding an unused exception"
+    ],
+    "thresholds": "Held amount = exception (or unused portion); upon use, charge actual salary (+ unused portion, except DPE charges only the replacement player's salary).",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(n)(2)",
+      "pages": [
+        248
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  }
+]

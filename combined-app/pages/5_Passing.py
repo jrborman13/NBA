@@ -1,7 +1,7 @@
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'streamlit'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'new-streamlit-app', 'player-app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'streamlit'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'player_app'))
 
 import streamlit as st
 import streamlit_testing_functions as functions

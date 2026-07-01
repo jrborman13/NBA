@@ -1,0 +1,1641 @@
+[
+  {
+    "rule_id": "FA-001",
+    "bucket": "free_agency",
+    "title": "Unrestricted Free Agent — timing to negotiate and to sign",
+    "summary": "An Unrestricted Free Agent (or a player who will become one on the following July 1) may begin negotiating at 6:00 p.m. ET on June 30 and may sign a contract only after the Moratorium Period ends.",
+    "detail_paraphrase": "A player who is, or who will become on the immediately following July 1, an Unrestricted Free Agent is free to begin negotiating a Player Contract with any Team starting at 6:00 p.m. eastern time on June 30, and is free to actually enter into (sign) a Player Contract with any Team only after the applicable Moratorium Period concludes. This general timing rule is subject to the special early-negotiation carve-outs for players still on a Team's roster at season's end and for Non-Draft Rookies.",
+    "conditions": [
+      "Player is an Unrestricted Free Agent or will become one on the immediately following July 1",
+      "Negotiation may begin at 6:00 p.m. ET on June 30",
+      "Signing may occur only after the conclusion of the applicable Moratorium Period"
+    ],
+    "exceptions": [
+      "Players described in Section 1(a)(iii) (finished the Season on a Team's roster) may begin negotiating with that Team earlier",
+      "Non-Draft Rookies under Section 1(a)(iv) may negotiate immediately after the Draft for which they were first eligible"
+    ],
+    "depends_on_terms": [
+      "Unrestricted Free Agent",
+      "Player Contract",
+      "Moratorium Period"
+    ],
+    "related_rule_ids": [
+      "FA-003",
+      "FA-004",
+      "FA-005"
+    ],
+    "applies_to": [
+      "Unrestricted Free Agent"
+    ],
+    "thresholds": "Negotiation start: 6:00 p.m. ET June 30; signing: after Moratorium Period ends",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(a)(i)",
+      "pages": [
+        310
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-002",
+    "bucket": "free_agency",
+    "title": "Restricted Free Agent — timing to negotiate, sign Offer Sheets, and re-sign with Prior Team",
+    "summary": "A player who will become a Restricted Free Agent on the following July 1 may negotiate at 6:00 p.m. ET on June 30, may enter Offer Sheets with other Teams starting at 12:01 p.m. ET on the first day of the Moratorium Period, and may sign with his Prior Team only after the Moratorium Period ends.",
+    "detail_paraphrase": "A player who will become a Restricted Free Agent on the immediately following July 1 has three distinct timing rights: (1) starting at 6:00 p.m. eastern time on June 30 he may negotiate a Player Contract with his Prior Team and negotiate an Offer Sheet with any Team other than his Prior Team; (2) starting at 12:01 p.m. eastern time on the first day of the Moratorium Period he may enter into (sign) an Offer Sheet with any Team other than his Prior Team; and (3) after the conclusion of the Moratorium Period he may enter into a Player Contract with his Prior Team.",
+    "conditions": [
+      "Player will become a Restricted Free Agent on the immediately following July 1",
+      "Negotiate (Prior Team contract and other-team Offer Sheet) starting 6:00 p.m. ET June 30",
+      "Sign Offer Sheet with non-Prior Team starting 12:01 p.m. ET first day of Moratorium Period",
+      "Sign Player Contract with Prior Team after Moratorium Period concludes"
+    ],
+    "exceptions": [
+      "Players described in Section 1(a)(iii) (finished the Season on a Team's roster) may begin negotiating with that Team earlier"
+    ],
+    "depends_on_terms": [
+      "Restricted Free Agent",
+      "Offer Sheet",
+      "Prior Team",
+      "Player Contract",
+      "Moratorium Period"
+    ],
+    "related_rule_ids": [
+      "FA-001",
+      "FA-003",
+      "FA-013"
+    ],
+    "applies_to": [
+      "Restricted Free Agent"
+    ],
+    "thresholds": "Negotiate: 6:00 p.m. ET June 30; sign Offer Sheet: 12:01 p.m. ET day 1 of Moratorium; sign with Prior Team: after Moratorium ends",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(a)(ii)",
+      "pages": [
+        310
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-003",
+    "bucket": "free_agency",
+    "title": "Early negotiation right for players finishing the Season on a Team's roster",
+    "summary": "A player who will (or could, via non-exercise of an Option or exercise of an ETO) become a UFA or RFA and who finished the Season on a Team's roster may begin negotiating with that Team the day after the Season's last day.",
+    "detail_paraphrase": "A player who (1) will, or could as a result of the non-exercise of an Option or the exercise of an Early Termination Option, become an Unrestricted Free Agent or Restricted Free Agent on the immediately following July 1, and (2) finished the Season on a Team's roster, may begin negotiating a Player Contract with that Team beginning on the day following the last day of that Season. This early negotiation right does not change when the player may actually enter into (sign) the contract — signing timing is still governed by Sections 1(a)(i) and (ii).",
+    "conditions": [
+      "Player will or could become a UFA or RFA on the following July 1 (including via non-exercise of an Option or exercise of an ETO)",
+      "Player finished the Season on a Team's roster",
+      "Negotiation may begin the day after the last day of the Season"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Unrestricted Free Agent",
+      "Restricted Free Agent",
+      "Option",
+      "ETO",
+      "Player Contract"
+    ],
+    "related_rule_ids": [
+      "FA-001",
+      "FA-002",
+      "FA-004"
+    ],
+    "applies_to": [
+      "Unrestricted Free Agent",
+      "Restricted Free Agent"
+    ],
+    "thresholds": "Negotiation start: day following last day of Season; signing timing unchanged (per FA-001/FA-002)",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(a)(iii)",
+      "pages": [
+        310,
+        311
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-004",
+    "bucket": "free_agency",
+    "title": "Non-Draft Rookie negotiation right",
+    "summary": "A Non-Draft Rookie may negotiate with any Team immediately after the conclusion of the NBA Draft for which he was first eligible and not selected; signing timing still follows the general rules.",
+    "detail_paraphrase": "A Non-Draft Rookie is free to negotiate a Player Contract with any Team beginning immediately after the conclusion of the NBA Draft for which he was first eligible and was not selected. As with the other early-negotiation carve-outs, this affects only when negotiations may begin, not when the player may actually sign — signing timing remains governed by Sections 1(a)(i) and (ii).",
+    "conditions": [
+      "Player is a Non-Draft Rookie (first eligible for a Draft and not selected)",
+      "Negotiation may begin immediately after the conclusion of that Draft"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Non-Draft Rookie",
+      "Player Contract"
+    ],
+    "related_rule_ids": [
+      "FA-001",
+      "FA-003"
+    ],
+    "applies_to": [
+      "Non-Draft Rookie"
+    ],
+    "thresholds": "Negotiation start: immediately after conclusion of the Draft for which first eligible and not selected",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(a)(iv)",
+      "pages": [
+        310,
+        311
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-005",
+    "bucket": "free_agency",
+    "title": "Penalties for violating free-agency timing rules",
+    "summary": "The Commissioner may fine a Team up to $2,000,000, forfeit draft picks, and/or suspend Team personnel for violating the free-agency discussion timing rules.",
+    "detail_paraphrase": "Upon the Commissioner's finding of a violation of the free-agency timing rules in Section 1(a), the Commissioner may impose a fine of up to $2,000,000 on the offending Team, direct the forfeiture of draft picks, and/or suspend any Team personnel involved. This authority is in addition to other penalties available under Article XIII, requires no predicate finding by the System Arbitrator, and any discipline imposed may be appealed by the Players Association to the System Arbitrator.",
+    "conditions": [
+      "Commissioner finds a violation of Section 1(a) free-agency discussion timing rules"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "System Arbitrator"
+    ],
+    "related_rule_ids": [
+      "FA-001",
+      "FA-002"
+    ],
+    "applies_to": [
+      "Team"
+    ],
+    "thresholds": "Fine up to $2,000,000; forfeiture of draft picks; suspension of Team personnel",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(b)",
+      "pages": [
+        311
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-006",
+    "bucket": "free_agency",
+    "title": "No public announcement of agreement before Moratorium ends",
+    "summary": "Players and Teams may not publicly state they have reached agreement on a contract that cannot be entered into until after the Moratorium Period ends.",
+    "detail_paraphrase": "Before the Moratorium Period concludes, players (and any person or entity acting with authority for a player) and Teams are each prohibited from publicly stating that they have reached agreement on the terms of a Player Contract (or amendment) that, under Article II, Section 15, cannot be entered into until after the Moratorium Period ends. This prohibition did not apply to players with respect to the Moratorium Period of the 2023-24 Salary Cap Year.",
+    "conditions": [
+      "Agreement concerns a contract that cannot be signed until after the Moratorium Period",
+      "Statement is made before the Moratorium Period concludes"
+    ],
+    "exceptions": [
+      "Did not apply to players for the Moratorium Period of the 2023-24 Salary Cap Year"
+    ],
+    "depends_on_terms": [
+      "Moratorium Period",
+      "Player Contract"
+    ],
+    "related_rule_ids": [
+      "FA-001",
+      "FA-002"
+    ],
+    "applies_to": [
+      "Player",
+      "Team"
+    ],
+    "thresholds": "",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(c)",
+      "pages": [
+        311
+      ]
+    },
+    "review_flag": false,
+    "notes": "Cross-references Article II, Section 15 for which contracts cannot be entered into during the Moratorium Period."
+  },
+  {
+    "rule_id": "FA-007",
+    "bucket": "free_agency",
+    "title": "No compensation obligation; Right of First Refusal only for RFAs",
+    "summary": "No compensation is owed to another Team for signing any Free Agent, and a Right of First Refusal applies only to a Restricted Free Agent.",
+    "detail_paraphrase": "No compensation obligation of any kind to another Team applies to the signing of any Free Agent. No Right of First Refusal of any kind applies to any Free Agent other than a Restricted Free Agent — only Restricted Free Agents are subject to a ROFR.",
+    "conditions": [
+      "Signing of any Free Agent carries no compensation obligation to another Team",
+      "Right of First Refusal applies only where the player is a Restricted Free Agent"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Free Agent",
+      "Right of First Refusal",
+      "Restricted Free Agent"
+    ],
+    "related_rule_ids": [
+      "FA-013",
+      "FA-016"
+    ],
+    "applies_to": [
+      "Free Agent",
+      "Restricted Free Agent"
+    ],
+    "thresholds": "",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(d)",
+      "pages": [
+        311,
+        312
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-008",
+    "bucket": "free_agency",
+    "title": "Qualifying Offer — definition and required form",
+    "summary": "A Qualifying Offer is a one-year Uniform Player Contract, signed by the Team, with 100% base-compensation protection for lack of skill and injury/illness and salary amounts set by the player's category.",
+    "detail_paraphrase": "A Qualifying Offer is an offer of a Uniform Player Contract, signed by the Team, that: is delivered personally, by email, or by certified/registered/overnight mail to the player or his representative (with a copy to the Players Association if by email); is for a term of one (1) year; provides Salary (excluding Incentive Compensation), Likely Bonuses, and Unlikely Bonuses in the amounts set by the applicable category rules; provides 100% protection of Base Compensation for lack of skill and injury or illness with no individually-negotiated conditions and no other protection types; and provides that 100% of Base Compensation is payable per Paragraph 3 of the Uniform Player Contract. Qualifying Offers for players finishing Two-Way Contracts are exempt from the 100%-protection requirement and instead follow the Two-Way rules in Section 1(e)(iii).",
+    "conditions": [
+      "Offer of a Uniform Player Contract signed by the Team",
+      "Term of one (1) year",
+      "Salary, Likely Bonuses, and Unlikely Bonuses per the applicable category (Sections 1(e)(ii)-(iv))",
+      "100% of Base Compensation protected for lack of skill and injury/illness with no individually-negotiated conditions and no other protection types",
+      "100% of Base Compensation payable per Paragraph 3 of the Uniform Player Contract"
+    ],
+    "exceptions": [
+      "Qualifying Offers for players finishing Two-Way Contracts are not subject to the 100%-protection requirement and instead follow Section 1(e)(iii)"
+    ],
+    "depends_on_terms": [
+      "Qualifying Offer",
+      "Uniform Player Contract",
+      "Base Compensation",
+      "Likely Bonuses",
+      "Unlikely Bonuses",
+      "Incentive Compensation",
+      "Two-Way Contract"
+    ],
+    "related_rule_ids": [
+      "FA-009",
+      "FA-010",
+      "FA-011",
+      "FA-012",
+      "FA-018"
+    ],
+    "applies_to": [
+      "Restricted Free Agent"
+    ],
+    "thresholds": "One-year term; 100% Base Compensation protection",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(e)(i)",
+      "pages": [
+        312
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-009",
+    "bucket": "free_agency",
+    "title": "Qualifying Offer amount — First Round Picks finishing Rookie Scale Contracts",
+    "summary": "For a first-round pick finishing his Rookie Scale Contract, the Qualifying Offer equals the fourth-year salary increased by the Rookie Salary Scale percentage, with adjustments based on draft position and the Starter Criteria.",
+    "detail_paraphrase": "For a First Round Pick finishing his Rookie Scale Contract, the Qualifying Offer's Salary, Likely Bonuses, and Unlikely Bonuses equal the amounts in the fourth Salary Cap Year of the Rookie Scale Contract (Fourth Year Salary) increased by the percentage in the Rookie Salary Scale's 'Qualifying Offer: Percentage Increase Over 4th Year Salary' column. Two adjustments apply: (A) a pick not selected in the first nine picks who met the Starter Criteria gets a Qualifying Offer equal to the amount applicable to the ninth-selected player (treating the ninth player's Fourth Year Salary as 120% of his Rookie Scale Amount), with no bonuses; (B) a pick selected first through fourteenth who failed the Starter Criteria gets the lesser of his percentage-increased Fourth Year Salary amount or the amount applicable to the fifteenth-selected player (treating the fifteenth player's Fourth Year Salary as 120% of his Rookie Scale Amount), with no bonuses.",
+    "conditions": [
+      "Player is a First Round Pick finishing his Rookie Scale Contract",
+      "Base amount: Fourth Year Salary increased by the Rookie Salary Scale QO percentage column",
+      "Adjustment (A): picks 10+ meeting Starter Criteria use the ninth-player amount (ninth player's 4th-year salary deemed 120% of Rookie Scale Amount), no bonuses",
+      "Adjustment (B): picks 1-14 failing Starter Criteria use the lesser of percentage-increased 4th-year amount or the fifteenth-player amount (fifteenth player's 4th-year salary deemed 120% of Rookie Scale Amount), no bonuses"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Qualifying Offer",
+      "First Round Pick",
+      "Rookie Scale Contract",
+      "Fourth Year Salary",
+      "Starter Criteria",
+      "Rookie Salary Scale",
+      "Rookie Scale Amount",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "FA-008",
+      "FA-017"
+    ],
+    "applies_to": [
+      "First Round Pick",
+      "Restricted Free Agent"
+    ],
+    "thresholds": "Starter Criteria; ninth-player amount (picks 10+ meeting criteria); fifteenth-player amount (picks 1-14 failing criteria); deemed 120% of Rookie Scale Amount",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(e)(ii)",
+      "pages": [
+        312,
+        313,
+        314
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-010",
+    "bucket": "free_agency",
+    "title": "Qualifying Offer amount — players finishing Two-Way Contracts",
+    "summary": "Qualifying Offers for players finishing Two-Way Contracts are either a Standard NBA Contract at the Minimum Player Salary (for certain multi-year/repeat Two-Way players) or a Two-Way Qualifying Offer, with specified protection amounts.",
+    "detail_paraphrase": "For Qualifying Offers to players finishing Two-Way Contracts: (A) a player who finished a two-Season Two-Way Contract in the current Salary Cap Year, or finished a Two-Way Contract with the same Team in both the current and immediately preceding Salary Cap Years (or changed Teams during the current year only via trade or waiver assignment), receives a Qualifying Offer of a Standard NBA Contract with Base Compensation equal to the applicable Minimum Player Salary for the next Salary Cap Year (no bonuses) and Base Compensation protection equal to the 'Standard/Two-Way QO Protection Amount' ($90,000 for a 2023-24 QO; for later Seasons, $90,000 scaled by the ratio of that year's Salary Cap to the 2023-24 Salary Cap). (B) All other players finishing Two-Way Contracts receive a Two-Way Qualifying Offer (an offer of a Two-Way Contract) providing the Two-Way Player Salary for the next Salary Cap Year and Base Compensation protection equal to the Maximum Two-Way Protection Amount. (C) A player finishing a Two-Way Contract who is ineligible for another Two-Way Contract (per Article II, Section 11(e)) receives the Section 1(e)(iii)(A) Standard-contract Qualifying Offer regardless of whether his prior Two-Way Contract was one or two Seasons.",
+    "conditions": [
+      "Player is finishing a Two-Way Contract",
+      "(A) Two-Season Two-Way or same-Team repeat (or trade/waiver-only Team change): Standard NBA Contract at next-year Minimum Player Salary, protection = Standard/Two-Way QO Protection Amount",
+      "(B) All other Two-Way finishers: Two-Way Qualifying Offer at Two-Way Player Salary, protection = Maximum Two-Way Protection Amount",
+      "(C) Player ineligible for another Two-Way Contract under Article II, Section 11(e): receives the Section 1(e)(iii)(A) offer regardless of prior term length"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Qualifying Offer",
+      "Two-Way Contract",
+      "Standard NBA Contract",
+      "Minimum Player Salary",
+      "Standard/Two-Way QO Protection Amount",
+      "Two-Way Player Salary",
+      "Maximum Two-Way Protection Amount",
+      "Two-Way Qualifying Offer",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "FA-008",
+      "FA-012"
+    ],
+    "applies_to": [
+      "Restricted Free Agent"
+    ],
+    "thresholds": "Standard/Two-Way QO Protection Amount: $90,000 for 2023-24, scaled by Salary Cap ratio thereafter",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(e)(iii)",
+      "pages": [
+        314,
+        315
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-011",
+    "bucket": "free_agency",
+    "title": "Qualifying Offer amount — all other ROFR players (135%/125% rule)",
+    "summary": "For other players subject to a Right of First Refusal, the Qualifying Offer is 135% (or 125% for pre-2023-24 contracts) of the player's last-year salary, with a Minimum-Plus floor and a 21st-pick amount for certain second-round/undrafted players meeting the Starter Criteria.",
+    "detail_paraphrase": "For all other players subject to a Right of First Refusal under Article XI, the Qualifying Offer's Salary, Likely Bonuses, and Unlikely Bonuses equal 135% (or 125% if the prior Contract was signed before the 2023-24 Salary Cap Year) of those amounts for the last Salary Cap Year of the prior Contract (the 'Prior Salary Qualifying Offer Amount'). If, on the following July 1, the player's applicable Minimum Annual Salary plus $200,000 (the 'Minimum-Plus Qualifying Offer Amount') exceeds the Prior Salary Qualifying Offer Amount, the Qualifying Offer is deemed amended to provide Base Compensation equal to the Minimum-Plus Qualifying Offer Amount (no bonuses). However, for a second-round or undrafted player with two or three Years of Service who met the Starter Criteria over his prior two Seasons, if it exceeds the greater of the Prior Salary or Minimum-Plus amounts, the Qualifying Offer instead provides Base Compensation equal to the amount applicable to the twenty-first-selected first-round player (treating that player's Fourth Year Salary as 100% of his Rookie Scale Amount).",
+    "conditions": [
+      "Player is subject to a Right of First Refusal and not covered by 1(e)(ii) or (iii)",
+      "Base amount: 135% of last-year Salary/bonuses (125% if prior Contract signed before 2023-24 Salary Cap Year)",
+      "Floor: if Minimum Annual Salary + $200,000 exceeds the base, QO is deemed Base Compensation at that Minimum-Plus amount (no bonuses)",
+      "Special: 2nd-round/undrafted player with 2-3 Years of Service meeting Starter Criteria over prior two Seasons uses the twenty-first-player amount if it exceeds the greater of the prior-salary or minimum-plus amounts (21st player's 4th-year salary deemed 100% of Rookie Scale Amount)"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Qualifying Offer",
+      "Right of First Refusal",
+      "Prior Salary Qualifying Offer Amount",
+      "Minimum-Plus Qualifying Offer Amount",
+      "Minimum Annual Salary",
+      "Starter Criteria",
+      "Years of Service",
+      "Rookie Scale Amount",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "FA-008",
+      "FA-009"
+    ],
+    "applies_to": [
+      "Restricted Free Agent"
+    ],
+    "thresholds": "135% (or 125% pre-2023-24); Minimum-Plus = Minimum Annual Salary + $200,000; twenty-first-player amount for qualifying 2nd-round/undrafted players",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(e)(iv)",
+      "pages": [
+        315,
+        316
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-012",
+    "bucket": "free_agency",
+    "title": "Qualifying Offer — other terms must match prior contract; physical exam exhibit",
+    "summary": "All other Qualifying Offer terms must be unchanged from the last year of the prior contract (to the extent amendable), and the Team may include an Exhibit 6 requiring the player to pass a physical.",
+    "detail_paraphrase": "All other terms and conditions of a Qualifying Offer must be unchanged from those that applied to the last year of the player's prior Contract, to the extent such terms are allowable amendments at the time the Qualifying Offer is made. A Team may include in any Qualifying Offer an Exhibit 6 to the Uniform Player Contract requiring the player, if he signs, to pass a physical examination performed by a Team-designated physician as a condition precedent to the Contract's validity. The Starter Criteria are determined based on Official NBA statistics.",
+    "conditions": [
+      "All other terms unchanged from the last year of the prior Contract, to the extent amendable at the time the QO is made",
+      "Team may add an Exhibit 6 requiring a passing physical as a condition precedent to validity"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Qualifying Offer",
+      "Uniform Player Contract",
+      "Starter Criteria"
+    ],
+    "related_rule_ids": [
+      "FA-008",
+      "FA-009",
+      "FA-011"
+    ],
+    "applies_to": [
+      "Restricted Free Agent"
+    ],
+    "thresholds": "",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(e)(v)",
+      "pages": [
+        316,
+        317
+      ]
+    },
+    "review_flag": false,
+    "notes": "Confirms Starter Criteria determined using Official NBA statistics."
+  },
+  {
+    "rule_id": "FA-013",
+    "bucket": "free_agency",
+    "title": "Prohibition on Team public statements about matching or offering RFAs",
+    "summary": "A Team may not publicly state it would match a future Offer Sheet or offer an RFA a particular contract, though it may express a general desire to retain or praise the player.",
+    "detail_paraphrase": "No Team or its employees or agents may make a public statement that the Team would match any future Offer Sheet for one of its players, or that it would offer an impending or current Restricted Free Agent a particular Player Contract (for example, a maximum-salary contract). This does not limit a Team's ability to express a general desire to retain the player or to make general praise (e.g., that the player is important or essential, or that the Team hopes to keep him).",
+    "conditions": [
+      "Statement is public and concerns matching a future Offer Sheet or offering a specific contract to an RFA"
+    ],
+    "exceptions": [
+      "General statements expressing desire to retain or praising the player are permitted"
+    ],
+    "depends_on_terms": [
+      "Offer Sheet",
+      "Restricted Free Agent",
+      "Player Contract"
+    ],
+    "related_rule_ids": [
+      "FA-002",
+      "FA-016"
+    ],
+    "applies_to": [
+      "Team"
+    ],
+    "thresholds": "",
+    "citation": {
+      "article": "XI",
+      "section": "1",
+      "subsection": "(f)",
+      "pages": [
+        317
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-014",
+    "bucket": "free_agency",
+    "title": "No individually-negotiated Right of First Refusal",
+    "summary": "No Player Contract may include an individually-negotiated Right of First Refusal or other limit on player movement after the contract ends, and no ROFR may attach due to playing in another (non-NBA) league.",
+    "detail_paraphrase": "No Player Contract may contain any individually-negotiated Right of First Refusal or other limitation on player movement following the last Salary Cap Year covered by the contract. Additionally, no Right of First Refusal rule, practice, policy, or agreement may be applied to a player as a result of his entering into a contract with, or otherwise playing for, any team in a professional basketball league other than the NBA.",
+    "conditions": [
+      "Player Contract may not include an individually-negotiated ROFR or post-contract movement limitation",
+      "ROFR may not be applied based on play in any non-NBA professional basketball league"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Player Contract",
+      "Right of First Refusal",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "FA-007"
+    ],
+    "applies_to": [
+      "Player",
+      "Team"
+    ],
+    "thresholds": "",
+    "citation": {
+      "article": "XI",
+      "section": "2",
+      "subsection": "(a)-(b)",
+      "pages": [
+        317
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-015",
+    "bucket": "free_agency",
+    "title": "Withholding services voids Veteran Free Agent status",
+    "summary": "A player who withholds playing services for more than 30 days after the start of the last Season of his contract is not deemed to have completed it and cannot sign elsewhere without his last Team's consent.",
+    "detail_paraphrase": "A player who withholds the playing services called for by his Player Contract for more than thirty (30) days after the start of the last Season covered by that contract is deemed not to have completed his contract by rendering the required playing services. As a result, he is not a Veteran Free Agent and may not negotiate or sign a contract with any other professional basketball team unless and until the Team for which he last played expressly agrees otherwise.",
+    "conditions": [
+      "Player withholds playing services for more than 30 days after the start of the last Season of his contract"
+    ],
+    "exceptions": [
+      "The last Team may expressly agree otherwise, restoring the player's ability to sign elsewhere"
+    ],
+    "depends_on_terms": [
+      "Player Contract",
+      "Veteran Free Agent"
+    ],
+    "related_rule_ids": [],
+    "applies_to": [
+      "Player"
+    ],
+    "thresholds": "More than 30 days after the start of the last Season",
+    "citation": {
+      "article": "XI",
+      "section": "3",
+      "subsection": "",
+      "pages": [
+        317
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-016",
+    "bucket": "free_agency",
+    "title": "Qualifying Offer makes a First Round Pick a Restricted Free Agent",
+    "summary": "A Team may make a Qualifying Offer to a first-round pick from the day after his second Option Year Season through 5:00 p.m. ET on the following June 29; doing so makes him an RFA, otherwise he becomes a UFA.",
+    "detail_paraphrase": "From the day following the Season covered by the second Option Year of a First Round Pick's Rookie Scale Contract through 5:00 p.m. eastern time on the immediately following June 29, the player's Team may make a Qualifying Offer. If made, the player becomes a Restricted Free Agent on the following July 1, subject to a Right of First Refusal in favor of the Team (the 'ROFR Team') per Section 5. If not made, the player becomes an Unrestricted Free Agent on that July 1. Separately, if a Team fails to timely exercise its Option for the first or second Option Year of a Rookie Scale Contract, the player becomes an Unrestricted Free Agent following his second or third Season as applicable.",
+    "conditions": [
+      "Player is a First Round Pick on a Rookie Scale Contract",
+      "QO window: day after the second Option Year Season through 5:00 p.m. ET the following June 29",
+      "QO made: player becomes a Restricted Free Agent (ROFR Team holds ROFR) on July 1",
+      "QO not made: player becomes an Unrestricted Free Agent on July 1",
+      "Team fails to timely exercise first or second Option Year: player becomes a UFA after his second or third Season as applicable"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Qualifying Offer",
+      "First Round Pick",
+      "Rookie Scale Contract",
+      "Option Year",
+      "Restricted Free Agent",
+      "Unrestricted Free Agent",
+      "Right of First Refusal",
+      "ROFR Team"
+    ],
+    "related_rule_ids": [
+      "FA-008",
+      "FA-017",
+      "FA-019",
+      "FA-020"
+    ],
+    "applies_to": [
+      "First Round Pick",
+      "Restricted Free Agent"
+    ],
+    "thresholds": "QO deadline: 5:00 p.m. ET June 29; RFA/UFA status set on July 1",
+    "citation": {
+      "article": "XI",
+      "section": "4",
+      "subsection": "(a)(i)",
+      "pages": [
+        318
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-017",
+    "bucket": "free_agency",
+    "title": "Maximum Qualifying Offer for First Round Picks",
+    "summary": "Along with a Qualifying Offer, a Team may offer a first-round pick a Maximum Qualifying Offer: a 5-year contract at the Maximum Annual Salary with 8% annual raises, full protection, and no Option or ETO.",
+    "detail_paraphrase": "A Team making a Qualifying Offer to a player after the second Option Year of his Rookie Scale Contract may simultaneously offer a Maximum Qualifying Offer — a five-Season Contract providing first-year Salary equal to the Maximum Annual Salary under Article II, Section 7(a), with annual increases of 8.0% of the first-year Salary. The Maximum Qualifying Offer must contain only Base Compensation (no bonuses), cannot contain an Option or ETO, must provide full Base Compensation protection each Season for lack of skill and injury/illness, and must remain open for the same period as the Qualifying Offer. If the Team withdraws the Qualifying Offer, the Maximum Qualifying Offer is deemed withdrawn simultaneously. A player may accept either his Qualifying Offer or his Maximum Qualifying Offer, but not both. Providing a Maximum Qualifying Offer has the consequence described in Section 5(b) regarding required Offer Sheet length.",
+    "conditions": [
+      "Available only alongside a Qualifying Offer made after the second Option Year",
+      "Five Seasons; first-year Salary = Maximum Annual Salary (Article II, Section 7(a)); 8.0% annual increases of first-year Salary",
+      "Base Compensation only, no bonuses; no Option or ETO; full protection each Season",
+      "Must remain open for the same period as the Qualifying Offer and cannot be withdrawn except simultaneously with the QO",
+      "Player may accept the QO or the Maximum QO, but not both"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Maximum Qualifying Offer",
+      "Qualifying Offer",
+      "Rookie Scale Contract",
+      "Option Year",
+      "Maximum Annual Salary",
+      "Base Compensation",
+      "ETO",
+      "Offer Sheet"
+    ],
+    "related_rule_ids": [
+      "FA-016",
+      "FA-018",
+      "FA-021"
+    ],
+    "applies_to": [
+      "First Round Pick",
+      "Restricted Free Agent"
+    ],
+    "thresholds": "5 Seasons; first-year = Maximum Annual Salary; 8.0% annual raises",
+    "citation": {
+      "article": "XI",
+      "section": "4",
+      "subsection": "(a)(ii)",
+      "pages": [
+        318,
+        319
+      ]
+    },
+    "review_flag": false,
+    "notes": "The Section 5(b) consequence: if both a QO and Maximum QO are tendered, an Offer Sheet must be for a term of more than two Seasons (see FA-021)."
+  },
+  {
+    "rule_id": "FA-018",
+    "bucket": "free_agency",
+    "title": "Qualifying Offer makes a non-rookie-scale Veteran Free Agent a Restricted Free Agent",
+    "summary": "A Veteran Free Agent with 3 or fewer Years of Service (or completing a Two-Way Contract) becomes an RFA if his Prior Team makes a Qualifying Offer between the day after the Season and 5:00 p.m. ET on the following June 29.",
+    "detail_paraphrase": "Any Veteran Free Agent (other than a First Round Pick whose first or second Option Year was not exercised) who either (i) will have three (3) or fewer Years of Service as of the June 30 following the end of the last Season covered by his contract, or (ii) is completing a Two-Way Contract, becomes a Restricted Free Agent if his Prior Team makes a Qualifying Offer at any time from the day following that Season through 5:00 p.m. eastern time on the immediately following June 29. If the Qualifying Offer is made, the player becomes a Restricted Free Agent subject to a Right of First Refusal in favor of the ROFR Team on the following July 1. If not made, the player becomes an Unrestricted Free Agent on that July 1.",
+    "conditions": [
+      "Player is a Veteran Free Agent (not a First Round Pick whose first/second Option Year went unexercised)",
+      "Player has 3 or fewer Years of Service as of the following June 30, OR is completing a Two-Way Contract",
+      "QO window: day after the Season through 5:00 p.m. ET the following June 29",
+      "QO made: player becomes a Restricted Free Agent (ROFR Team holds ROFR) on July 1",
+      "QO not made: player becomes an Unrestricted Free Agent on July 1"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Veteran Free Agent",
+      "Years of Service",
+      "Two-Way Contract",
+      "Qualifying Offer",
+      "Prior Team",
+      "Restricted Free Agent",
+      "Unrestricted Free Agent",
+      "Right of First Refusal",
+      "ROFR Team",
+      "First Round Pick",
+      "Option Year"
+    ],
+    "related_rule_ids": [
+      "FA-008",
+      "FA-010",
+      "FA-016"
+    ],
+    "applies_to": [
+      "Veteran Free Agent",
+      "Restricted Free Agent"
+    ],
+    "thresholds": "3 or fewer Years of Service; QO deadline 5:00 p.m. ET June 29; status set July 1",
+    "citation": {
+      "article": "XI",
+      "section": "4",
+      "subsection": "(b)",
+      "pages": [
+        318,
+        319,
+        320
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-019",
+    "bucket": "free_agency",
+    "title": "Qualifying Offer acceptance and withdrawal deadlines",
+    "summary": "A player has until October 1 to accept a Qualifying Offer (extendable up to March 1); a Team may withdraw it through July 13 freely, but withdrawal on/after July 14 also renounces the player.",
+    "detail_paraphrase": "A player receiving a Qualifying Offer must be given until the following October 1 to accept it. A Team may withdraw the Qualifying Offer at any time through the following July 13; after July 13 it may be withdrawn only with the player's written agreement. If a Qualifying Offer is withdrawn, the player immediately becomes an Unrestricted Free Agent, and a withdrawal on or after July 14 also deems the Team to have renounced the player under Article VII, Section 4(g). A player may not accept after October 1 unless the Team, before October 1, extends the acceptance date by written notice; there is no limit on the number of extensions, but in no event may the acceptance date be extended beyond, or the player accept beyond, the following March 1. If a Qualifying Offer is neither withdrawn nor accepted and the deadline passes, the Team's Right of First Refusal continues, subject to Section 5(a). A player who knows he has a medical disability rendering him unable to perform the following Season may not validly accept a Qualifying Offer (under Section 4 or 5) without the ROFR Team's consent after disclosure, but remains subject to the ROFR Team's Right of First Refusal.",
+    "conditions": [
+      "Acceptance deadline: October 1 following issuance",
+      "Free withdrawal by Team: through July 13; after July 13 only with player's written agreement",
+      "Withdrawal makes player a UFA immediately; withdrawal on/after July 14 also renounces player (Article VII, Section 4(g))",
+      "Acceptance date extendable before October 1 by written notice, unlimited times, but never beyond the following March 1",
+      "If neither withdrawn nor accepted, ROFR continues subject to Section 5(a)",
+      "Player with a known disqualifying medical disability cannot validly accept without ROFR Team consent after disclosure, but remains subject to ROFR"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Qualifying Offer",
+      "Unrestricted Free Agent",
+      "Right of First Refusal",
+      "ROFR Team"
+    ],
+    "related_rule_ids": [
+      "FA-008",
+      "FA-016",
+      "FA-018",
+      "FA-022"
+    ],
+    "applies_to": [
+      "Restricted Free Agent"
+    ],
+    "thresholds": "Accept by October 1; free Team withdrawal through July 13; renunciation on/after July 14; extension cap March 1",
+    "citation": {
+      "article": "XI",
+      "section": "4",
+      "subsection": "(c)",
+      "pages": [
+        320,
+        321
+      ]
+    },
+    "review_flag": false,
+    "notes": "Cross-references Article VII, Section 4(g) (renunciation) for the effect of a July 14+ withdrawal."
+  },
+  {
+    "rule_id": "FA-020",
+    "bucket": "free_agency",
+    "title": "Challenging the validity of a Qualifying Offer or Maximum Qualifying Offer",
+    "summary": "A claim that an offered QO or Maximum QO fails the required criteria must be made in writing within 10 days; the Team then has 5 business days to cure with an amended contract.",
+    "detail_paraphrase": "Any claim that a Contract offered as a Qualifying Offer or Maximum Qualifying Offer fails one or more of the required criteria must be made by written notice to the Team no later than ten (10) days after a copy of the offer was given by the Team or the NBA to the Players Association. The notice must specify the changes allegedly required for the offer to qualify. If the requested changes are necessary, the Team may, within five (5) business days, offer the player an amended Contract incorporating them; if it does, the player and Players Association are precluded from asserting that the Contract is not a timely and valid Qualifying Offer or Maximum Qualifying Offer.",
+    "conditions": [
+      "Written notice of deficiency to the Team within 10 days of the offer being given to the Players Association",
+      "Notice must specify the required changes",
+      "Team may cure within 5 business days with an amended Contract; curing precludes further challenge"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Qualifying Offer",
+      "Maximum Qualifying Offer"
+    ],
+    "related_rule_ids": [
+      "FA-008",
+      "FA-017"
+    ],
+    "applies_to": [
+      "Restricted Free Agent",
+      "Team"
+    ],
+    "thresholds": "10 days to challenge; 5 business days for Team to cure",
+    "citation": {
+      "article": "XI",
+      "section": "4",
+      "subsection": "(d)",
+      "pages": [
+        320,
+        321
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-021",
+    "bucket": "free_agency",
+    "title": "Reasserting Right of First Refusal in subsequent years",
+    "summary": "If an RFA neither signs an Offer Sheet by March 1 nor re-signs with the ROFR Team that Season, the Team may reassert its ROFR for the next year by extending another identical Qualifying Offer by 5:00 p.m. ET on June 29.",
+    "detail_paraphrase": "If a Restricted Free Agent does not sign an Offer Sheet with any Team by March 1 of the Season for which the Qualifying Offer was made, and does not sign a contract with the ROFR Team before that Season ends, the ROFR Team may reassert its Right of First Refusal for the following Season by extending another Qualifying Offer (with the same terms, including the same Salary, Likely Bonuses, and Unlikely Bonuses) by 5:00 p.m. eastern time on the next June 29. A ROFR Team may continue reasserting its ROFR in each subsequent year by following this procedure. In any Season it reasserts its ROFR, the Team may also simultaneously provide the player with a Maximum Qualifying Offer on the same terms as the prior one. Any such Qualifying Offer and Maximum Qualifying Offer are governed by Section 4.",
+    "conditions": [
+      "RFA did not sign an Offer Sheet by March 1 of the QO Season",
+      "RFA did not sign with the ROFR Team before that Season ended",
+      "Reassertion requires a new identical Qualifying Offer by 5:00 p.m. ET on June 29",
+      "May reassert in each subsequent year by the same procedure",
+      "A reasserted Maximum Qualifying Offer (same terms) may accompany the QO"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Restricted Free Agent",
+      "Offer Sheet",
+      "Qualifying Offer",
+      "Maximum Qualifying Offer",
+      "Right of First Refusal",
+      "ROFR Team"
+    ],
+    "related_rule_ids": [
+      "FA-017",
+      "FA-019",
+      "FA-031"
+    ],
+    "applies_to": [
+      "Restricted Free Agent"
+    ],
+    "thresholds": "Reassertion deadline: 5:00 p.m. ET June 29; tied to March 1 non-signing",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(a)",
+      "pages": [
+        321,
+        322
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-022",
+    "bucket": "free_agency",
+    "title": "Offer Sheet — definition, required term, and New Team Room requirement",
+    "summary": "An RFA accepts a New Team's offer via a signed Offer Sheet given to the ROFR Team; it must be more than 1 Season (more than 2 if both a QO and Max QO were tendered), cannot be Two-Way, and the New Team must have Room throughout.",
+    "detail_paraphrase": "When a Restricted Free Agent wishes to accept an offer from a Team other than the ROFR Team (the 'New Team'), he gives the ROFR Team a completed Offer Sheet (in the form of Exhibit G), signed by the player and the New Team, with an attached Uniform Player Contract specifying the Principal Terms and any non-Principal Terms the ROFR Team need not match. The player's obligation to give the Offer Sheet is satisfied if the New Team gives it. The Offer Sheet must be for a Player Contract with a term of more than one (1) Season (excluding any Option Year), unless the ROFR Team tendered both a Qualifying Offer and a Maximum Qualifying Offer, in which case it must be for more than two (2) Seasons (excluding any Option Year). The Offer Sheet cannot be for a Two-Way Contract. To extend an Offer Sheet, the New Team must have Room for the contract when the Offer Sheet is signed and continuously while it is outstanding.",
+    "conditions": [
+      "RFA gives ROFR Team a completed Offer Sheet (Exhibit G) signed by player and New Team, with attached Uniform Player Contract specifying Principal and non-Principal Terms",
+      "Obligation satisfied if the New Team gives the Offer Sheet",
+      "Term must exceed 1 Season (excluding Option Year), or exceed 2 Seasons if both a QO and Maximum QO were tendered",
+      "Cannot be a Two-Way Contract",
+      "New Team must have Room at signing and continuously while outstanding"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Offer Sheet",
+      "Restricted Free Agent",
+      "ROFR Team",
+      "New Team",
+      "Uniform Player Contract",
+      "Principal Terms",
+      "Qualifying Offer",
+      "Maximum Qualifying Offer",
+      "Two-Way Contract",
+      "Room",
+      "Option Year"
+    ],
+    "related_rule_ids": [
+      "FA-017",
+      "FA-023",
+      "FA-026",
+      "FA-029"
+    ],
+    "applies_to": [
+      "Restricted Free Agent",
+      "New Team",
+      "ROFR Team"
+    ],
+    "thresholds": "Term > 1 Season (or > 2 Seasons if QO + Max QO tendered); New Team Room required throughout",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(b)",
+      "pages": [
+        322
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-023",
+    "bucket": "free_agency",
+    "title": "ROFR Team matching — exceptions usable and Room/exception amount required",
+    "summary": "The ROFR Team may match an Offer Sheet using Room, a Veteran Free Agent Exception, or the Minimum Player Salary Exception, and must hold an amount at least equal to first-year Salary plus Unlikely Bonuses throughout.",
+    "detail_paraphrase": "Upon receiving an Offer Sheet, the ROFR Team may exercise its Right of First Refusal. To match, it may use Room, a Veteran Free Agent Exception (Article VII, Section 6(b)), or the Minimum Player Salary Exception. The ROFR Team must have Room or the applicable Exception in an amount equal to or greater than the Salary plus any Unlikely Bonuses in the first Salary Cap Year of the player's contract at the time it gives notice of exercising its Right of First Refusal, and must continue to have that Room or Exception at all times the First Refusal Exercise Notice remains in effect.",
+    "conditions": [
+      "ROFR Team may match using Room, a Veteran Free Agent Exception, or the Minimum Player Salary Exception",
+      "Must hold Room/Exception >= first-year Salary plus Unlikely Bonuses when exercising ROFR",
+      "Must continue to hold that amount while the First Refusal Exercise Notice is in effect"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Offer Sheet",
+      "Right of First Refusal",
+      "ROFR Team",
+      "Room",
+      "Veteran Free Agent Exception",
+      "Minimum Player Salary Exception",
+      "First Refusal Exercise Notice",
+      "Unlikely Bonuses",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "FA-022",
+      "FA-026",
+      "EXC-002",
+      "EXC-003",
+      "EXC-004"
+    ],
+    "applies_to": [
+      "ROFR Team",
+      "Restricted Free Agent"
+    ],
+    "thresholds": "Room/Exception >= first-year Salary plus Unlikely Bonuses, held continuously",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(c)",
+      "pages": [
+        322
+      ]
+    },
+    "review_flag": false,
+    "notes": "Veteran Free Agent Exception mechanics are defined in Article VII, Section 6(b) — cross-referenced, not duplicated."
+  },
+  {
+    "rule_id": "FA-024",
+    "bucket": "free_agency",
+    "title": "Offer Sheet structure for RFAs with 1-2 Years of Service (Gilbert Arenas rule)",
+    "summary": "For an RFA with 1 or 2 Years of Service, the Offer Sheet's first-year Salary plus Unlikely Bonuses cannot exceed the Non-Taxpayer Mid-Level amount; later years may balloon, and Room is computed on the contract's average salary.",
+    "detail_paraphrase": "For a Restricted Free Agent with one (1) or two (2) Years of Service, an Offer Sheet's first-year Salary plus Unlikely Bonuses cannot exceed the Non-Taxpayer Mid-Level Salary Exception amount for that Salary Cap Year, with annual changes governed by Article VII, Section 5(a)(1). If the first two Salary Cap Years are at that maximum, the third year's Salary may rise to the maximum the player could have received had his first two years been at the maximum permitted under Article II, Section 7(a) and Article VII, Section 5(b)(1); if so, the fourth year may change by no more than 4.5% of the third year, the Offer Sheet cannot contain bonuses, and 100% of Base Compensation each Season must be protected for lack of skill and injury/illness. For determining whether the New Team has Room, the first-year Salary is deemed to equal the average of the aggregate Salaries across all years of the Offer Sheet; if the ROFR Team does not match, the New Team's contract salary in each year equals that average, while if the ROFR Team matches, its salary is the year-by-year amount stated (unless the ROFR Team elects, where its Team Salary plus the average fits under the Salary Cap, to use the averaged salary instead, by written statement to the NBA on the same day it gives the First Refusal Exercise Notice).",
+    "conditions": [
+      "RFA has one (1) or two (2) Years of Service",
+      "First-year Salary plus Unlikely Bonuses capped at the Non-Taxpayer Mid-Level Salary Exception amount",
+      "Third-year balloon allowed if first two years at the cap; fourth-year change limited to 4.5% of third year, no bonuses, full Base Compensation protection",
+      "Room is computed using the average of aggregate Salaries across all Offer Sheet years",
+      "If ROFR Team matches it may elect averaged salary where Team Salary plus the average fits under the Salary Cap, via written statement to the NBA on the day of the First Refusal Exercise Notice"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Offer Sheet",
+      "Restricted Free Agent",
+      "Years of Service",
+      "Non-Taxpayer Mid-Level Salary Exception",
+      "Room",
+      "Salary Cap",
+      "Team Salary",
+      "First Refusal Exercise Notice",
+      "Base Compensation",
+      "Unlikely Bonuses",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "FA-022",
+      "FA-023",
+      "FA-025"
+    ],
+    "applies_to": [
+      "Restricted Free Agent",
+      "New Team",
+      "ROFR Team"
+    ],
+    "thresholds": "First-year cap = Non-Taxpayer Mid-Level amount; fourth-year change <= 4.5% of third year; Room based on averaged salary",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(d)",
+      "pages": [
+        323,
+        324
+      ]
+    },
+    "review_flag": false,
+    "notes": "Commonly called the 'Gilbert Arenas provision.' The Prior Team may match such an Offer Sheet using the Early Qualifying Veteran Free Agent Exception (Art. VII §6(b)(3)(ii)) or the Non-Taxpayer Mid-Level Exception (Art. VII §6(e)(5))."
+  },
+  {
+    "rule_id": "FA-025",
+    "bucket": "free_agency",
+    "title": "Principal Terms of an Offer Sheet (what the ROFR Team must match)",
+    "summary": "Only the contract term, fixed/specified compensation, certain Incentive Compensation (Likely Bonuses based on the two Teams and Generally Recognized League Honors), and allowable Uniform Player Contract amendments are Principal Terms.",
+    "detail_paraphrase": "The Principal Terms of an Offer Sheet are limited to: (i) the term of the Contract; (ii) the fixed and specified Compensation the New Team will pay or lend as a signing bonus, Current Base Compensation, and/or Deferred Base Compensation in specified installments on specified dates; (iii) Incentive Compensation, but only the elements that are Likely Bonuses based on the performance of the Offer-Sheet Team and the ROFR Team, plus Generally Recognized League Honors; and (iv) any allowable amendments to the Uniform Player Contract terms (e.g., Base Compensation protection, a trade bonus).",
+    "conditions": [
+      "Principal Terms = contract term; fixed/specified compensation (signing bonus, Current/Deferred Base Compensation); qualifying Incentive Compensation; allowable Uniform Player Contract amendments",
+      "Only Likely Bonuses tied to the two Teams' performance and Generally Recognized League Honors count as Principal-Term Incentive Compensation"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Principal Terms",
+      "Offer Sheet",
+      "Incentive Compensation",
+      "Likely Bonuses",
+      "Generally Recognized League Honors",
+      "Base Compensation",
+      "Uniform Player Contract",
+      "New Team",
+      "ROFR Team"
+    ],
+    "related_rule_ids": [
+      "FA-022",
+      "FA-026"
+    ],
+    "applies_to": [
+      "Restricted Free Agent",
+      "New Team",
+      "ROFR Team"
+    ],
+    "thresholds": "",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(e)",
+      "pages": [
+        324,
+        325
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-026",
+    "bucket": "free_agency",
+    "title": "First Refusal Exercise Notice — 48-hour matching window",
+    "summary": "The ROFR Team must give a First Refusal Exercise Notice by 11:59 p.m. ET the next day (if the Offer Sheet arrived before noon) or two days later (if at/after noon); matching binds the player to the ROFR Team on the Principal Terms.",
+    "detail_paraphrase": "If the ROFR Team gives the Restricted Free Agent a First Refusal Exercise Notice (Exhibit H) — (i) for an Offer Sheet received before 12:00 p.m. eastern time, by 11:59 p.m. ET the immediately following day, or (ii) for an Offer Sheet received at or after 12:00 p.m. eastern time, by 11:59 p.m. ET the day that is two days after — then, subject to Section 5(k), the player and ROFR Team are deemed to have entered into a Player Contract containing all the Principal Terms (and only the Principal Terms) of the attached Uniform Player Contract (with any Exhibit 6 deemed deleted). Such a Contract may not be amended in any manner for one (1) year.",
+    "conditions": [
+      "Offer Sheet received before 12:00 p.m. ET: Notice due by 11:59 p.m. ET the next day",
+      "Offer Sheet received at/after 12:00 p.m. ET: Notice due by 11:59 p.m. ET two days later",
+      "Timely Notice binds player and ROFR Team on the Principal Terms only (Exhibit 6 deemed deleted)",
+      "Resulting Contract may not be amended for one (1) year"
+    ],
+    "exceptions": [
+      "Special extended deadline applies for Offer Sheets received during the Moratorium Period (Section 5(i))",
+      "Physical-conditioned matching procedures under Section 5(k) may modify the outcome"
+    ],
+    "depends_on_terms": [
+      "First Refusal Exercise Notice",
+      "Offer Sheet",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Principal Terms",
+      "Player Contract",
+      "Uniform Player Contract"
+    ],
+    "related_rule_ids": [
+      "FA-022",
+      "FA-025",
+      "FA-027",
+      "FA-028",
+      "FA-030"
+    ],
+    "applies_to": [
+      "ROFR Team",
+      "Restricted Free Agent"
+    ],
+    "thresholds": "Match by 11:59 p.m. ET next day (received before noon) or two days later (received at/after noon)",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(g)",
+      "pages": [
+        325
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-027",
+    "bucket": "free_agency",
+    "title": "Failure to match — player signs with New Team",
+    "summary": "If the ROFR Team does not give a First Refusal Exercise Notice in time or declines in writing, the player and New Team are deemed to have entered the full contract attached to the Offer Sheet, unamendable for one year.",
+    "detail_paraphrase": "If the ROFR Team does not give the First Refusal Exercise Notice within the applicable period (Section 5(g)), or during that period provides written notice that it declines to exercise its Right of First Refusal, the player and the New Team are deemed to have entered into a Player Contract containing all terms and conditions of the Uniform Player Contract attached to the Offer Sheet (including any Exhibit 6 physical-exam condition). Such a Contract may not be amended in any manner for one (1) year.",
+    "conditions": [
+      "ROFR Team fails to give a timely First Refusal Exercise Notice, OR declines in writing during the period",
+      "Player and New Team deemed to enter the full attached contract (including any Exhibit 6)",
+      "Contract may not be amended for one (1) year"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "First Refusal Exercise Notice",
+      "Right of First Refusal",
+      "ROFR Team",
+      "New Team",
+      "Offer Sheet",
+      "Player Contract",
+      "Uniform Player Contract"
+    ],
+    "related_rule_ids": [
+      "FA-026",
+      "FA-029"
+    ],
+    "applies_to": [
+      "New Team",
+      "Restricted Free Agent",
+      "ROFR Team"
+    ],
+    "thresholds": "One-year no-amendment lock",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(h)",
+      "pages": [
+        325,
+        326
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-028",
+    "bucket": "free_agency",
+    "title": "Moratorium Period extends the matching deadline to July 7",
+    "summary": "For an Offer Sheet received by the ROFR Team during the Moratorium Period, the Team has until 11:59 p.m. ET on the July 7 immediately following the Moratorium Period to give the First Refusal Exercise Notice.",
+    "detail_paraphrase": "Notwithstanding the standard matching windows, for any Offer Sheet received by the ROFR Team during the Moratorium Period, the ROFR Team has until 11:59 p.m. eastern time on the July 7 immediately following that Moratorium Period to give the First Refusal Exercise Notice.",
+    "conditions": [
+      "Offer Sheet received by the ROFR Team during the Moratorium Period",
+      "Matching deadline extended to 11:59 p.m. ET on the following July 7"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Offer Sheet",
+      "ROFR Team",
+      "Moratorium Period",
+      "First Refusal Exercise Notice"
+    ],
+    "related_rule_ids": [
+      "FA-026"
+    ],
+    "applies_to": [
+      "ROFR Team",
+      "Restricted Free Agent"
+    ],
+    "thresholds": "Matching deadline: 11:59 p.m. ET July 7 following the Moratorium Period",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(i)",
+      "pages": [
+        326
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-029",
+    "bucket": "free_agency",
+    "title": "Post-match trade restriction on the matched player",
+    "summary": "After matching, the ROFR Team may not trade the player for one year without his consent, and even with consent neither the ROFR Team nor any Team may trade him to the Team whose Offer Sheet was matched for one year.",
+    "detail_paraphrase": "After exercising its Right of First Refusal, the ROFR Team may not trade the Restricted Free Agent for one (1) year without the player's consent. Even with the player's consent, for one (1) year neither the matching ROFR Team nor any other Team may trade the player to the Team whose Offer Sheet was matched.",
+    "conditions": [
+      "ROFR Team exercised its Right of First Refusal (matched the Offer Sheet)",
+      "No trade of the player for 1 year without his consent",
+      "Even with consent, no trade for 1 year to the Team whose Offer Sheet was matched (by any Team)"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Right of First Refusal",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Offer Sheet"
+    ],
+    "related_rule_ids": [
+      "FA-026",
+      "FA-027"
+    ],
+    "applies_to": [
+      "ROFR Team",
+      "Restricted Free Agent"
+    ],
+    "thresholds": "One-year trade restriction",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(j)",
+      "pages": [
+        326
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-030",
+    "bucket": "free_agency",
+    "title": "Conditioning the match on a physical examination",
+    "summary": "A ROFR Team may condition its First Refusal Exercise Notice on the player passing a physical within 2 days; detailed withdrawal and timing rules govern non-submission, failure, and the resulting binding contract.",
+    "detail_paraphrase": "A ROFR Team may condition its First Refusal Exercise Notice on the player reporting for and passing (in the Team's good-faith sole discretion) a physical examination by a Team-designated physician within two (2) days of exercising its Right of First Refusal; the player must cooperate fully. If the player does not submit within two days, the Notice is deemed no longer conditioned on a physical, and the ROFR Team then has two days after that two-day period to withdraw its First Refusal Exercise Notice. A timely withdrawal in that circumstance: invalidates the Offer Sheet (barring the issuing Team from signing/acquiring the player for one year, subject to early expiry if the ROFR Team later relinquishes its ROFR); bars the player from entering an Offer Sheet with any other Team until the next Salary Cap Year; deems any Qualifying Offer/Maximum Qualifying Offer acceptance deadline expired; and restricts the player from signing with the ROFR Team except on the Principal Terms (plus possibly an Exhibit 6) before the later of three months after withdrawal or the January 15 of the relevant Salary Cap Year. If the Notice is not withdrawn within the two-day period, the player and ROFR Team are deemed to have entered a Player Contract per Section 5(g). If the player submits to but fails the physical, the ROFR Team may withdraw its Notice within two days of the exam; if it withdraws, the player and New Team are deemed bound per Section 5(h); if it does not withdraw, the ROFR Team waives the physical requirement and the player and ROFR Team are bound per Section 5(g).",
+    "conditions": [
+      "ROFR Team may condition the Notice on a passing physical within 2 days of exercising the ROFR; player must cooperate",
+      "Player fails to submit in 2 days: condition drops; ROFR Team has 2 more days to withdraw the Notice, triggering the Section 5(k)(ii)(1) consequences",
+      "Player submits but fails: ROFR Team may withdraw within 2 days of the exam (then New Team binds per 5(h)); if not withdrawn, the physical is waived and the ROFR Team binds per 5(g)",
+      "Notice not withdrawn within the applicable 2-day period: player and ROFR Team bound per Section 5(g)"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "First Refusal Exercise Notice",
+      "Right of First Refusal",
+      "ROFR Team",
+      "New Team",
+      "Offer Sheet",
+      "Principal Terms",
+      "Qualifying Offer",
+      "Maximum Qualifying Offer",
+      "Player Contract",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "FA-026",
+      "FA-027",
+      "FA-031"
+    ],
+    "applies_to": [
+      "ROFR Team",
+      "Restricted Free Agent",
+      "New Team"
+    ],
+    "thresholds": "Physical within 2 days; 2-day Notice-withdrawal windows; later of 3 months or January 15 for restricted re-signing; one-year issuing-Team bar",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(k)",
+      "pages": [
+        326,
+        327,
+        328,
+        329,
+        330
+      ]
+    },
+    "review_flag": false,
+    "notes": "Section 5(k)(ii)(1)(D)(ii) ties the subsequent ROFR-Team contract to the Early Qualifying Veteran Free Agent Exception (Art. VII §6(b)(3)(ii)) or Non-Taxpayer Mid-Level Exception (Art. VII §6(e)(5)) for Gilbert-Arenas (5(d)(ii)) Offer Sheets."
+  },
+  {
+    "rule_id": "FA-031",
+    "bucket": "free_agency",
+    "title": "New Team physical exam via Exhibit 6 in the Offer Sheet",
+    "summary": "If an Offer Sheet includes an Exhibit 6, prescribed language requires the player to pass a New-Team physical within 2 days of execution, with results reported within 3 days; failure to timely report deems the player passed.",
+    "detail_paraphrase": "If an Offer Sheet includes an Exhibit 6 requiring the player to pass a physical performed by a New-Team-designated physician, the Exhibit 6 language must be replaced with prescribed text stating the Offer Sheet is invalid (except as in Section 5(l)) unless the player passes, in the New Team's good-faith sole discretion, a physical (under Article II, Section 13(h)) conducted within two (2) days of executing the Offer Sheet, with results reported by the Team to the player within three (3) days of execution; the player must supply complete and truthful information. The New Team must notify the player and the ROFR Team within that three-day period whether the player passed; if it fails to timely notify, the player is deemed to have passed the physical with the New Team.",
+    "conditions": [
+      "Offer Sheet includes an Exhibit 6 requiring a New-Team physical; prescribed replacement language is mandatory",
+      "Physical conducted within 2 days of Offer Sheet execution; results reported to player within 3 days",
+      "New Team must notify player and ROFR Team of pass/fail within the 3-day period",
+      "Failure to timely notify deems the player to have passed"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Offer Sheet",
+      "New Team",
+      "ROFR Team",
+      "Right of First Refusal"
+    ],
+    "related_rule_ids": [
+      "FA-022",
+      "FA-032"
+    ],
+    "applies_to": [
+      "New Team",
+      "Restricted Free Agent",
+      "ROFR Team"
+    ],
+    "thresholds": "Physical within 2 days of execution; results reported within 3 days; non-notice deems passed",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(f)",
+      "pages": [
+        324,
+        325
+      ]
+    },
+    "review_flag": false,
+    "notes": "Physical conducted per Article II, Section 13(h) — cross-referenced."
+  },
+  {
+    "rule_id": "FA-032",
+    "bucket": "free_agency",
+    "title": "ROFR Team rights when New Team's Exhibit 6 physical is failed",
+    "summary": "If the New Team's Exhibit 6 physical is failed and the ROFR pathway closes, the ROFR Team must within 2 days elect either to keep its prior rights over the player (if it engaged in no inconsistent transactions) or to relinquish the ROFR.",
+    "detail_paraphrase": "If an Offer Sheet includes an Exhibit 6, the New Team determines the player did not pass, and either the ROFR Team declines its Right of First Refusal, the exercise period expires, or the ROFR Team's conditional match is withdrawn for a failed physical under Section 5(k), then the ROFR Team must, within two (2) days of the later of receiving the New Team's non-pass notice or its own timely non-pass notice to the player, either: (i) elect to continue to possess the rights it had at Offer Sheet execution — available only if it has not engaged in any transaction since the Offer Sheet was given that it could not have engaged in had the player's Free Agent Amount (or QO/Max QO amount) remained in Team Salary; or (ii) decline to continue those rights, in which case any Qualifying Offer is deemed withdrawn under Section 4(c)(i) and the Right of First Refusal is deemed relinquished under Section 5(o). If, when the New Team notifies the ROFR Team of the failed physical, the ROFR Team has not yet exercised or declined its ROFR, nothing prevents it from exercising the ROFR or making one of these elections.",
+    "conditions": [
+      "Offer Sheet includes an Exhibit 6 and the New Team determines a failed physical",
+      "ROFR pathway closes (decline, expiry, or conditional-match withdrawal for failed physical)",
+      "ROFR Team must elect within 2 days of the later notice date",
+      "Election (i) retain prior rights — only if no transaction since the Offer Sheet would have been precluded had the player's amount stayed in Team Salary",
+      "Election (ii) decline — QO deemed withdrawn (Section 4(c)(i)) and ROFR deemed relinquished (Section 5(o))"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Offer Sheet",
+      "New Team",
+      "ROFR Team",
+      "Right of First Refusal",
+      "Free Agent Amount",
+      "Qualifying Offer",
+      "Maximum Qualifying Offer",
+      "Team Salary"
+    ],
+    "related_rule_ids": [
+      "FA-031",
+      "FA-030",
+      "FA-019",
+      "FA-037"
+    ],
+    "applies_to": [
+      "ROFR Team",
+      "Restricted Free Agent",
+      "New Team"
+    ],
+    "thresholds": "Election within 2 days of the later non-pass notice date",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(l)",
+      "pages": [
+        330,
+        331
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-033",
+    "bucket": "free_agency",
+    "title": "No exercising ROFR to immediately trade the matched contract",
+    "summary": "A Team may not exercise its Right of First Refusal pursuant to an agreement to trade the player's contract to another Team under Article VII, Section 8(e).",
+    "detail_paraphrase": "A Team is not permitted to exercise its Right of First Refusal pursuant to an agreement to trade the player's Player Contract to another Team under Article VII, Section 8(e).",
+    "conditions": [
+      "ROFR Team may not match an Offer Sheet pursuant to a pre-arranged agreement to trade the contract under Article VII, Section 8(e)"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Right of First Refusal",
+      "ROFR Team",
+      "Player Contract"
+    ],
+    "related_rule_ids": [
+      "FA-029"
+    ],
+    "applies_to": [
+      "ROFR Team"
+    ],
+    "thresholds": "",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(m)",
+      "pages": [
+        331
+      ]
+    },
+    "review_flag": false,
+    "notes": "Cross-references Article VII, Section 8(e) (sign-and-trade agreements)."
+  },
+  {
+    "rule_id": "FA-034",
+    "bucket": "free_agency",
+    "title": "Only one outstanding Offer Sheet; revocation requires unanimous consent",
+    "summary": "An RFA may have only one signed Offer Sheet outstanding at a time; it may be revoked only with written consent of the ROFR Team, New Team, and player, after which the RFA is again free to negotiate (subject to renewed ROFR).",
+    "detail_paraphrase": "There may be only one (1) Offer Sheet signed by a Restricted Free Agent outstanding at any one time, provided the Offer Sheet has also been signed by a Team. An Offer Sheet — both before and after it is given to the ROFR Team — may be revoked or withdrawn only with the written consent of the ROFR Team, the New Team, and the Restricted Free Agent. After revocation, the Restricted Free Agent is again free to negotiate and sign an Offer Sheet with any Team, and any Team is free to do so with him, subject only to the ROFR Team's renewed Right of First Refusal.",
+    "conditions": [
+      "Only one signed Offer Sheet may be outstanding at a time",
+      "Revocation/withdrawal requires written consent of ROFR Team, New Team, and the player",
+      "After revocation, RFA is again free to negotiate/sign, subject to the ROFR Team's renewed ROFR"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Offer Sheet",
+      "Restricted Free Agent",
+      "ROFR Team",
+      "New Team",
+      "Right of First Refusal"
+    ],
+    "related_rule_ids": [
+      "FA-022",
+      "FA-035"
+    ],
+    "applies_to": [
+      "Restricted Free Agent",
+      "ROFR Team",
+      "New Team"
+    ],
+    "thresholds": "One outstanding Offer Sheet maximum",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(n)",
+      "pages": [
+        331,
+        332
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-035",
+    "bucket": "free_agency",
+    "title": "Relinquishing the Right of First Refusal",
+    "summary": "A ROFR Team may relinquish its ROFR at any time except while the player has a pending Qualifying Offer to accept; relinquishment makes the player a UFA and renounces him, via written statement to the NBA.",
+    "detail_paraphrase": "A Team holding the Right of First Refusal over a Restricted Free Agent may relinquish it at any time except during the period the player has been given to accept a Qualifying Offer. If the Team relinquishes its Right of First Refusal, the player immediately becomes an Unrestricted Free Agent and the Team is deemed to have renounced him under Article VII, Section 4(g). To relinquish, the Team must provide the NBA a written statement; the NBA provides a copy to the Players Association by email within two (2) business days of receipt.",
+    "conditions": [
+      "ROFR Team may relinquish at any time except while the player has a pending Qualifying Offer to accept",
+      "Relinquishment makes the player a UFA immediately and renounces him (Article VII, Section 4(g))",
+      "Requires a written statement to the NBA; NBA notifies the Players Association within 2 business days"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Right of First Refusal",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Qualifying Offer",
+      "Unrestricted Free Agent"
+    ],
+    "related_rule_ids": [
+      "FA-019",
+      "FA-034",
+      "FA-032"
+    ],
+    "applies_to": [
+      "ROFR Team",
+      "Restricted Free Agent"
+    ],
+    "thresholds": "NBA notifies Players Association within 2 business days",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(o)",
+      "pages": [
+        331,
+        332
+      ]
+    },
+    "review_flag": false,
+    "notes": "Cross-references Article VII, Section 4(g) (renunciation)."
+  },
+  {
+    "rule_id": "FA-036",
+    "bucket": "free_agency",
+    "title": "Expedited arbitration for Offer Sheet disputes",
+    "summary": "Disputes under Section 5 are resolved exclusively by expedited, final-and-binding System Arbitrator arbitration, with Offer Sheet content disputes resolved within 5 days.",
+    "detail_paraphrase": "An expedited arbitration before the System Arbitrator, whose decision is final and binding on all parties, is the exclusive method for resolving any dispute concerning Section 5. If a dispute arises between the player and either the ROFR Team or the New Team relating to an Offer Sheet's contents and/or whether the binding agreement is with the New Team or the ROFR Team, the dispute is immediately submitted to the System Arbitrator, who must resolve it within five (5) days.",
+    "conditions": [
+      "All Section 5 disputes go exclusively to expedited System Arbitrator arbitration (final and binding)",
+      "Offer Sheet content / binding-party disputes resolved within 5 days"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "System Arbitrator",
+      "Offer Sheet",
+      "ROFR Team",
+      "New Team"
+    ],
+    "related_rule_ids": [
+      "FA-022"
+    ],
+    "applies_to": [
+      "Restricted Free Agent",
+      "ROFR Team",
+      "New Team"
+    ],
+    "thresholds": "Resolution within 5 days for Offer Sheet content disputes",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(p)",
+      "pages": [
+        332
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-037",
+    "bucket": "free_agency",
+    "title": "March 1 deadline to give an Offer Sheet; no inter-Team consideration",
+    "summary": "An RFA may not give an Offer Sheet to the ROFR Team after March 1 of the QO Season, and no consideration may be exchanged between Teams over ROFR or Offer Sheet decisions.",
+    "detail_paraphrase": "A Restricted Free Agent may not give an Offer Sheet to the ROFR Team at any time after the March 1 of the Season for which he was made a Qualifying Offer. Additionally, no consideration of any kind may be given by one Team to another in exchange for a Team's decision to exercise or not exercise its Right of First Refusal, or to submit or not submit an Offer Sheet to a Restricted Free Agent.",
+    "conditions": [
+      "No Offer Sheet may be given to the ROFR Team after March 1 of the QO Season",
+      "No inter-Team consideration may be exchanged over ROFR exercise or Offer Sheet submission decisions"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Offer Sheet",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Qualifying Offer",
+      "Right of First Refusal"
+    ],
+    "related_rule_ids": [
+      "FA-021",
+      "FA-022"
+    ],
+    "applies_to": [
+      "Restricted Free Agent",
+      "ROFR Team",
+      "Team"
+    ],
+    "thresholds": "Offer Sheet deadline: March 1 of the QO Season",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(q)-(s)",
+      "pages": [
+        332
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-038",
+    "bucket": "free_agency",
+    "title": "Notice and delivery rules for free-agency writings",
+    "summary": "Offer Sheets, First Refusal Exercise Notices, and related writings must be delivered by personal delivery, email, or certified/registered/overnight mail; email notices are deemed given when sent, and specific 'deemed given' rules apply by document type.",
+    "detail_paraphrase": "Any Offer Sheet, First Refusal Exercise Notice, or other writing required or permitted under Article XI must be delivered by personal delivery, email, or pre-paid certified/registered/overnight mail to the specified addresses for Teams, the NBA, the Players Association, and Restricted Free Agents. Offer Sheet-Related Notices may be delivered by email to designated recipients, and each Team must, by June 10 before each Salary Cap Year, provide the NBA three (3) designated email representatives (the NBA circulates the list by June 15). Any such writing sent by email is deemed given when sent. For non-email delivery: an Offer Sheet is deemed given only when received by the ROFR Team; a First Refusal Exercise Notice is deemed given when sent by the ROFR Team; a Qualifying Offer, Maximum Qualifying Offer, amended Qualifying Offer, and a notice extending the QO acceptance date are deemed given when sent by the ROFR Team; and other writings (e.g., relinquishing a ROFR, accepting/withdrawing a QO, or claiming a QO is deficient) are deemed given only when received.",
+    "conditions": [
+      "Delivery by personal delivery, email, or pre-paid certified/registered/overnight mail",
+      "Email Offer Sheet-Related Notices go to designated representatives; Teams designate 3 email reps by June 10 (NBA circulates by June 15)",
+      "Email writings deemed given when sent",
+      "Non-email: Offer Sheet deemed given when received by ROFR Team; First Refusal Exercise Notice and QO/Max QO/amended QO/extension notice deemed given when sent by ROFR Team; other writings deemed given when received"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Offer Sheet",
+      "First Refusal Exercise Notice",
+      "Qualifying Offer",
+      "Maximum Qualifying Offer",
+      "ROFR Team",
+      "Restricted Free Agent",
+      "Right of First Refusal",
+      "Salary Cap Year"
+    ],
+    "related_rule_ids": [
+      "FA-022",
+      "FA-026"
+    ],
+    "applies_to": [
+      "Team",
+      "ROFR Team",
+      "New Team",
+      "Restricted Free Agent"
+    ],
+    "thresholds": "Team email reps due June 10; NBA list circulated June 15",
+    "citation": {
+      "article": "XI",
+      "section": "5",
+      "subsection": "(t)-(u)",
+      "pages": [
+        332,
+        333,
+        334,
+        335
+      ]
+    },
+    "review_flag": false,
+    "notes": ""
+  },
+  {
+    "rule_id": "FA-039",
+    "bucket": "free_agency",
+    "title": "Veteran Free Agent Exception — re-signing power (Bird / Early Bird / Non-Bird)",
+    "summary": "After the Moratorium Period, a Veteran Free Agent may re-sign with his Prior Team above the cap: a Qualifying (Bird) FA up to the max, an Early Qualifying (Early Bird) FA up to 175% or 105% of Average Player Salary, and a Non-Qualifying (Non-Bird) FA up to 120% of prior salary.",
+    "detail_paraphrase": "Beginning at 12:01 p.m. eastern time on the last day of the Moratorium Period following the last Season of a Veteran Free Agent's contract, the player may enter a new contract with his Prior Team above the Salary Cap as follows: (1) a Qualifying Veteran Free Agent ('Bird') may receive first-year Salary plus Unlikely Bonuses up to the maximum under Article II, Section 7 (annual changes governed by Section 5(a)(2)); (2) a Non-Qualifying Veteran Free Agent ('Non-Bird') may receive in the first year the greater of 120% of the Regular Salary (plus 120% of Likely/Unlikely Bonuses) for the final year of the prior contract, 120% of the current Minimum Annual Salary, or (for a Team and its own RFA) the Qualifying-Offer amount (annual changes governed by Section 5(a)(1)); and (3) an Early Qualifying Veteran Free Agent ('Early Bird') must sign for at least two Seasons (excluding Option Years) and may receive in the first year the greater of 175% of the Regular Salary (plus 175% of Likely/Unlikely Bonuses) for the final year of the prior contract, or 105% of the prior year's Average Player Salary (annual changes governed by Section 5(a)(2)). Notwithstanding the two-year minimum, an Early Qualifying Veteran Free Agent with two Years of Service who receives an Offer Sheet under Article XI, Section 5(d) may have his Prior Team use the Early Qualifying Veteran Free Agent Exception to match it.",
+    "conditions": [
+      "Re-signing with Prior Team begins at 12:01 p.m. ET on the last day of the Moratorium Period",
+      "Qualifying Veteran Free Agent (Bird): up to maximum (Article II, Section 7); increases per Section 5(a)(2)",
+      "Non-Qualifying Veteran Free Agent (Non-Bird): greater of 120% of prior Regular Salary (+120% bonuses), 120% of current Minimum Annual Salary, or (own RFA) the Qualifying-Offer amount; increases per Section 5(a)(1)",
+      "Early Qualifying Veteran Free Agent (Early Bird): at least 2 Seasons (excl. Option Years); greater of 175% of prior Regular Salary (+175% bonuses) or 105% of prior-year Average Player Salary; increases per Section 5(a)(2)",
+      "Early Bird with 2 Years of Service receiving a Section 5(d) Offer Sheet: Prior Team may use the Early Qualifying Veteran Free Agent Exception to match"
+    ],
+    "exceptions": [],
+    "depends_on_terms": [
+      "Veteran Free Agent Exception",
+      "Qualifying Veteran Free Agent",
+      "Early Qualifying Veteran Free Agent",
+      "Non-Qualifying Veteran Free Agent",
+      "Prior Team",
+      "Moratorium Period",
+      "Maximum Annual Salary",
+      "Minimum Annual Salary",
+      "Average Player Salary",
+      "Regular Salary",
+      "Likely Bonuses",
+      "Unlikely Bonuses",
+      "Offer Sheet",
+      "Years of Service",
+      "Salary Cap"
+    ],
+    "related_rule_ids": [
+      "FA-002",
+      "FA-023",
+      "FA-024"
+    ],
+    "applies_to": [
+      "Veteran Free Agent",
+      "Qualifying Veteran Free Agent",
+      "Early Qualifying Veteran Free Agent",
+      "Non-Qualifying Veteran Free Agent",
+      "Prior Team"
+    ],
+    "thresholds": "Bird: up to max; Early Bird: greater of 175% prior salary or 105% Average Player Salary, 2-Season minimum; Non-Bird: greater of 120% prior salary, 120% Minimum Annual Salary, or QO amount",
+    "citation": {
+      "article": "VII",
+      "section": "6",
+      "subsection": "(b)",
+      "pages": [
+        231,
+        232
+      ]
+    },
+    "review_flag": false,
+    "notes": "Bird/Early Bird/Non-Bird are the common names for the Qualifying / Early Qualifying / Non-Qualifying Veteran Free Agent re-signing tiers. How a player qualifies for each tier (Years of Service with the Prior Team, etc.) is set by the definitions of Qualifying/Early Qualifying/Non-Qualifying Veteran Free Agent elsewhere in the CBA (Article I definitions), which are not contained in the provided source excerpts — review against those definitions for full qualification mechanics."
+  }
+]

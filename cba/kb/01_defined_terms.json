@@ -1,0 +1,742 @@
+[
+  {
+    "term": "Active List",
+    "definition_paraphrase": "The NBA-maintained roster of players who are under signed Player Contracts with a Team and are otherwise eligible to play in a Regular Season game.",
+    "citation": { "article": "I", "section": "1", "pages": [1] }
+  },
+  {
+    "term": "Average Player Salary",
+    "definition_paraphrase": "For a given Salary Cap Year, Total Salaries (plus certain Team payments under Article VII, Sec. 2(c)(2)(i) or 2(c)(5)) divided by the number of NBA Teams that year (excluding Expansion Teams in their first two years) multiplied by 13.2. Drives benchmark salary figures used in cap math.",
+    "citation": { "article": "I", "section": "1", "pages": [1] }
+  },
+  {
+    "term": "Base Compensation",
+    "definition_paraphrase": "The portion of a player's Compensation that is not any kind of bonus.",
+    "citation": { "article": "I", "section": "1", "pages": [1] }
+  },
+  {
+    "term": "Basketball Related Income",
+    "definition_paraphrase": "Often abbreviated BRI. The aggregate operating revenues received by the NBA, its league-related entities, NBA Teams, and Related Parties for a Salary Cap Year that derive from or relate to the performance of players in NBA games and NBA-related activities, computed under detailed inclusion/exclusion rules. BRI is the master input that sets the Salary Cap, Tax Level, and Apron Levels each year. Defined in detail at Article VII, Sec. 1(a)-(b).",
+    "citation": { "article": "VII", "section": "1", "pages": [131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165] }
+  },
+  {
+    "term": "Benefits",
+    "definition_paraphrase": "Also called Total Benefits. The sum of all amounts paid or accrued during a Salary Cap Year by the NBA or NBA Teams (other than Expansion Teams in their first two years) for the specific player benefits listed in Article IV. Excluded from a player's Salary but counted alongside Total Salaries in cap/tax system math.",
+    "citation": { "article": "I", "section": "1", "pages": [2] }
+  },
+  {
+    "term": "Compensation",
+    "definition_paraphrase": "The pay that an NBA player earns or could earn, or that is paid or payable to him (or to his designee), under a Player Contract — including players whose contracts have been terminated.",
+    "citation": { "article": "I", "section": "1", "pages": [2] }
+  },
+  {
+    "term": "Current Base Compensation",
+    "definition_paraphrase": "The part of Base Compensation that is not Deferred Base Compensation (i.e., the currently-payable, non-deferred, non-bonus pay).",
+    "citation": { "article": "I", "section": "1", "pages": [2] }
+  },
+  {
+    "term": "Deferred Base Compensation",
+    "definition_paraphrase": "The portion of Deferred Compensation that is not any kind of bonus.",
+    "citation": { "article": "I", "section": "1", "pages": [2] }
+  },
+  {
+    "term": "Deferred Compensation",
+    "definition_paraphrase": "The portion of a Season's Compensation that is payable to a player only after the May 1 following that Season, under the deferral rules in Articles VII and XXV. Classification depends on when the contract sets payment to occur, regardless of funding.",
+    "citation": { "article": "I", "section": "1", "pages": [2] }
+  },
+  {
+    "term": "Designated Veteran Player",
+    "definition_paraphrase": "A player with whom a Team has entered into either a Designated Veteran Player Extension or a Designated Veteran Player Contract under Article II, Sec. 7(a)(ii) or 7(e) and Article VII, Sec. 7(a). Eligible for the elevated (up to 35% of cap) 'supermax' salary.",
+    "citation": { "article": "I", "section": "1", "pages": [2] }
+  },
+  {
+    "term": "Designated Veteran Player Contract",
+    "definition_paraphrase": "A five-Season contract between a Team and its own Designated Veteran Player who is a Qualifying Veteran Free Agent, with first-year Salary set between 30% and 35% of the Salary Cap at signing (as agreed). Annual raises/decreases governed by Article VII, Sec. 5(a)(2).",
+    "citation": { "article": "I", "section": "1", "pages": [2, 3] }
+  },
+  {
+    "term": "Designated Veteran Player Extension",
+    "definition_paraphrase": "An extension between a Team and its Designated Veteran Player covering six Seasons from signing, with first-year extended-term Salary set at 30%-35% of the Salary Cap in the first Season of the extended term. Annual raises/decreases governed by Article VII, Sec. 5(a)(3).",
+    "citation": { "article": "I", "section": "1", "pages": [3] }
+  },
+  {
+    "term": "Early Qualifying Veteran Free Agent",
+    "definition_paraphrase": "A Veteran Free Agent who, before free agency, played under one or more contracts spanning some or all of each of the two preceding Seasons and either stayed with his Prior Team the whole time or changed Teams only via trade, waiver-procedure assignment, or by signing with his Prior Team in the first of those two Seasons. Confers 'Early Bird' rights — a Team can re-sign him using the Early Bird exception above the cap.",
+    "citation": { "article": "I", "section": "1", "pages": [3] }
+  },
+  {
+    "term": "Early Termination Option",
+    "definition_paraphrase": "Abbreviated ETO. A player-favoring option to shorten the stated length of a Player Contract, exercised under Article XII.",
+    "citation": { "article": "I", "section": "1", "pages": [3] }
+  },
+  {
+    "term": "Effective Season",
+    "definition_paraphrase": "For an Early Termination Option, the first Season that the ETO covers (i.e., the first Season removed from the contract if exercised).",
+    "citation": { "article": "I", "section": "1", "pages": [3] }
+  },
+  {
+    "term": "Estimated Average Player Salary",
+    "definition_paraphrase": "For a given Salary Cap Year, 104.5% of the prior Salary Cap Year's Average Player Salary. Used in certain exception and maximum-salary calculations.",
+    "citation": { "article": "I", "section": "1", "pages": [3] }
+  },
+  {
+    "term": "Exception",
+    "definition_paraphrase": "Any exception to the general rule that a Team's Team Salary cannot exceed the Salary Cap (i.e., a mechanism letting a team add salary while over the cap).",
+    "citation": { "article": "I", "section": "1", "pages": [4] }
+  },
+  {
+    "term": "Expansion Team",
+    "definition_paraphrase": "A Team that joins the NBA through expansion after this Agreement's effective date and begins play during its term. Expansion Teams receive special treatment in BRI, Total Salaries, and benefits calculations during their first two Salary Cap Years.",
+    "citation": { "article": "I", "section": "1", "pages": [4] }
+  },
+  {
+    "term": "Extension",
+    "definition_paraphrase": "An amendment to a Player Contract that lengthens its term by a specified number of years.",
+    "citation": { "article": "I", "section": "1", "pages": [4] }
+  },
+  {
+    "term": "First Round Pick",
+    "definition_paraphrase": "A player selected by a Team in the first round of the NBA Draft. First Round Picks sign Rookie Scale Contracts.",
+    "citation": { "article": "I", "section": "1", "pages": [4] }
+  },
+  {
+    "term": "Free Agent",
+    "definition_paraphrase": "Any of: (i) a Veteran Free Agent; (ii) a Rookie Free Agent; (iii) a Veteran whose contract was terminated via the NBA waiver procedure; or (iv) a player whose last contract was a 10-Day Contract that he either completed or was released from early.",
+    "citation": { "article": "I", "section": "1", "pages": [4] }
+  },
+  {
+    "term": "Incentive Compensation",
+    "definition_paraphrase": "The bonus component of Compensation consisting of one or more bonuses described in Article II, Sec. 3(b)(ii)-(iii) and 3(c). Split into Likely and Unlikely Bonuses for cap purposes.",
+    "citation": { "article": "I", "section": "1", "pages": [4] }
+  },
+  {
+    "term": "Likely Bonus",
+    "definition_paraphrase": "Incentive Compensation that is counted in a player's Salary because it is deemed likely to be earned, per Article VII, Sec. 3(d).",
+    "citation": { "article": "I", "section": "1", "pages": [4] }
+  },
+  {
+    "term": "Maximum Annual Salary",
+    "definition_paraphrase": "The most a player may receive in Salaries and Unlikely Bonuses in the first Salary Cap Year of a contract or extension, calculated under Article II, Sec. 7 (the player 'max').",
+    "citation": { "article": "I", "section": "1", "pages": [4, 5] }
+  },
+  {
+    "term": "Minimum Annual Salary",
+    "definition_paraphrase": "The minimum Salary that must be in a full-Regular-Season Player Contract (other than a Two-Way Contract), per Article II, Sec. 6(a).",
+    "citation": { "article": "I", "section": "1", "pages": [5] }
+  },
+  {
+    "term": "Minimum Annual Salary Scale",
+    "definition_paraphrase": "The year-by-year table of minimum Salary amounts. For 2023-24 it is the Baseline Minimum Annual Salary Scale (Exhibit C) adjusted by the cap increase from 2022-23; for each later year it is the prior year's scale adjusted by that year's cap increase.",
+    "citation": { "article": "I", "section": "1", "pages": [5] }
+  },
+  {
+    "term": "Minimum Player Salary",
+    "definition_paraphrase": "The minimum Salary applicable to a contract depending on coverage: for a full-Regular-Season contract (non-Two-Way) it is the Article II, Sec. 6(a) Minimum Annual Salary; for a partial-season contract it is that amount prorated by days remaining; and for a 10-Day Contract it is that amount prorated by days covered.",
+    "citation": { "article": "I", "section": "1", "pages": [5] }
+  },
+  {
+    "term": "Minimum Team Salary",
+    "definition_paraphrase": "The minimum Team Salary a Team must carry for a Salary Cap Year, set as a percentage of the Salary Cap per Article VII, Sec. 2(b). Teams below it owe a shortfall payment.",
+    "citation": { "article": "I", "section": "1", "pages": [5] }
+  },
+  {
+    "term": "Moratorium Period",
+    "definition_paraphrase": "The annual window from 12:01 a.m. ET on July 1 of a Salary Cap Year through 12:00 p.m. ET the following July 6, during which most contracts cannot be signed and the new cap/tax/apron figures are being finalized.",
+    "citation": { "article": "I", "section": "1", "pages": [6] }
+  },
+  {
+    "term": "negotiate",
+    "definition_paraphrase": "Any written or oral communication between a player (or his reps) and a Team (or its reps) about the player's possible employment or terms of employment, regardless of who starts it. Relevant to tampering and timing-of-contact rules.",
+    "citation": { "article": "I", "section": "1", "pages": [6] }
+  },
+  {
+    "term": "Non-Qualifying Veteran Free Agent",
+    "definition_paraphrase": "A Veteran Free Agent who is neither a Qualifying Veteran Free Agent nor an Early Qualifying Veteran Free Agent — i.e., a 'Non-Bird' free agent whom a Team can only re-sign over the cap using the limited Non-Bird exception.",
+    "citation": { "article": "I", "section": "1", "pages": [6] }
+  },
+  {
+    "term": "Option",
+    "definition_paraphrase": "A Team or player option in a Player Contract to extend the contract beyond its stated term.",
+    "citation": { "article": "I", "section": "1", "pages": [6] }
+  },
+  {
+    "term": "Option Year",
+    "definition_paraphrase": "The additional contract year that would be added if an Option is exercised.",
+    "citation": { "article": "I", "section": "1", "pages": [6] }
+  },
+  {
+    "term": "Performance Bonus",
+    "definition_paraphrase": "Incentive Compensation of the type described in Article II, Sec. 3(b)(ii).",
+    "citation": { "article": "I", "section": "1", "pages": [6] }
+  },
+  {
+    "term": "Prior Team",
+    "definition_paraphrase": "The Team a player was last under contract with before becoming a Qualifying, Early Qualifying, or Non-Qualifying Veteran Free Agent. Central to Bird-rights and right-of-first-refusal mechanics.",
+    "citation": { "article": "I", "section": "1", "pages": [6] }
+  },
+  {
+    "term": "Qualifying Offer",
+    "definition_paraphrase": "A one-year offer a Team makes to its own potential Restricted Free Agent that creates a Right of First Refusal, as defined in Article XI, Sec. 1(e). Cited here by cross-reference to Article XI.",
+    "citation": { "article": "I", "section": "1", "pages": [7] }
+  },
+  {
+    "term": "Qualifying Veteran Free Agent",
+    "definition_paraphrase": "A Veteran Free Agent who, before free agency, played under one or more contracts spanning some or all of each of the three preceding Seasons and either stayed with his Prior Team throughout or changed Teams only via trade, via waiver assignment in the first of the three Seasons, or by re-signing with his Prior Team in the first of those Seasons. Confers full 'Bird' rights for re-signing above the cap.",
+    "citation": { "article": "I", "section": "1", "pages": [7] }
+  },
+  {
+    "term": "Regular Salary",
+    "definition_paraphrase": "A player's Salary minus any signing-bonus component (or deemed signing bonus under Article VII) and minus any Incentive Compensation.",
+    "citation": { "article": "I", "section": "1", "pages": [7] }
+  },
+  {
+    "term": "Renegotiation",
+    "definition_paraphrase": "Also 'renegotiate'/'renegotiated.' A contract amendment that raises Salary and/or Unlikely Bonuses.",
+    "citation": { "article": "I", "section": "1", "pages": [7] }
+  },
+  {
+    "term": "Replacement Player",
+    "definition_paraphrase": "Where relevant, a player a Team acquires using the Traded Player Exception, or one it signs or acquires using the Disabled Player Exception.",
+    "citation": { "article": "I", "section": "1", "pages": [7] }
+  },
+  {
+    "term": "Required Tender",
+    "definition_paraphrase": "A signed Team offer of a Uniform Player Contract to a drafted rookie that meets timing and form rules under Article X: for a First Round Pick it must satisfy the Rookie Scale Contract requirements and give the player until the next Regular Season to accept; for a Second Round Pick it must offer a one-Season term at least at the applicable Minimum Player Salary with a specified acceptance deadline. A Team may condition it on passing a physical.",
+    "citation": { "article": "I", "section": "1", "pages": [7, 8] }
+  },
+  {
+    "term": "Restricted Free Agent",
+    "definition_paraphrase": "A Veteran Free Agent subject to his Team's Right of First Refusal under Article XI (his Team can match an Offer Sheet he signs elsewhere).",
+    "citation": { "article": "I", "section": "1", "pages": [8] }
+  },
+  {
+    "term": "Rookie",
+    "definition_paraphrase": "A person who has never signed a Player Contract with an NBA Team. Subdivided into 'Draft Rookie' (selected in the Draft) and 'Non-Draft Rookie' (not selected in the Draft for which he was first eligible).",
+    "citation": { "article": "I", "section": "1", "pages": [8] }
+  },
+  {
+    "term": "Rookie Free Agent",
+    "definition_paraphrase": "Either (i) a Draft Rookie who, under Article VIII, Sec. 3 or Article X, is no longer subject to any Team's exclusive negotiating rights and may sign anywhere, or (ii) a Non-Draft Rookie.",
+    "citation": { "article": "I", "section": "1", "pages": [8] }
+  },
+  {
+    "term": "Rookie Salary Scale",
+    "definition_paraphrase": "The per-Salary-Cap-Year table of rookie-scale Salary amounts, prepared once the Salary Cap for the year is set and incorporating that year's adjusted Rookie Scale Amounts.",
+    "citation": { "article": "I", "section": "1", "pages": [8] }
+  },
+  {
+    "term": "Rookie Scale Amounts",
+    "definition_paraphrase": "The First Round Pick salary figures: for 2023-24, the Baseline Rookie Salary Scale (Exhibit B) adjusted by the cap increase from 2022-23; for each later year, the prior year's scale adjusted by that year's cap increase. The 4th-year-option and qualifying-offer percentage columns stay fixed across the Agreement.",
+    "citation": { "article": "I", "section": "1", "pages": [8, 9] }
+  },
+  {
+    "term": "Rookie Scale Contract",
+    "definition_paraphrase": "The initial Uniform Player Contract that a First Round Pick signs with the Team holding his draft rights, under Article VIII, Sec. 1 or 2.",
+    "citation": { "article": "I", "section": "1", "pages": [9] }
+  },
+  {
+    "term": "Room",
+    "definition_paraphrase": "Either (i) the amount by which a Team's current Team Salary is below the Salary Cap, or (ii) the Team's entitlement to use one of the listed Salary Cap exceptions in Article VII, Sec. 6(c)-(g) and (j): the Disabled Player Exception, Bi-Annual Exception, Non-Taxpayer Mid-Level Salary Exception, Taxpayer Mid-Level Salary Exception, Mid-Level Salary Exception for Room Teams, and Traded Player Exception.",
+    "citation": { "article": "I", "section": "1", "pages": [9] }
+  },
+  {
+    "term": "Salary",
+    "definition_paraphrase": "For a Salary Cap Year, a player's Compensation for that Season plus any other amounts deemed Salary under the Agreement, but excluding Unlikely Bonuses, benefits (per diem, moving expenses, Article IV benefits, etc.), and any Compensation attributable to a different Salary Cap Year. Also includes certain retired-player consideration under Article XIII.",
+    "citation": { "article": "I", "section": "1", "pages": [9] }
+  },
+  {
+    "term": "Salary Cap",
+    "definition_paraphrase": "The maximum allowable Team Salary for each Team for a Salary Cap Year, subject to the Agreement's rules and exceptions. Set as a function of BRI under Article VII, Sec. 2.",
+    "citation": { "article": "I", "section": "1", "pages": [9] }
+  },
+  {
+    "term": "Salary Cap Year",
+    "definition_paraphrase": "The period from July 1 through the following June 30. The basic accounting period for the cap, tax, and apron systems.",
+    "citation": { "article": "I", "section": "1", "pages": [9] }
+  },
+  {
+    "term": "Standard NBA Contract",
+    "definition_paraphrase": "Any Player Contract other than a Two-Way Contract.",
+    "citation": { "article": "I", "section": "1", "pages": [10] }
+  },
+  {
+    "term": "Standard NBA Contract Conversion Option",
+    "definition_paraphrase": "A Team option in a Two-Way Contract to convert it into a Standard NBA Contract paying the player's applicable Minimum Player Salary for each Salary Cap Year, for the remainder of the original Two-Way term, per Article II, Sec. 11(f).",
+    "citation": { "article": "I", "section": "1", "pages": [10] }
+  },
+  {
+    "term": "Team Salary",
+    "definition_paraphrase": "For a Salary Cap Year, the sum of all Salaries charged to a Team's active and former players, plus other amounts and minus applicable credits, all computed under Article VII. This is the figure compared against the Salary Cap, Tax Level, and Apron Levels.",
+    "citation": { "article": "I", "section": "1", "pages": [11] }
+  },
+  {
+    "term": "Total Salaries",
+    "definition_paraphrase": "The total of all Salaries included in Team Salary across all NBA Teams for a Salary Cap Year (excluding Expansion Teams' first two years), with specified inclusions (e.g., earned Likely-bonus reconciliation, Two-Way Player Salaries, Exhibit 10 bonuses) and reductions (e.g., half of suspension-related compensation reductions). A core input to league-wide cap math.",
+    "citation": { "article": "I", "section": "1", "pages": [11, 12] }
+  },
+  {
+    "term": "Total Salaries and Benefits",
+    "definition_paraphrase": "The sum of Total Salaries plus Total Benefits — the aggregate player cost used in the BRI split / cap-setting formulas.",
+    "citation": { "article": "I", "section": "1", "pages": [12] }
+  },
+  {
+    "term": "Traded Player",
+    "definition_paraphrase": "A player whose Player Contract is assigned from one Team to another by means other than the NBA waiver procedure (i.e., via trade).",
+    "citation": { "article": "I", "section": "1", "pages": [12] }
+  },
+  {
+    "term": "Two-Way Contract",
+    "definition_paraphrase": "A contract between a Two-Way Player and a Team under Article II, Sec. 11. If converted to a Standard NBA Contract via the Team's conversion option, it stops being a Two-Way Contract.",
+    "citation": { "article": "I", "section": "1", "pages": [12] }
+  },
+  {
+    "term": "Two-Way Player",
+    "definition_paraphrase": "A player under a Two-Way Contract per Article II, Sec. 11.",
+    "citation": { "article": "I", "section": "1", "pages": [12] }
+  },
+  {
+    "term": "Two-Way Player Salary",
+    "definition_paraphrase": "The Salary called for under a Two-Way Contract per Article II, Sec. 11(a).",
+    "citation": { "article": "I", "section": "1", "pages": [12] }
+  },
+  {
+    "term": "Two-Way Player Conversion Option",
+    "definition_paraphrase": "A Team option in a Player Contract that has an Exhibit 10 to convert that contract into a Two-Way Contract, per Article II, Sec. 3(s)(ii) and 11(h).",
+    "citation": { "article": "I", "section": "1", "pages": [12] }
+  },
+  {
+    "term": "Uniform Player Contract",
+    "definition_paraphrase": "Also called Player Contract or Contract. The standard written employment agreement, required by Article II, between a person and a Team employing him as a professional basketball player.",
+    "citation": { "article": "I", "section": "1", "pages": [12] }
+  },
+  {
+    "term": "Unlikely Bonus",
+    "definition_paraphrase": "Incentive Compensation that is excluded from a player's Salary because it is deemed unlikely to be earned, per Article VII, Sec. 3(d). It is excluded from cap Salary but counts toward Maximum Annual Salary limits.",
+    "citation": { "article": "I", "section": "1", "pages": [13] }
+  },
+  {
+    "term": "Unrestricted Free Agent",
+    "definition_paraphrase": "A Free Agent who is not subject to any Team's Right of First Refusal — free to sign with any Team without his prior Team being able to match.",
+    "citation": { "article": "I", "section": "1", "pages": [13] }
+  },
+  {
+    "term": "Veteran",
+    "definition_paraphrase": "Also 'Veteran Player.' A person who has signed at least one Player Contract with an NBA Team.",
+    "citation": { "article": "I", "section": "1", "pages": [13] }
+  },
+  {
+    "term": "Veteran Free Agent",
+    "definition_paraphrase": "A Veteran who completed his Player Contract (other than a 10-Day Contract) by rendering the required playing services. The base category from which Qualifying / Early Qualifying / Non-Qualifying (Bird / Early Bird / Non-Bird) status is derived.",
+    "citation": { "article": "I", "section": "1", "pages": [13] }
+  },
+  {
+    "term": "Years of Service",
+    "definition_paraphrase": "A player's count of credited NBA service years (one per year on an NBA Active or Inactive List for at least one day during the Regular Season), subject to forfeiture rules (e.g., extended holdouts, certain unsigned Restricted Free Agents, disapproved contracts), capped at one per Season. Determines minimum salary tier, exception sizes, and free-agency rights eligibility.",
+    "citation": { "article": "I", "section": "1", "pages": [13, 14] }
+  },
+  {
+    "term": "Projected BRI",
+    "definition_paraphrase": "The NBA and Players Association's pre-season agreed estimate of BRI for an upcoming Salary Cap Year; absent agreement by the end of the Moratorium Period, it defaults to the prior year's BRI grown 4.5% for most sources plus stated national-TV contract amounts. Used to set the cap, tax, and apron levels before actual BRI is known.",
+    "citation": { "article": "VII", "section": "1", "pages": [166, 167, 168] }
+  },
+  {
+    "term": "Local Expansion Team BRI",
+    "definition_paraphrase": "The BRI generated by Expansion Teams during their first two Seasons, excluding their share of shared League-wide revenues (such as national TV, cable, and radio).",
+    "citation": { "article": "VII", "section": "1", "pages": [168] }
+  },
+  {
+    "term": "Projected Local Expansion Team BRI",
+    "definition_paraphrase": "Local Expansion Team BRI for the immediately preceding Season grown by 4.5%. Used in the alternate Salary Cap calculation in years when an Expansion Team is in its second Season.",
+    "citation": { "article": "VII", "section": "1", "pages": [169] }
+  },
+  {
+    "term": "Interim Projected BRI",
+    "definition_paraphrase": "A projection of BRI for a Salary Cap Year that substitutes Estimated BRI for the prior Salary Cap Year's actual BRI. Used to set cap/tax/apron levels when the prior year's Audit Report and the BRI projections have not been finalized.",
+    "citation": { "article": "VII", "section": "1", "pages": [169] }
+  },
+  {
+    "term": "Estimated BRI",
+    "definition_paraphrase": "The estimate of BRI for a Salary Cap Year as stated in that year's Interim Audit Report. Stands in for actual BRI in interim cap calculations.",
+    "citation": { "article": "VII", "section": "1", "pages": [169] }
+  },
+  {
+    "term": "Estimated Total Salaries",
+    "definition_paraphrase": "The estimate of Total Salaries for a Salary Cap Year as stated in that year's Interim Audit Report. Used in place of Total Salaries in interim calculations (e.g., Average Player Salary substitutes for certain exception sizes).",
+    "citation": { "article": "VII", "section": "1", "pages": [169] }
+  },
+  {
+    "term": "Estimated Total Benefits",
+    "definition_paraphrase": "The estimate of Total Benefits for a Salary Cap Year as stated in that year's Interim Audit Report.",
+    "citation": { "article": "VII", "section": "1", "pages": [169] }
+  },
+  {
+    "term": "Estimated Total Salaries and Benefits",
+    "definition_paraphrase": "The sum of Estimated Total Salaries and Estimated Total Benefits for a Salary Cap Year per the Interim Audit Report. Substitutes for Total Salaries and Benefits in interim cap math.",
+    "citation": { "article": "VII", "section": "1", "pages": [169] }
+  },
+  {
+    "term": "Tax Level",
+    "definition_paraphrase": "The luxury-tax threshold for a Salary Cap Year, set at 121.5% of that year's Salary Cap. A Team whose Tax Team Salary exceeds the Tax Level owes a luxury tax under the Standard or Repeater Tax Rate tables. Subject to the annual no-decrease floor and 110% growth cap.",
+    "citation": { "article": "VII", "section": "2", "pages": [170, 171, 172] }
+  },
+  {
+    "term": "First Apron Level",
+    "definition_paraphrase": "The lower of the two apron thresholds above the Tax Level. For 2023-24 it equals the Tax Level plus $6.716 million scaled by the average of the 2022-23 and 2023-24 caps over the 2022-23 cap; in later years it grows in proportion to the Salary Cap relative to 2023-24. A Team whose Apron Team Salary is above this level is barred from the transactions designated 'First Apron Level' in the Transaction Restrictions Table (e.g., using the Bi-annual Exception or Non-Taxpayer Mid-Level Exception).",
+    "citation": { "article": "VII", "section": "2", "pages": [171, 172, 173] }
+  },
+  {
+    "term": "Second Apron Level",
+    "definition_paraphrase": "The higher of the two apron thresholds. For 2023-24 it equals the Tax Level plus $17.5 million; in later years it grows in proportion to the Salary Cap relative to 2023-24. A Team above this level faces the most severe restrictions, including being barred from 'Second Apron Level' transactions (cash in trades, aggregating salaries in trades, using the Taxpayer Mid-Level Exception) and the Draft Pick Penalty mechanics.",
+    "citation": { "article": "VII", "section": "2", "pages": [171, 172, 173] }
+  },
+  {
+    "term": "Tax Bracket Amount",
+    "definition_paraphrase": "For a Salary Cap Year, $5 million scaled by that year's Salary Cap over the 2023-24 Salary Cap. It defines the width of each incremental tax bracket used to compute the luxury tax owed above the Tax Level.",
+    "citation": { "article": "VII", "section": "2", "pages": [181, 182] }
+  },
+  {
+    "term": "Standard Tax Rates",
+    "definition_paraphrase": "The luxury-tax rate schedule (escalating per Tax Bracket Amount above the Tax Level) applied to a Team that did NOT exceed the Tax Level in three or more of the four immediately preceding Salary Cap Years.",
+    "citation": { "article": "VII", "section": "2", "pages": [182, 183] }
+  },
+  {
+    "term": "Repeater Tax Rates",
+    "definition_paraphrase": "The higher luxury-tax rate schedule applied to a Team that exceeded the Tax Level in three or more of the four immediately preceding Salary Cap Years (a 'repeater' taxpayer).",
+    "citation": { "article": "VII", "section": "2", "pages": [182, 184] }
+  },
+  {
+    "term": "Tax Team Salary",
+    "definition_paraphrase": "A Team's Team Salary measured as of the start of its last Regular Season game, computed like audit Team Salary but with specified adjustments (e.g., adding actually-earned Incentive Compensation that had been excluded, subtracting excluded-but-not-earned bonuses, plus certain trade-bonus and minimum-salary additions, minus half of any NBA-imposed suspension reduction). This is the figure compared to the Tax Level to determine the luxury tax.",
+    "citation": { "article": "VII", "section": "2", "pages": [179, 180, 181] }
+  },
+  {
+    "term": "Apron Team Salary",
+    "definition_paraphrase": "A Team's Team Salary recomputed under the apron-specific rules in Section 2(e)(1): it adds back Performance Bonuses excluded under Section 3(d), the salary of certain zero/one-Year-of-Service Free Agent contracts, and outstanding Required Tenders to First Round Picks, and it subtracts Free Agent Amounts, certain unsigned-First-Round-Pick amounts, deemed-included exception amounts, and incomplete-roster cap holds, among other adjustments. This is the figure tested against the First and Second Apron Levels for transaction restrictions.",
+    "citation": { "article": "VII", "section": "2", "pages": [186, 187] }
+  },
+  {
+    "term": "Transaction Restrictions Table",
+    "definition_paraphrase": "The table in Section 2(e)(4) listing the transactions (rows A through K) that are barred once a Team's Apron Team Salary would exceed the corresponding 'Applicable Apron Level' (First or Second Apron). Examples: using the Bi-annual or Non-Taxpayer MLE (First Apron), paying cash in a trade, aggregating salaries in a trade, or using the Taxpayer MLE (Second Apron).",
+    "citation": { "article": "VII", "section": "2", "pages": [188, 190, 191] }
+  },
+  {
+    "term": "Applicable Apron Level",
+    "definition_paraphrase": "For a given transaction in the Transaction Restrictions Table, the apron threshold (First Apron Level or Second Apron Level) that a Team's Apron Team Salary may not exceed when engaging in, or after engaging in, that transaction during the Salary Cap Year.",
+    "citation": { "article": "VII", "section": "2", "pages": [187, 188] }
+  },
+  {
+    "term": "Second Apron Team",
+    "definition_paraphrase": "For a Salary Cap Year, a Team whose Apron Team Salary as of the start of its last Regular Season game exceeds the Second Apron Level. Second Apron Team status triggers the Draft Pick Penalty / first-round-pick freeze rules beginning with 2024-25.",
+    "citation": { "article": "VII", "section": "2", "pages": [195] }
+  },
+  {
+    "term": "Draft Pick Penalty",
+    "definition_paraphrase": "A penalty under which a Team's first round draft pick is moved to the final selection in the first round (regardless of the Team's record), applied when a Team is a Second Apron Team in two or more of the four Salary Cap Years following a designated year. Also freezes the ability to trade that pick.",
+    "citation": { "article": "VII", "section": "2", "pages": [196, 197] }
+  },
+  {
+    "term": "MTS Cap Hold Team Salary",
+    "definition_paraphrase": "A Team's Team Salary for a Salary Cap Year calculated the same way the Accountants compute Team Salary for Total Salaries and Benefits in the Audit Report. Used as the baseline for Minimum Team Salary compliance.",
+    "citation": { "article": "VII", "section": "2", "pages": [176, 177] }
+  },
+  {
+    "term": "MTS Payment Team Salary",
+    "definition_paraphrase": "A Team's MTS Cap Hold Team Salary as of the first day of the Regular Season, adjusted by adding/subtracting certain Section 3(e) and Section 4 amounts. If it is below the Minimum Team Salary, the Team must pay the shortfall to the NBA.",
+    "citation": { "article": "VII", "section": "2", "pages": [177] }
+  },
+  {
+    "term": "MTS Threshold",
+    "definition_paraphrase": "For a Team for a Salary Cap Year, the lesser of (A) the Minimum Team Salary and (B) the Team's MTS Cap Hold Team Salary as of the first day of the Regular Season. A Team must keep its MTS Cap Hold Team Salary at or above this threshold during the season.",
+    "citation": { "article": "VII", "section": "2", "pages": [177] }
+  },
+  {
+    "term": "First Year Expansion Team Salary Cap",
+    "definition_paraphrase": "For an Expansion Team in its first Salary Cap Year of play, a Salary Cap equal to 66-2/3% of the otherwise-applicable Salary Cap; its Minimum Team Salary is 90% of that figure.",
+    "citation": { "article": "VII", "section": "2", "pages": [195] }
+  },
+  {
+    "term": "Second Year Expansion Team Salary Cap",
+    "definition_paraphrase": "For an Expansion Team in the Salary Cap Year following its first year of play, a Salary Cap equal to 80% of the otherwise-applicable Salary Cap; its Minimum Team Salary is 90% of that figure.",
+    "citation": { "article": "VII", "section": "2", "pages": [197, 198] }
+  },
+  {
+    "term": "Over 38 Contract",
+    "definition_paraphrase": "A Player Contract (or Extension/Renegotiation) that, from the date of signing, covers four or more Seasons including one or more Seasons commencing after the player reaches age 38. Such contracts are subject to special rules re-allocating later-year (Zero Year) Salaries pro rata to earlier Salary Cap Years to prevent cap circumvention.",
+    "citation": { "article": "VII", "section": "3", "pages": [198, 199, 200] }
+  },
+  {
+    "term": "Zero Year",
+    "definition_paraphrase": "With respect to an Over 38 Contract, any Salary Cap Year whose Salary has been re-attributed to earlier Salary Cap Years of the contract under the Over 38 rules. 'First Zero Year' is the earliest such re-attributed year.",
+    "citation": { "article": "VII", "section": "3", "pages": [199, 200] }
+  },
+  {
+    "term": "Excluded International Player Payment Amount",
+    "definition_paraphrase": "The annual capped amount (e.g., $825,000 for 2023-24, rising yearly) that a Team may pay a foreign basketball team or other party to secure a player's release without that payment being deemed Salary. Payments above the cap are treated as a signing-bonus form of Salary to the player.",
+    "citation": { "article": "VII", "section": "3", "pages": [208, 209] }
+  },
+  {
+    "term": "Free Agent Amount",
+    "definition_paraphrase": "Also called a 'Cap Hold.' The amount at which an unsigned Veteran Free Agent stays charged to his Prior Team's Team Salary until he re-signs, signs elsewhere, or is renounced. Set as a percentage of his prior Salary keyed to his free-agent class: e.g., 150%/190% for most Qualifying (Bird) Free Agents (250%/300% after a Rookie Scale second Option Year), 130% for Early Qualifying (Early Bird), 120% for Non-Qualifying (Non-Bird); capped at the player's Maximum Player Salary and floored at the unreimbursed Minimum Annual Salary.",
+    "citation": { "article": "VII", "section": "4", "pages": [217, 218, 219] }
+  },
+  {
+    "term": "Rookie Scale Cap Hold Amount",
+    "definition_paraphrase": "The amount at which a First Round Pick is charged to his drafting Team's Team Salary from the moment of selection until he signs or the Team loses/renounces his rights, equal to 120% of his applicable Rookie Scale Amount.",
+    "citation": { "article": "VII", "section": "4", "pages": [218, 219] }
+  },
+  {
+    "term": "Incomplete Roster Charge",
+    "definition_paraphrase": "An amount added to a Team's Team Salary when, between July 1 and the day before the Regular Season, the Team has fewer than twelve countable players in Team Salary. The charge equals (12 minus the number of such players) multiplied by the zero-Years-of-Service Minimum Annual Salary for that Salary Cap Year.",
+    "citation": { "article": "VII", "section": "4", "pages": [220, 221] }
+  },
+  {
+    "term": "Renouncing",
+    "definition_paraphrase": "A Team's written relinquishment of its right to re-sign a Veteran Free Agent (effective no earlier than the July 1 after the player's last contract Season), which removes that player's Free Agent Amount from the Team's Team Salary. A renounced player can then be re-signed only with Room, the Minimum Player Salary Exception, or to a Two-Way Contract. Restricted Free Agents cannot be renounced. Limited rescission is allowed if a renunciation was made to create Room for an Offer Sheet that the Prior Team later matches.",
+    "citation": { "article": "VII", "section": "4", "pages": [221, 222] }
+  },
+  {
+    "term": "Career-Ending Injury or Illness Exclusion",
+    "definition_paraphrase": "The Section 4(h) mechanism letting a Team remove from its Team Salary the remaining Salary of a player whose contract was terminated via waivers due to a career-ending injury or illness (as determined by a jointly selected physician or Fitness-to-Play Panel), generally beginning one year after the player's last game. The Salary is re-included if the player later plays 25+ NBA games; the Team may not re-sign or re-acquire that player.",
+    "citation": { "article": "VII", "section": "4", "pages": [222, 223, 224] }
+  },
+  {
+    "term": "Summer Contract",
+    "definition_paraphrase": "A Player Contract signed between July 1 and the day before the next Regular Season that is not counted in Team Salary until the first day of that Regular Season, provided it pays no compensation (beyond per diem, lodging, transportation, and limited summer-league coverage) and offers no protection before the season. Must be terminated by the day before the Regular Season unless the Team has Room or can use the Minimum Player Salary Exception.",
+    "citation": { "article": "VII", "section": "4", "pages": [224, 225] }
+  },
+  {
+    "term": "Veteran Free Agent Exception",
+    "definition_paraphrase": "The Section 6(b) over-the-cap exception (the 'Bird/Early Bird/Non-Bird' exceptions) letting a Team re-sign its own Veteran Free Agent: a Qualifying (Bird) Free Agent up to the player max, an Early Qualifying (Early Bird) Free Agent up to 175% of prior salary or 105% of the Average Player Salary, and a Non-Qualifying (Non-Bird) Free Agent up to 120% of prior salary (or 120% of the minimum).",
+    "citation": { "article": "VII", "section": "6", "pages": [231, 232] }
+  },
+  {
+    "term": "Disabled Player Exception",
+    "definition_paraphrase": "A Section 6(c) exception allowing a Team to sign or acquire one Replacement Player for a player suffering a Disabling Injury or Illness (likely to prevent play through the following June 15). The exception equals the lesser of 50% of the disabled player's Salary or the Non-Taxpayer Mid-Level Salary Exception amount (plus $100,000 if acquiring via trade). Application window is July 1 through January 15; the exception expires the following March 10.",
+    "citation": { "article": "VII", "section": "6", "pages": [232, 233, 234, 235] }
+  },
+  {
+    "term": "Bi-annual Exception",
+    "definition_paraphrase": "A Section 6(d) over-the-cap exception (also styled 'Bi-Annual') letting a Team sign and/or acquire contracts totaling up to 3.32% of the Salary Cap in the first year, with terms up to two Seasons. It cannot be used in two consecutive Salary Cap Years, cannot be used if the Room MLE was already used that year, and its use is barred above the First Apron Level.",
+    "citation": { "article": "VII", "section": "6", "pages": [235, 236] }
+  },
+  {
+    "term": "Non-Taxpayer Mid-Level Salary Exception",
+    "definition_paraphrase": "A Section 6(e) over-the-cap exception letting a Team sign and/or acquire contracts totaling up to 9.12% of the Salary Cap in the first year, with terms up to four Seasons. Its use is barred above the First Apron Level, and it cannot be combined with the Room MLE in the same year. A Prior Team may use it to match an Offer Sheet for a one- or two-Year-of-Service Restricted Free Agent.",
+    "citation": { "article": "VII", "section": "6", "pages": [236, 237] }
+  },
+  {
+    "term": "Taxpayer Mid-Level Salary Exception",
+    "definition_paraphrase": "A Section 6(f) over-the-cap exception letting a Team sign contracts totaling up to a fixed amount ($5 million for 2023-24, scaled by the cap thereafter), with terms up to two Seasons, where the Team's Apron Team Salary exceeds the First Apron Level after use. Using it bars a Team from various First/Second Apron transactions and prevents having an Apron Team Salary above the Second Apron Level.",
+    "citation": { "article": "VII", "section": "6", "pages": [237, 238] }
+  },
+  {
+    "term": "Mid-Level Salary Exception for Room Teams",
+    "definition_paraphrase": "Also called the Room Mid-Level Salary Exception. A Section 6(g) exception available to a Team below the Salary Cap (with Room) that is therefore not entitled to the Bi-annual or either Mid-Level Exception. It allows signing/acquiring contracts totaling up to 5.678% of the Salary Cap in the first year, with terms up to three Seasons. Using it bars the Bi-annual and both other Mid-Level Exceptions for the rest of the year.",
+    "citation": { "article": "VII", "section": "6", "pages": [238, 239] }
+  },
+  {
+    "term": "Rookie Scale Exception",
+    "definition_paraphrase": "A Section 6(h) exception permitting a Team to sign a First Round Pick to a Rookie Scale Contract over the Salary Cap, in accordance with Article VIII, Section 1.",
+    "citation": { "article": "VII", "section": "6", "pages": [239] }
+  },
+  {
+    "term": "Minimum Player Salary Exception",
+    "definition_paraphrase": "A Section 6(i) exception allowing a Team to sign or acquire a contract of up to two Seasons that pays the applicable Minimum Player Salary each season (with no bonuses of any kind), regardless of the Team's cap position.",
+    "citation": { "article": "VII", "section": "6", "pages": [240] }
+  },
+  {
+    "term": "Traded Player Exception",
+    "definition_paraphrase": "The Section 6(j) family of exceptions letting an over-the-cap Team acquire replacement player(s) by trade based on outgoing salary. Variants: Standard (up to 100% of the traded player's salary + $250,000), Aggregated Standard (combining two-plus traded players, 100% + $250,000), Transition (2023-24 only, 110% + $250,000), Expanded (up to the greater of 200%/cap-scaled-$7.5M/125% formulas + $250,000), and Room Under Salary Cap plus $250,000. The $250,000 allowance drops to $0 if the post-trade Apron Team Salary exceeds the First Apron Level. Does not apply to Two-Way Players.",
+    "citation": { "article": "VII", "section": "6", "pages": [240, 241, 242, 243, 244, 245] }
+  },
+  {
+    "term": "Standard Traded Player Exception",
+    "definition_paraphrase": "The base Traded Player Exception variant: replacing one Traded Player with replacement(s) whose post-assignment salaries total no more than 100% of the traded player's pre-trade Salary plus $250,000 (acquired simultaneously or within one year). Acquiring via this exception after the season is a First Apron Level transaction.",
+    "citation": { "article": "VII", "section": "6", "pages": [240, 241] }
+  },
+  {
+    "term": "Aggregated Standard Traded Player Exception",
+    "definition_paraphrase": "A Traded Player Exception variant combining two or more Traded Players to acquire replacement(s) whose post-trade salaries total no more than 100% of the aggregated pre-trade Salaries plus $250,000 (acquired simultaneously). Using it is a Second Apron Level transaction (barred above the Second Apron Level).",
+    "citation": { "article": "VII", "section": "6", "pages": [240, 241] }
+  },
+  {
+    "term": "Transition Traded Player Exception",
+    "definition_paraphrase": "A Traded Player Exception variant available only in 2023-24, replacing one or more Traded Players (acquired simultaneously) with replacement salaries totaling up to 110% of the pre-trade Salaries plus $250,000.",
+    "citation": { "article": "VII", "section": "6", "pages": [240, 241] }
+  },
+  {
+    "term": "Expanded Traded Player Exception",
+    "definition_paraphrase": "A Traded Player Exception variant replacing one or more Traded Players (acquired simultaneously) with replacement salaries totaling up to the greater of three formulas (the lesser of 200% + $250,000 or 100% + a cap-scaled $7.5M, or 125% + $250,000). Acquiring via this exception is a First Apron Level transaction.",
+    "citation": { "article": "VII", "section": "6", "pages": [241] }
+  },
+  {
+    "term": "Minimum Traded Player",
+    "definition_paraphrase": "For the salary-aggregation rules, a player whose contract provides for his applicable Minimum Player Salary in the Salary Cap Year of the trade (or the following year if traded after the Regular Season). When aggregating three or more Traded Players with fewer replacement players (outside the December 15-to-trade-deadline window), no more than one may be a Minimum Traded Player.",
+    "citation": { "article": "VII", "section": "6", "pages": [242, 243] }
+  },
+  {
+    "term": "Second Round Pick Exception",
+    "definition_paraphrase": "A Section 6(k) exception letting a Team holding a Second Round Pick's draft rights sign him to a contract of either two Seasons plus a team option for a third, or three Seasons plus a team option for a fourth, at specified minimum/near-minimum salary levels. A contract signed under this exception is excluded from Team Salary until July 31.",
+    "citation": { "article": "VII", "section": "6", "pages": [246, 247] }
+  },
+  {
+    "term": "Non-Aggregation Rule",
+    "definition_paraphrase": "The Section 6(m) rule prohibiting a Team from combining multiple Salary Cap Exceptions (other than as allowed within the Traded Player Exception in Section 6(j)) to sign or acquire players at salaries greater than any single exception permits. A Team with multiple available exceptions chooses which one to use.",
+    "citation": { "article": "VII", "section": "6", "pages": [247] }
+  },
+  {
+    "term": "Right of First Refusal",
+    "definition_paraphrase": "Abbreviated ROFR. The right that applies only to a Restricted Free Agent, allowing his Prior (ROFR) Team to retain him by matching an Offer Sheet he signs with another Team. No individually-negotiated Right of First Refusal is permitted, and it cannot be triggered by play in a non-NBA league.",
+    "citation": { "article": "XI", "section": "1", "pages": [311, 312] }
+  },
+  {
+    "term": "Offer Sheet",
+    "definition_paraphrase": "The Exhibit G certificate (with an attached Uniform Player Contract) that a Restricted Free Agent signs with a New Team and gives to his ROFR Team, specifying the offer's Principal Terms. It must be for more than one Season (more than two if both a Qualifying Offer and Maximum Qualifying Offer were tendered), cannot be a Two-Way Contract, and requires the New Team to have and maintain Room for it.",
+    "citation": { "article": "XI", "section": "5", "pages": [322] }
+  },
+  {
+    "term": "Maximum Qualifying Offer",
+    "definition_paraphrase": "An optional alternative offer a Team may make alongside a Qualifying Offer to a player finishing his Rookie Scale second Option Year: a five-Season contract at the player's Maximum Annual Salary with 8% annual raises, Base-Compensation only (no bonuses), fully protected, with no Option or ETO. A player may accept either his Qualifying Offer or his Maximum Qualifying Offer, but not both.",
+    "citation": { "article": "XI", "section": "4", "pages": [318, 319] }
+  },
+  {
+    "term": "Two-Way Qualifying Offer",
+    "definition_paraphrase": "The form of Qualifying Offer made to certain players finishing Two-Way Contracts: an offer of a Two-Way Contract providing the next year's Two-Way Player Salary and Base-Compensation protection equal to the Maximum Two-Way Protection Amount. Other Two-Way finishers instead receive a Standard NBA Contract Qualifying Offer at the Minimum Player Salary.",
+    "citation": { "article": "XI", "section": "1", "pages": [314, 315] }
+  },
+  {
+    "term": "ROFR Team",
+    "definition_paraphrase": "The Team holding the Right of First Refusal over a Restricted Free Agent (generally his Prior Team that made the Qualifying Offer). It may match an Offer Sheet using Room, a Veteran Free Agent Exception, or the Minimum Player Salary Exception, and after matching may not trade the player for one year without consent.",
+    "citation": { "article": "XI", "section": "4", "pages": [318] }
+  },
+  {
+    "term": "First Refusal Exercise Notice",
+    "definition_paraphrase": "The Exhibit H notice (FREN) by which a ROFR Team exercises its Right of First Refusal to match an Offer Sheet, given within the Section 5(g) deadlines. Upon a valid notice, the player and ROFR Team are deemed to have entered into a contract containing all (and only) the Offer Sheet's Principal Terms, unamendable for one year.",
+    "citation": { "article": "XI", "section": "5", "pages": [323, 325] }
+  },
+  {
+    "term": "Principal Terms",
+    "definition_paraphrase": "The only Offer Sheet terms a ROFR Team must match: the contract term; the fixed/specified signing bonus, Current Base Compensation, and Deferred Base Compensation with installment dates; certain Incentive Compensation (Likely Bonuses based on the offering and ROFR Teams' performance, plus Generally Recognized League Honors); and allowable Uniform Player Contract amendments such as protection and trade bonuses.",
+    "citation": { "article": "XI", "section": "5", "pages": [324, 325] }
+  },
+  {
+    "term": "New Team",
+    "definition_paraphrase": "In Restricted Free Agency, the Team other than the ROFR Team that signs an Offer Sheet with a Restricted Free Agent. If the ROFR Team declines to match, the player and the New Team are deemed to have entered into the contract attached to the Offer Sheet.",
+    "citation": { "article": "XI", "section": "5", "pages": [322] }
+  },
+  {
+    "term": "Prior Salary Qualifying Offer Amount",
+    "definition_paraphrase": "For Qualifying Offers to players other than First Round Picks finishing rookie scale and certain Two-Way finishers, 135% (or 125% if the prior contract predates 2023-24) of the player's prior-year Salary, Likely Bonuses, and Unlikely Bonuses. It may be raised to the Minimum-Plus Qualifying Offer Amount if that is greater.",
+    "citation": { "article": "XI", "section": "1", "pages": [315, 316] }
+  },
+  {
+    "term": "Minimum-Plus Qualifying Offer Amount",
+    "definition_paraphrase": "The applicable Minimum Annual Salary for the player plus $200,000. A Qualifying Offer is deemed amended up to this amount (Base Compensation, no bonuses) when it exceeds the Prior Salary Qualifying Offer Amount.",
+    "citation": { "article": "XI", "section": "1", "pages": [316] }
+  },
+  {
+    "term": "Starter Criteria",
+    "definition_paraphrase": "The games-started/minutes-played benchmarks (averaging 41+ starts or 2,000+ minutes per Season over the third and fourth Rookie Scale years, or 41+ starts or 2,000+ minutes in the fourth year alone) that, when met, raise a player's Qualifying Offer to a higher tier (e.g., the ninth-pick or twenty-first-pick reference amounts). An analogous test applies to certain second-round/undrafted players.",
+    "citation": { "article": "XI", "section": "1", "pages": [313, 314] }
+  },
+  {
+    "term": "Player Contract",
+    "definition_paraphrase": "A synonym for the Uniform Player Contract (also just 'Contract') — the standard written employment agreement required by Article II between a person and a Team employing him as a professional basketball player. The defined-terms list points 'Player Contract' to the 'Uniform Player Contract' entry.",
+    "citation": { "article": "I", "section": "1", "pages": [6, 12] }
+  },
+  {
+    "term": "Regular Season",
+    "definition_paraphrase": "With respect to any Season, the span from the first to the last day of regularly scheduled competition between NBA Teams — excluding Exhibition (preseason), Play-In, and playoff games.",
+    "citation": { "article": "I", "section": "1", "pages": [7] }
+  },
+  {
+    "term": "Season",
+    "definition_paraphrase": "Also 'NBA Season.' The period running from the first day of NBA training camp through immediately after the last game of the NBA Finals.",
+    "citation": { "article": "I", "section": "1", "pages": [10] }
+  },
+  {
+    "term": "Higher Max Criteria",
+    "definition_paraphrase": "The performance criteria a player must meet to qualify for the elevated 30% (rather than 25%) of-cap maximum salary as a 5th Year Eligible Player. Met if, as of the July 1 following his fourth Season, the player either (A) was named to an All-NBA team (first, second, or third) or Defensive Player of the Year in the immediately preceding Season, or in two of the immediately preceding three Seasons; or (B) was named NBA MVP in one of the immediately preceding three Seasons. The same criteria also gate certain Designated Veteran Player eligibility.",
+    "citation": { "article": "II", "section": "7", "pages": [36] }
+  },
+  {
+    "term": "5th Year Eligible Player",
+    "definition_paraphrase": "A player who has four Years of Service as of the June 30 following the end of the last Season covered by his Player Contract. Such a player may receive from his Prior Team up to 30% of the Salary Cap (instead of the usual sub-seven-year 25% cap) if he has met at least one of the Higher Max Criteria as of the July 1 following his fourth Season.",
+    "citation": { "article": "II", "section": "7", "pages": [36] }
+  },
+  {
+    "term": "Disabling Injury or Illness",
+    "definition_paraphrase": "For purposes of the Disabled Player Exception, any injury or illness that, in the opinion of the NBA-designated physician, makes it substantially more likely than not that the player will be unable to play through the following June 15.",
+    "citation": { "article": "VII", "section": "6", "pages": [233] }
+  },
+  {
+    "term": "Veteran Extension",
+    "definition_paraphrase": "An Extension of a Player Contract other than a Rookie Scale Contract, governed by Article VII, Sec. 7(a). Timing depends on original term length (a three- or four-Season contract may be extended no sooner than the second anniversary of signing; a five- or six-Season contract no sooner than the third anniversary; one- or two-Season contracts cannot be extended). The first extended-term Salary may generally reach up to 140% of the prior Regular Salary or 140% of the Estimated Average Player Salary. A player who will not be a Qualifying Veteran Free Agent at his contract's end is ineligible.",
+    "citation": { "article": "VII", "section": "7", "pages": [249, 250, 251, 252, 253] }
+  },
+  {
+    "term": "Rookie Scale Extension",
+    "definition_paraphrase": "An Extension of a First Round Pick's Rookie Scale Contract under Article VII, Sec. 7(b), which may be signed only during the window from the last day of the Moratorium Period through 6:00 p.m. ET the day before the first day of the Regular Season of the contract's second Option Year (assuming the Team exercised that Option). First extended-term Salary and Unlikely Bonuses may not exceed the Article II, Sec. 7 maximum. A player who will not be a Qualifying Veteran Free Agent at the contract's end is ineligible.",
+    "citation": { "article": "VII", "section": "7", "pages": [255] }
+  },
+  {
+    "term": "10-Day Contract",
+    "definition_paraphrase": "Beginning January 5 of an NBA Season, a Player Contract (other than a Two-Way Contract) for the longer of ten days or a span covering three of the Team's games. It pays the Minimum Player Salary; a Team may sign the same player to no more than two in a Season; the number a Team may carry at once scales with roster size; it cannot extend to or past the Team's last Regular Season game (except under hardship rules); and it is terminated by written notice rather than the waiver procedure.",
+    "citation": { "article": "II", "section": "9", "pages": [48, 49, 50] }
+  },
+  {
+    "term": "Rest-of-Season Contract",
+    "definition_paraphrase": "A Player Contract a Team may enter into at any time after the first day of an NBA Regular Season that provides Compensation for the remainder of that Season, paying no less than the Minimum Player Salary. Two-Way Contracts are not subject to the Rest-of-Season Contract rules.",
+    "citation": { "article": "II", "section": "10", "pages": [50] }
+  },
+  {
+    "term": "Inactive List",
+    "definition_paraphrase": "The NBA-maintained list of players who have signed Player Contracts with a Team but are otherwise ineligible to participate in a Regular Season game (the counterpart to the Active List).",
+    "citation": { "article": "I", "section": "1", "pages": [5] }
+  },
+  {
+    "term": "Two-Way List",
+    "definition_paraphrase": "The NBA-maintained list of players who have signed Two-Way Contracts and are eligible to provide services to an NBAGL team under the Agreement.",
+    "citation": { "article": "I", "section": "1", "pages": [11] }
+  },
+  {
+    "term": "Second Round Pick",
+    "definition_paraphrase": "A player selected by a Team in the second round of the NBA Draft.",
+    "citation": { "article": "I", "section": "1", "pages": [10] }
+  },
+  {
+    "term": "Non-Draft Rookie",
+    "definition_paraphrase": "A Rookie who is not selected in the NBA Draft for which he is first eligible (a subtype of Rookie, contrasted with a 'Draft Rookie').",
+    "citation": { "article": "I", "section": "1", "pages": [8] }
+  },
+  {
+    "term": "Exhibit 10",
+    "definition_paraphrase": "An optional amendment (Exhibit 10 to a Uniform Player Contract) permitted under Article II, Sec. 3(s). A Contract with an Exhibit 10 must be one Season long, pay the Minimum Player Salary with no bonuses other than the Exhibit 10 Bonus, and carry no Sec. 3(i) Compensation protection (except in connection with a Two-Way conversion). It can include an Exhibit 10 Bonus and/or a Two-Way Player Conversion Option with a Conversion Protection Amount. No Team may be party to more than six Exhibit 10 Contracts at once.",
+    "citation": { "article": "II", "section": "3", "pages": [23] }
+  },
+  {
+    "term": "Exhibit 10 Bonus",
+    "definition_paraphrase": "A bonus (between $5,000 and the Maximum Exhibit 10 Bonus Amount, e.g., $75,000 for 2023-24) payable to a player under an Exhibit 10 if the Team waives him before the first day of the Regular Season and he then signs with the NBAGL, reports to the Team's NBAGL affiliate, and provides 60 consecutive days of service during the NBAGL Season (the 60-Day Service Period). An Exhibit 10 may include the bonus only if the Team has an NBAGL affiliate at signing.",
+    "citation": { "article": "II", "section": "3", "pages": [21, 22] }
+  },
+  {
+    "term": "Non-Guaranteed, Training Camp Contract",
+    "definition_paraphrase": "A Player Contract with an Exhibit 9 that eliminates the player's right to his Base Compensation if the Contract is terminated before the first day of the Regular Season. It must be one Season long, pay the Minimum Player Salary (or Two-Way Salary) with no bonuses and no Sec. 3(i) Compensation protection; the Team must already have at least 14 players signed (excluding Two-Way and other such contracts); and no Team may hold more than six at once.",
+    "citation": { "article": "II", "section": "3", "pages": [20, 21] }
+  },
+  {
+    "term": "Conversion Protection Amount",
+    "definition_paraphrase": "Under an Exhibit 10 (Article II, Sec. 3(s)(ii)), the amount of lack-of-skill and injury/illness Compensation protection — between $5,000 and the Maximum Exhibit 10 Bonus Amount — that attaches if, before the first day of the Regular Season, the Team either exercises its Two-Way Player Conversion Option or does not terminate the Contract. If the Exhibit 10 also contains an Exhibit 10 Bonus, the Conversion Protection Amount must equal that bonus.",
+    "citation": { "article": "II", "section": "3", "pages": [22] }
+  },
+  {
+    "term": "NBAGL Work Assignment",
+    "definition_paraphrase": "The assignment by an NBA Team of a player (other than a Two-Way Player) from its Active or Inactive List to an NBAGL team. Permitted freely for players with zero, one, or two Years of Service; players with more require the player's and Players Association's written consent. On assignment the player goes to the NBA Team's Inactive List and reports to the NBAGL team. The assignment begins when the player reports in person to the NBAGL team and ends when he reports back upon recall or when the NBAGL Season concludes.",
+    "citation": { "article": "XLI", "section": "1", "pages": [550] }
+  },
+  {
+    "term": "NBAGL Season",
+    "definition_paraphrase": "The period beginning on the first day of NBAGL training camp and ending immediately after the last game of the NBAGL playoffs.",
+    "citation": { "article": "I", "section": "1", "pages": [6] }
+  }
+]

@@ -1,0 +1,5 @@
+nba_api>=1.4.1
+curl_cffi>=0.7.0
+pandas>=2.0
+supabase>=2.4
+python-dotenv>=1.0

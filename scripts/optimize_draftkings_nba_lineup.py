@@ -472,17 +472,23 @@ def optimize_lineup(df: pd.DataFrame, max_salary: int = 50000) -> pd.DataFrame:
     return selected_df
 
 
-def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lineups: int = 5, 
-                              max_overlap: int = 3) -> List[pd.DataFrame]:
+def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lineups: int = 5,
+                              max_overlap: int = 3, locked_players: List[str] = None,
+                              stack_team: str = None, stack_count: int = 2,
+                              contest_type: str = 'gpp') -> List[pd.DataFrame]:
     """
     Generate multiple unique lineups with different optimization strategies.
-    
+
     Args:
         df: DataFrame with Player, salary, FPTS, and position flags
         max_salary: Maximum total salary (default 50000)
         num_lineups: Number of lineups to generate (default 5)
         max_overlap: Maximum number of overlapping players between lineups (default 3)
-        
+        locked_players: Player names to force-include in every lineup
+        stack_team: Team abbreviation to stack
+        stack_count: Minimum players from stack_team (default 2)
+        contest_type: 'cash' or 'gpp' — affects strategy ordering
+
     Returns:
         List of DataFrames, each containing an optimized lineup
     """
@@ -639,46 +645,52 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
             # SG slot: needs at least 1 SG-eligible player
             prob += lpSum([vars[name] for name in players if player_data[name]["is_sg"]]) >= 1
             # SF slot: needs at least 1 SF-eligible player
-            # IMPORTANT: We need at least 1 SF-eligible player that is NOT also SG-eligible
-            # OR we need at least 2 SF-eligible players total (one can be SG/SF)
-            # To be safe, let's require at least 2 SF-eligible players
-            prob += lpSum([vars[name] for name in players if player_data[name]["is_sf"]]) >= 2
+            prob += lpSum([vars[name] for name in players if player_data[name]["is_sf"]]) >= 1
             # PF slot: needs at least 1 PF-eligible player
             prob += lpSum([vars[name] for name in players if player_data[name]["is_pf"]]) >= 1
             # C slot: needs at least 1 C-eligible player
             prob += lpSum([vars[name] for name in players if player_data[name]["is_c"]]) >= 1
-            # G slot: needs at least 1 G-eligible player (PG or SG)
-            # Since PG and SG slots also require G-eligible players, we need at least 5 total
-            # (1 for PG, 1 for SG, 1 for G slot, plus buffer for flexibility)
-            # G-eligible players might also be F-eligible and get used for F slot, so we need extra buffer
-            prob += lpSum([vars[name] for name in players if player_data[name]["is_g"]]) >= 5
-            # F slot: needs at least 1 F-eligible player (SF or PF)
-            # Since SF and PF slots also require F-eligible players, we need at least 5 total
-            # (1 for SF slot, 1 for PF slot, 1 for F slot, plus buffer for flexibility)
-            # We need extra F-eligible players because SF-eligible players might also be SG-eligible 
-            # and get used for SG slot, and we need flexibility in slot assignment
-            prob += lpSum([vars[name] for name in players if player_data[name]["is_f"]]) >= 5
+            # G slot: PG + SG + G slots each need a distinct G-eligible player
+            prob += lpSum([vars[name] for name in players if player_data[name]["is_g"]]) >= 3
+            # F slot: SF + PF + F slots each need a distinct F-eligible player
+            prob += lpSum([vars[name] for name in players if player_data[name]["is_f"]]) >= 3
             # UTIL slot: can be any player (all players are UTIL-eligible)
             # We need at least 1 player total, but this is already satisfied by the 8-player constraint
             
-            # Punt strategy: enforce salary tier structure
-            # 2-3 high salary stars (>= $8,000), 2-3 low salary role players (<= $6,000), 2-3 mid-tier (between $6,000 and $8,000)
+            # Punt strategy: stars + deep punts
+            # Structure: 3+ stars (>= $8k) + 4+ punts (< $5k, ideally 2 under $4k) + <= 1 mid ($5k-$8k)
             if strategy['objective'] == 'punt':
-                # High salary players (stars) >= $8,000
-                high_salary_players = [name for name in players if player_data[name]["salary"] >= 8000]
-                prob += lpSum([vars[name] for name in high_salary_players]) >= 2
-                prob += lpSum([vars[name] for name in high_salary_players]) <= 3
-                
-                # Low salary players (role players) <= $6,000
-                low_salary_players = [name for name in players if player_data[name]["salary"] <= 6000]
-                prob += lpSum([vars[name] for name in low_salary_players]) >= 2
-                prob += lpSum([vars[name] for name in low_salary_players]) <= 3
-                
-                # Mid-tier players (between $6,000 and $8,000)
-                mid_salary_players = [name for name in players if 6000 < player_data[name]["salary"] < 8000]
-                prob += lpSum([vars[name] for name in mid_salary_players]) >= 2
-                prob += lpSum([vars[name] for name in mid_salary_players]) <= 3
+                # Stars: at least 3 players >= $8,000
+                star_players = [name for name in players if player_data[name]["salary"] >= 8000]
+                prob += lpSum([vars[name] for name in star_players]) >= 3
+
+                # Punt spots: at least 4 players under $5,000
+                punt_players = [name for name in players if player_data[name]["salary"] < 5000]
+                prob += lpSum([vars[name] for name in punt_players]) >= 4
+
+                # Deep discount: at least 2 players under $4,000 (frees max cap for stars)
+                cheap_players = [name for name in players if player_data[name]["salary"] < 4000]
+                prob += lpSum([vars[name] for name in cheap_players]) >= 2
+
+                # Mid-tier cap: at most 1 player between $5,000 and $8,000
+                mid_players = [name for name in players if 5000 <= player_data[name]["salary"] < 8000]
+                prob += lpSum([vars[name] for name in mid_players]) <= 1
             
+            # Locked players: force-include specified players
+            if locked_players:
+                for lp_name in locked_players:
+                    if lp_name in vars:
+                        prob += vars[lp_name] == 1
+
+            # Stack constraint: require minimum players from a team
+            if stack_team and 'Team' in df.columns:
+                stack_player_names = [
+                    name for name in players
+                    if str(player_data[name].get('Team', '')).upper() == stack_team.upper()
+                ]
+                if len(stack_player_names) >= stack_count:
+                    prob += lpSum([vars[name] for name in stack_player_names]) >= stack_count
+
             # Uniqueness constraints: ensure this lineup differs from previous ones
             # Progressively relax constraints - allow more overlap with earlier lineups
             uniqueness_constraints_added = 0
@@ -779,11 +791,11 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                     prob += lpSum([vars[name] * player_data[name]["salary"] for name in players]) <= max_salary
                     prob += lpSum([vars[name] for name in players if player_data[name]["is_pg"]]) >= 1
                     prob += lpSum([vars[name] for name in players if player_data[name]["is_sg"]]) >= 1
-                    prob += lpSum([vars[name] for name in players if player_data[name]["is_sf"]]) >= 2
+                    prob += lpSum([vars[name] for name in players if player_data[name]["is_sf"]]) >= 1
                     prob += lpSum([vars[name] for name in players if player_data[name]["is_pf"]]) >= 1
                     prob += lpSum([vars[name] for name in players if player_data[name]["is_c"]]) >= 1
-                    prob += lpSum([vars[name] for name in players if player_data[name]["is_g"]]) >= 5
-                    prob += lpSum([vars[name] for name in players if player_data[name]["is_f"]]) >= 5
+                    prob += lpSum([vars[name] for name in players if player_data[name]["is_g"]]) >= 3
+                    prob += lpSum([vars[name] for name in players if player_data[name]["is_f"]]) >= 3
                     prob += lpSum([vars[name] for name in players if player_data[name]["is_util"]]) >= 1
                     
                     # Relaxed uniqueness constraints: allow more overlap (max_overlap + 2)
@@ -792,23 +804,39 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                     for prev_selected in selected_players_sets:
                         prob += lpSum([vars[name] for name in prev_selected]) <= relaxed_overlap
                     
-                    # Punt strategy: enforce salary tier structure
+                    # Punt strategy: stars + deep punts (relaxed retry — drop >=2 cheap to >=1)
                     if strategy['objective'] == 'punt':
-                        # High salary players (stars) >= $8,000
-                        high_salary_players = [name for name in players if player_data[name]["salary"] >= 8000]
-                        prob += lpSum([vars[name] for name in high_salary_players]) >= 2
-                        prob += lpSum([vars[name] for name in high_salary_players]) <= 3
-                        
-                        # Low salary players (role players) <= $6,000
-                        low_salary_players = [name for name in players if player_data[name]["salary"] <= 6000]
-                        prob += lpSum([vars[name] for name in low_salary_players]) >= 2
-                        prob += lpSum([vars[name] for name in low_salary_players]) <= 3
-                        
-                        # Mid-tier players (between $6,000 and $8,000)
-                        mid_salary_players = [name for name in players if 6000 < player_data[name]["salary"] < 8000]
-                        prob += lpSum([vars[name] for name in mid_salary_players]) >= 2
-                        prob += lpSum([vars[name] for name in mid_salary_players]) <= 3
+                        # Stars: at least 3 players >= $8,000
+                        star_players = [name for name in players if player_data[name]["salary"] >= 8000]
+                        prob += lpSum([vars[name] for name in star_players]) >= 3
+
+                        # Punt spots: at least 4 players under $5,000
+                        punt_players = [name for name in players if player_data[name]["salary"] < 5000]
+                        prob += lpSum([vars[name] for name in punt_players]) >= 4
+
+                        # Relaxed deep discount: at least 1 player under $4,000 (retry)
+                        cheap_players = [name for name in players if player_data[name]["salary"] < 4000]
+                        prob += lpSum([vars[name] for name in cheap_players]) >= 1
+
+                        # Mid-tier cap: at most 1 player between $5,000 and $8,000
+                        mid_players = [name for name in players if 5000 <= player_data[name]["salary"] < 8000]
+                        prob += lpSum([vars[name] for name in mid_players]) <= 1
                     
+                    # Locked players
+                    if locked_players:
+                        for lp_name in locked_players:
+                            if lp_name in vars:
+                                prob += vars[lp_name] == 1
+
+                    # Stack constraint
+                    if stack_team and 'Team' in df.columns:
+                        stack_player_names = [
+                            name for name in players
+                            if str(player_data[name].get('Team', '')).upper() == stack_team.upper()
+                        ]
+                        if len(stack_player_names) >= stack_count:
+                            prob += lpSum([vars[name] for name in stack_player_names]) >= stack_count
+
                     # Player exposure constraint: no player can appear in more than 3 lineups total
                     # BUT: Only apply this constraint if we've already generated at least one lineup
                     if len(selected_players_sets) > 0:
@@ -818,7 +846,7 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                             if current_exposure >= max_exposure:
                                 # Player has already reached max exposure, exclude from this lineup
                                 prob += vars[player_name] == 0
-                    
+
                     prob.solve()
                     
                     # #region agent log
@@ -874,7 +902,9 @@ def optimize_multiple_lineups(df: pd.DataFrame, max_salary: int = 50000, num_lin
                         'Position': player_info['position'],
                         'Salary': player_info['salary'],
                         'FPTS': player_info['FPTS'],
-                        'Team': player_info.get('Team', '')
+                        'Team': player_info.get('Team', ''),
+                        'FPTS_Ceiling': player_info.get('FPTS_Ceiling', None),
+                        'FPTS_Floor': player_info.get('FPTS_Floor', None),
                     }
                     # Add tip time and opponent if available
                     if 'Tip_Time' in player_info:

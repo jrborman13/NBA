@@ -1,8 +1,9 @@
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'new-streamlit-app', 'player-app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'player_app'))
 
 import streamlit as st
+from theme_colors import tc
 import player_functions as pf
 import team_defensive_stats as tds
 import prediction_model as pm
@@ -465,8 +466,9 @@ selected_player_id = st.selectbox(
 
 # Cache player data to avoid repeated API calls
 # Version 2: Added PRA and PRA percentile support
+# Version 3: Added GP (games played) column to the averages table
 @st.cache_data
-def get_cached_player_data(player_id, players_df, _cache_version=2):
+def get_cached_player_data(player_id, players_df, _cache_version=3):
     """Cache player data to avoid repeated API calls"""
     return pf.get_player_data(player_id, players_df)
 
@@ -619,17 +621,15 @@ with tab1:
                             # Green gradient - better than season
                             diff_pct = ((current_val - season_val) / season_val * 100) if season_val > 0 else 0
                             intensity = min(diff_pct / 20, 1.0)  # Cap at 20% difference for max intensity
-                            green_intensity = int(200 + (55 * intensity))
-                            styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
+                            styles[i] = f'background-color: {tc.heatmap_green(intensity)};'
                         elif current_val < season_val:
                             # Red gradient - worse than season
                             diff_pct = ((season_val - current_val) / season_val * 100) if season_val > 0 else 0
                             intensity = min(diff_pct / 20, 1.0)
-                            red_intensity = int(200 + (55 * intensity))
-                            styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
+                            styles[i] = f'background-color: {tc.heatmap_red(intensity)};'
                         else:
                             # Gray - same as season
-                            styles[i] = 'background-color: rgb(240, 240, 240);'
+                            styles[i] = f'background-color: {tc.heatmap_neutral};'
                     except (ValueError, TypeError):
                         pass
                 elif col in pct_cols:
@@ -639,24 +639,22 @@ with tab1:
                         season_str = str(season_row[col]).replace('%', '')
                         current_val = float(current_str)
                         season_val = float(season_str)
-                        
+
                         if current_val > season_val:
                             diff_pct = ((current_val - season_val) / season_val * 100) if season_val > 0 else 0
                             intensity = min(diff_pct / 20, 1.0)
-                            green_intensity = int(200 + (55 * intensity))
-                            styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
+                            styles[i] = f'background-color: {tc.heatmap_green(intensity)};'
                         elif current_val < season_val:
                             diff_pct = ((season_val - current_val) / season_val * 100) if season_val > 0 else 0
                             intensity = min(diff_pct / 20, 1.0)
-                            red_intensity = int(200 + (55 * intensity))
-                            styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
+                            styles[i] = f'background-color: {tc.heatmap_red(intensity)};'
                         else:
-                            styles[i] = 'background-color: rgb(240, 240, 240);'
+                            styles[i] = f'background-color: {tc.heatmap_neutral};'
                     except (ValueError, TypeError):
                         pass
-            
+
             return styles
-        
+
         # Add comparison columns if toggle is on
         if show_comparison:
             # Get season row values
@@ -706,15 +704,13 @@ with tab1:
                             if current_val > season_val:
                                 diff_pct = ((current_val - season_val) / season_val * 100) if season_val > 0 else 0
                                 intensity = min(diff_pct / 20, 1.0)
-                                green_intensity = int(200 + (55 * intensity))
-                                styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
+                                styles[i] = f'background-color: {tc.heatmap_green(intensity)};'
                             elif current_val < season_val:
                                 diff_pct = ((season_val - current_val) / season_val * 100) if season_val > 0 else 0
                                 intensity = min(diff_pct / 20, 1.0)
-                                red_intensity = int(200 + (55 * intensity))
-                                styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
+                                styles[i] = f'background-color: {tc.heatmap_red(intensity)};'
                             else:
-                                styles[i] = 'background-color: rgb(240, 240, 240);'
+                                styles[i] = f'background-color: {tc.heatmap_neutral};'
                         except (ValueError, TypeError):
                             pass
                     elif col in pct_cols:
@@ -726,15 +722,13 @@ with tab1:
                             if current_val > season_val:
                                 diff_pct = ((current_val - season_val) / season_val * 100) if season_val > 0 else 0
                                 intensity = min(diff_pct / 20, 1.0)
-                                green_intensity = int(200 + (55 * intensity))
-                                styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
+                                styles[i] = f'background-color: {tc.heatmap_green(intensity)};'
                             elif current_val < season_val:
                                 diff_pct = ((season_val - current_val) / season_val * 100) if season_val > 0 else 0
                                 intensity = min(diff_pct / 20, 1.0)
-                                red_intensity = int(200 + (55 * intensity))
-                                styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
+                                styles[i] = f'background-color: {tc.heatmap_red(intensity)};'
                             else:
-                                styles[i] = 'background-color: rgb(240, 240, 240);'
+                                styles[i] = f'background-color: {tc.heatmap_neutral};'
                         except (ValueError, TypeError):
                             pass
                 return styles
@@ -743,6 +737,54 @@ with tab1:
             styled_df = averages_df.style.apply(style_heatmap, axis=1)
         
         st.dataframe(styled_df, width='stretch', hide_index=True)
+
+        # Player's own zone shooting — always available (no opponent required). When the player is
+        # part of a selected matchup, the richer "Zone Matchup Analysis" block below shows the same
+        # zones vs the opponent's defense, so we skip this standalone view to avoid duplication.
+        _player_team_id = player_data.get('team_id')
+        _in_selected_matchup = bool(
+            matchup_away_team_id and matchup_home_team_id and _player_team_id is not None
+            and int(_player_team_id) in (matchup_away_team_id, matchup_home_team_id)
+        )
+        if not _in_selected_matchup:
+            st.subheader("🎯 Zone Shooting")
+            st.caption("Player FG% and frequency by zone. Select a matchup to compare against the opponent's defense.")
+            player_shooting_df, player_shooting_error = get_cached_player_shooting_data()
+            if player_shooting_error:
+                st.warning(f"⚠️ Could not load player shooting data: {player_shooting_error}")
+            elif player_shooting_df is not None:
+                player_zones = tds.get_player_zone_shooting(selected_player_id, player_shooting_df)
+                if player_zones:
+                    st.caption("Percentiles are vs the league (≥10 games; FG% vs players who attempt that zone). 🟢 high · 🔴 low")
+                    zone_pctiles = tds.get_player_zone_percentiles(selected_player_id, player_shooting_df) or {}
+
+                    def _pctile_badge(p):
+                        if p is None:
+                            return '<span style="font-size: 15px; color: {};">— %ile</span>'.format(tc.text_muted)
+                        color = tc.green_text if p >= 67 else (tc.red_text if p <= 33 else tc.text_secondary)
+                        return f'<span style="font-size: 15px; font-weight: bold; color: {color};">{p}th %ile</span>'
+
+                    zone_meta = [
+                        ('rim', 'At Rim'), ('smr', 'Short Mid-Range'), ('lmr', 'Long Mid-Range'),
+                        ('c3', 'Corner 3'), ('atb3', 'Above Break 3'),
+                    ]
+                    zone_cols = st.columns(5)
+                    for i, (zk, zname) in enumerate(zone_meta):
+                        zp = zone_pctiles.get(zk, {})
+                        with zone_cols[i]:
+                            st.markdown(f"""
+                            <div style="background-color: {tc.card_bg}; border: 1px solid {tc.card_border}; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 8px;">
+                                <div style="font-weight: bold; font-size: 18px; margin-bottom: 8px;">{zname}</div>
+                                <div style="font-size: 13px; color: {tc.text_secondary};">FG%</div>
+                                <div style="font-size: 22px; font-weight: bold; line-height: 1.1;">{player_zones[f'{zk}_acc']}%</div>
+                                <div style="margin-bottom: 8px;">{_pctile_badge(zp.get('acc_pctile'))}</div>
+                                <div style="font-size: 13px; color: {tc.text_secondary};">Freq ({player_zones[f'{zk}_fga']} FGA)</div>
+                                <div style="font-size: 18px; font-weight: bold; line-height: 1.1;">{player_zones[f'{zk}_freq']}%</div>
+                                <div>{_pctile_badge(zp.get('freq_pctile'))}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                else:
+                    st.info("Could not load player zone shooting data.")
 
         # Display Opponent Defensive Stats (only when a matchup is selected)
         if matchup_away_team_id and matchup_home_team_id:
@@ -856,7 +898,7 @@ with tab1:
                                     return f'''
                                     <div style="background-color: {bg_color}; padding: 8px; border-radius: 5px; margin: 4px 0;">
                                         <span style="font-size: 14px;">{label}: <strong>{value}</strong></span>
-                                        <span style="font-size: 12px; color: #666;"> (#{rank})</span>
+                                        <span style="font-size: 12px; color: {tc.text_muted};"> (#{rank})</span>
                                     </div>
                                     '''
                                 
@@ -889,11 +931,11 @@ with tab1:
                                 
                                 # Add legend
                                 st.markdown("""
-                                <div style="margin-top: 10px; padding: 8px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px;">
-                                    <strong>Legend:</strong> 
-                                    <span style="background-color: rgba(255, 100, 100, 0.3); padding: 2px 8px; border-radius: 3px;">🔴 Good Defense (tough matchup)</span>
-                                    <span style="background-color: rgba(255, 255, 100, 0.3); padding: 2px 8px; border-radius: 3px; margin-left: 10px;">🟡 Average</span>
-                                    <span style="background-color: rgba(100, 255, 100, 0.3); padding: 2px 8px; border-radius: 3px; margin-left: 10px;">🟢 Bad Defense (favorable matchup)</span>
+                                <div style="margin-top: 10px; padding: 8px; background-color: {tc.neutral_bg}; border-radius: 5px; font-size: 12px;">
+                                    <strong>Legend:</strong>
+                                    <span style="background-color: {tc.red_bg}; padding: 2px 8px; border-radius: 3px;">🔴 Good Defense (tough matchup)</span>
+                                    <span style="background-color: {tc.warn_bg}; padding: 2px 8px; border-radius: 3px; margin-left: 10px;">🟡 Average</span>
+                                    <span style="background-color: {tc.green_bg}; padding: 2px 8px; border-radius: 3px; margin-left: 10px;">🟢 Bad Defense (favorable matchup)</span>
                                 </div>
                                 """, unsafe_allow_html=True)
                             
@@ -930,10 +972,10 @@ with tab1:
                                                 st.markdown(f"""
                                                 <div style="background-color: {bg_color}; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 8px;">
                                                     <div style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">{zone_data['zone_name']}</div>
-                                                    <div style="font-size: 15px; color: #444;">Player: <strong>{zone_data['player_pct']}%</strong></div>
-                                                    <div style="font-size: 15px; color: #444;">Opp Allows: <strong>{zone_data['opp_allowed_pct']}%</strong> (#{zone_data['opp_acc_rank']})</div>
+                                                    <div style="font-size: 15px; color: {tc.text_secondary};">Player: <strong>{zone_data['player_pct']}%</strong></div>
+                                                    <div style="font-size: 15px; color: {tc.text_secondary};">Opp Allows: <strong>{zone_data['opp_allowed_pct']}%</strong> (#{zone_data['opp_acc_rank']})</div>
                                                     <div style="font-size: 22px; font-weight: bold; margin-top: 10px;">{diff_sign}{zone_data['difference']}%</div>
-                                                    <div style="font-size: 13px; color: #666;">Freq: {zone_data['player_freq']}% ({zone_data['player_fga']} FGA)</div>
+                                                    <div style="font-size: 13px; color: {tc.text_muted};">Freq: {zone_data['player_freq']}% ({zone_data['player_fga']} FGA)</div>
                                                 </div>
                                                 """, unsafe_allow_html=True)
                                 else:
@@ -1235,7 +1277,7 @@ with tab1:
             for i, sim_player in enumerate(similar_players):
                 with sim_cols[i]:
                     sim_headshot = f"https://cdn.nba.com/headshots/nba/latest/1040x760/{sim_player['player_id']}.png"
-                    similarity_color = "#28a745" if sim_player['similarity'] >= 70 else "#ffc107" if sim_player['similarity'] >= 55 else "#6c757d"
+                    similarity_color = tc.injury_probable if sim_player['similarity'] >= 70 else tc.injury_questionable if sim_player['similarity'] >= 55 else tc.injury_unknown
                     
                     # Look up position from players dataframe
                     sim_player_row = players_df[players_df['PERSON_ID'] == sim_player['player_id']]
@@ -1251,17 +1293,17 @@ with tab1:
                     ft_pct = sim_player.get('ft_pct', 0)
                     
                     st.markdown(f"""
-                        <div style="text-align: center; padding: 15px; border: 1px solid #ddd; border-radius: 12px; background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);">
+                        <div style="text-align: center; padding: 15px; border: 1px solid {tc.card_border}; border-radius: 12px; background: {tc.card_bg};">
                             <img src="{sim_headshot}" style="width: 225px; height: 170px; object-fit: cover; border-radius: 8px; margin-bottom: 12px;" onerror="this.style.display='none'">
                             <div style="font-weight: bold; font-size: 18px; margin-bottom: 6px;">{sim_player['player_name']}</div>
-                            <div style="font-size: 15px; color: #555; margin-bottom: 10px;">{position} | {team_full}</div>
+                            <div style="font-size: 15px; color: {tc.text_secondary}; margin-bottom: 10px;">{position} | {team_full}</div>
                             <div style="background: {similarity_color}; color: white; padding: 5px 12px; border-radius: 14px; font-size: 16px; font-weight: bold; display: inline-block;">
                                 {sim_player['similarity']}% Match
                             </div>
-                            <div style="font-size: 16px; color: #333; margin-top: 12px; font-weight: 500;">
+                            <div style="font-size: 16px; color: {tc.text_primary}; margin-top: 12px; font-weight: 500;">
                                 {sim_player['ppg']} PPG | {sim_player['rpg']} RPG | {sim_player['apg']} APG
                             </div>
-                            <div style="font-size: 14px; color: #555; margin-top: 6px;">
+                            <div style="font-size: 14px; color: {tc.text_secondary}; margin-top: 6px;">
                                 {fg_pct}% FG | {fg3_pct}% 3PT | {ft_pct}% FT
                             </div>
                         </div>
@@ -1912,15 +1954,15 @@ with tab2:
                     def get_status_color(status):
                         status_lower = status.lower() if status else ''
                         if 'out' in status_lower:
-                            return '#dc3545'  # Red
+                            return tc.injury_out
                         elif 'doubtful' in status_lower:
-                            return '#fd7e14'  # Orange
+                            return tc.injury_doubtful
                         elif 'questionable' in status_lower:
-                            return '#ffc107'  # Yellow
+                            return tc.injury_questionable
                         elif 'probable' in status_lower:
-                            return '#28a745'  # Green
+                            return tc.injury_probable
                         else:
-                            return '#6c757d'  # Gray
+                            return tc.injury_unknown
                     
                     # Helper function to get status sort order (Probable first, Out last)
                     def get_status_order(status):
@@ -1951,19 +1993,19 @@ with tab2:
                                 player_id = injury_item.get('player_id', '')
                                 headshot_url = f"https://cdn.nba.com/headshots/nba/latest/1040x760/{player_id}.png" if player_id else ""
                                 st.markdown(f"""
-                                    <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #eee;">
-                                        <img src="{headshot_url}" style="width: 75px; height: 55px; object-fit: cover; border-radius: 4px; background-color: #f0f0f0;" onerror="this.style.display='none'">
+                                    <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid {tc.card_border};">
+                                        <img src="{headshot_url}" style="width: 75px; height: 55px; object-fit: cover; border-radius: 4px; background-color: {tc.img_placeholder};" onerror="this.style.display='none'">
                                         <div style="flex: 1;">
                                             <span style="font-weight: bold;">{formatted_name}</span>
-                                            <span style="background-color: {status_color}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-left: 8px;">{status}</span>
-                                            <br><span style="font-size: 13px; color: #666;">{formatted_reason}</span>
+                                            <span style="background-color: {status_color}; color: {tc.injury_text}; padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-left: 8px;">{status}</span>
+                                            <br><span style="font-size: 13px; color: {tc.text_muted};">{formatted_reason}</span>
                                         </div>
                                     </div>
                                 """, unsafe_allow_html=True)
                         else:
                             st.markdown(f"### {matchup_away_team_abbr}")
                             st.info("No injuries")
-                    
+
                     with col_home:
                         if all_injuries_home:
                             st.markdown(f"### {matchup_home_team_abbr}")
@@ -1976,12 +2018,12 @@ with tab2:
                                 player_id = injury_item.get('player_id', '')
                                 headshot_url = f"https://cdn.nba.com/headshots/nba/latest/1040x760/{player_id}.png" if player_id else ""
                                 st.markdown(f"""
-                                    <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #eee;">
-                                        <img src="{headshot_url}" style="width: 75px; height: 55px; object-fit: cover; border-radius: 4px; background-color: #f0f0f0;" onerror="this.style.display='none'">
+                                    <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid {tc.card_border};">
+                                        <img src="{headshot_url}" style="width: 75px; height: 55px; object-fit: cover; border-radius: 4px; background-color: {tc.img_placeholder};" onerror="this.style.display='none'">
                                         <div style="flex: 1;">
                                             <span style="font-weight: bold;">{formatted_name}</span>
-                                            <span style="background-color: {status_color}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-left: 8px;">{status}</span>
-                                            <br><span style="font-size: 13px; color: #666;">{formatted_reason}</span>
+                                            <span style="background-color: {status_color}; color: {tc.injury_text}; padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-left: 8px;">{status}</span>
+                                            <br><span style="font-size: 13px; color: {tc.text_muted};">{formatted_reason}</span>
                                         </div>
                                     </div>
                                 """, unsafe_allow_html=True)
@@ -2714,13 +2756,13 @@ Estimated Cost: {preview['estimated_cost']}
                                 try:
                                     num = float(val) if not isinstance(val, (int, float)) else val
                                     if num >= 1.5:
-                                        return 'color: #2E7D32; font-weight: bold'
+                                        return f'color: {tc.green_text}; font-weight: bold'
                                     elif num >= 0.5:
-                                        return 'color: #4CAF50'
+                                        return f'color: {tc.green_text}'
                                     elif num <= -1.5:
-                                        return 'color: #B71C1C; font-weight: bold'
+                                        return f'color: {tc.red_text}; font-weight: bold'
                                     elif num <= -0.5:
-                                        return 'color: #F44336'
+                                        return f'color: {tc.red_text}'
                                     return ''
                                 except:
                                     return ''
@@ -2927,8 +2969,9 @@ with tab3:
     
     # Get YoY data for all seasons
     @st.cache_data
-    def get_cached_yoy_data(player_id, players_df):
-        """Cache YoY player data to avoid repeated API calls"""
+    def get_cached_yoy_data(player_id, players_df, _cache_version=1):
+        """Cache YoY player data to avoid repeated API calls.
+        _cache_version: bump to invalidate when pf.get_player_yoy_data output changes (e.g. GP column)."""
         return pf.get_player_yoy_data(player_id, players_df)
     
     yoy_data = get_cached_yoy_data(selected_player_id, players_df)
@@ -2970,15 +3013,13 @@ with tab3:
                         if current_val > current_season_val:
                             diff_pct = ((current_val - current_season_val) / current_season_val * 100) if current_season_val > 0 else 0
                             intensity = min(diff_pct / 20, 1.0)
-                            green_intensity = int(200 + (55 * intensity))
-                            styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
+                            styles[i] = f'background-color: {tc.heatmap_green(intensity)};'
                         elif current_val < current_season_val:
                             diff_pct = ((current_season_val - current_val) / current_season_val * 100) if current_season_val > 0 else 0
                             intensity = min(diff_pct / 20, 1.0)
-                            red_intensity = int(200 + (55 * intensity))
-                            styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
+                            styles[i] = f'background-color: {tc.heatmap_red(intensity)};'
                         else:
-                            styles[i] = 'background-color: rgb(240, 240, 240);'
+                            styles[i] = f'background-color: {tc.heatmap_neutral};'
                     except (ValueError, TypeError, KeyError):
                         pass
                 elif col in pct_cols:
@@ -2987,19 +3028,17 @@ with tab3:
                         current_season_str = str(current_season_avg[col]).replace('%', '')
                         current_val = float(current_str)
                         current_season_val = float(current_season_str)
-                        
+
                         if current_val > current_season_val:
                             diff_pct = ((current_val - current_season_val) / current_season_val * 100) if current_season_val > 0 else 0
                             intensity = min(diff_pct / 20, 1.0)
-                            green_intensity = int(200 + (55 * intensity))
-                            styles[i] = f'background-color: rgb(200, {green_intensity}, 200);'
+                            styles[i] = f'background-color: {tc.heatmap_green(intensity)};'
                         elif current_val < current_season_val:
                             diff_pct = ((current_season_val - current_val) / current_season_val * 100) if current_season_val > 0 else 0
                             intensity = min(diff_pct / 20, 1.0)
-                            red_intensity = int(200 + (55 * intensity))
-                            styles[i] = f'background-color: rgb({red_intensity}, 200, 200);'
+                            styles[i] = f'background-color: {tc.heatmap_red(intensity)};'
                         else:
-                            styles[i] = 'background-color: rgb(240, 240, 240);'
+                            styles[i] = f'background-color: {tc.heatmap_neutral};'
                     except (ValueError, TypeError, KeyError):
                         pass
             

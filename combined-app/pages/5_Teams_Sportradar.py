@@ -6,8 +6,8 @@ Keeps the same structure as the main Teams page but uses Sportradar data sources
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'streamlit'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'new-streamlit-app', 'player-app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'streamlit'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'player_app'))
 
 import streamlit as st
 import datetime
@@ -119,7 +119,7 @@ if sr_db_reader:
         
         if standings_df is not None and len(standings_df) > 0:
             st.success(f"Loaded {len(standings_df)} teams from Sportradar")
-            st.dataframe(standings_df.head(10), use_container_width=True)
+            st.dataframe(standings_df.head(10), width='stretch')
         else:
             st.warning("No standings data available from Sportradar")
     except Exception as e:
@@ -137,7 +137,7 @@ if sr_db_reader:
         
         if schedule_df is not None and len(schedule_df) > 0:
             st.success(f"Loaded {len(schedule_df)} games from Sportradar")
-            st.dataframe(schedule_df.head(10), use_container_width=True)
+            st.dataframe(schedule_df.head(10), width='stretch')
         else:
             st.warning("No schedule data available from Sportradar")
     except Exception as e:

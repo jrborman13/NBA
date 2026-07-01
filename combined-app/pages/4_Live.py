@@ -1,7 +1,7 @@
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'streamlit'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'new-streamlit-app', 'player-app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'streamlit'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'player_app'))
 
 import streamlit as st
 import pandas as pd
@@ -9,7 +9,8 @@ import json
 import time
 from datetime import date, datetime
 from nba_api.live.nba.endpoints import scoreboard, boxscore
-from nba_api.stats.endpoints import ScoreboardV2
+from nba_api.stats.endpoints import ScoreboardV3
+from theme_colors import tc
 
 st.set_page_config(layout="wide", page_title="Live Game Stats", page_icon="🏀")
 st.title("🏀 Live Game Stats")
@@ -25,30 +26,30 @@ with st.sidebar:
     st.markdown("---")  # Separator
 
 # Add custom CSS styling
-st.markdown("""
+st.markdown(f"""
 <style>
-    .team-header {
+    .team-header {{
         font-size: 24px;
         font-weight: bold;
         margin-bottom: 10px;
-    }
-    .score-display {
+    }}
+    .score-display {{
         text-align: center;
         font-size: 48px;
         font-weight: bold;
         margin: 20px 0;
-    }
-    .quarter-scores {
+    }}
+    .quarter-scores {{
         font-size: 14px;
         color: #666;
         margin: 10px 0;
-    }
-    .player-table {
+    }}
+    .player-table {{
         margin-top: 20px;
-    }
-    .starter-row {
-        background-color: #e8f4f8;
-    }
+    }}
+    .starter-row {{
+        background-color: {tc.section_bg};
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -86,41 +87,15 @@ def get_live_games_for_date(selected_date, cache_refresh=0):
                 games_dict = games_board.get_dict()
                 games_list = games_dict.get('scoreboard', {}).get('games', [])
             except:
-                # Fallback to ScoreboardV2 if live endpoint fails
-                games_board = ScoreboardV2(league_id='00', game_date=date_str, day_offset=0)
+                # Fallback to ScoreboardV3 if live endpoint fails
+                games_board = ScoreboardV3(league_id='00', game_date=date_str)
                 games_data = games_board.get_dict()
-                games_list = []
-                if 'resultSets' in games_data:
-                    for rs in games_data['resultSets']:
-                        if rs['name'] == 'GameHeader':
-                            headers = rs['headers']
-                            for row in rs['rowSet']:
-                                game_dict = dict(zip(headers, row))
-                                games_list.append({
-                                    'gameId': game_dict.get('GAME_ID', ''),
-                                    'awayTeam': {'teamId': game_dict.get('VISITOR_TEAM_ID', '')},
-                                    'homeTeam': {'teamId': game_dict.get('HOME_TEAM_ID', '')},
-                                    'gameStatusText': game_dict.get('GAME_STATUS_TEXT', ''),
-                                    'gameStatusId': game_dict.get('GAME_STATUS_ID', '')
-                                })
+                games_list = games_data.get('scoreboard', {}).get('games', [])
         else:
-            # Use ScoreboardV2 for historical dates
-            games_board = ScoreboardV2(league_id='00', game_date=date_str, day_offset=0)
+            # Use ScoreboardV3 for historical dates
+            games_board = ScoreboardV3(league_id='00', game_date=date_str)
             games_data = games_board.get_dict()
-            games_list = []
-            if 'resultSets' in games_data:
-                for rs in games_data['resultSets']:
-                    if rs['name'] == 'GameHeader':
-                        headers = rs['headers']
-                        for row in rs['rowSet']:
-                            game_dict = dict(zip(headers, row))
-                            games_list.append({
-                                'gameId': game_dict.get('GAME_ID', ''),
-                                'awayTeam': {'teamId': game_dict.get('VISITOR_TEAM_ID', '')},
-                                'homeTeam': {'teamId': game_dict.get('HOME_TEAM_ID', '')},
-                                'gameStatusText': game_dict.get('GAME_STATUS_TEXT', ''),
-                                'gameStatusId': game_dict.get('GAME_STATUS_ID', '')
-                            })
+            games_list = games_data.get('scoreboard', {}).get('games', [])
         
         # Get team names from schedule
         try:
@@ -1024,7 +999,7 @@ if selected_game_id:
                 # Style the dataframe
                 def highlight_starters(row):
                     if row.get('Starter', False) if 'Starter' in away_df.columns else False:
-                        return ['background-color: #e8f4f8'] * len(row)
+                        return [f'background-color: {tc.section_bg}'] * len(row)
                     return [''] * len(row)
                 
                 # Remove helper columns from display
@@ -1044,7 +1019,7 @@ if selected_game_id:
                         # row is a Series, use its index to look up Starter in original df
                         row_idx = row.name
                         if row_idx in away_df.index and away_df.loc[row_idx, 'Starter']:
-                            return ['background-color: #e8f4f8'] * len(away_display.columns)
+                            return [f'background-color: {tc.section_bg}'] * len(away_display.columns)
                         return [''] * len(away_display.columns)
                     
                     styled_away = away_display.style.apply(highlight_starters, axis=1)
@@ -1229,7 +1204,7 @@ if selected_game_id:
                         # row is a Series, use its index to look up Starter in original df
                         row_idx = row.name
                         if row_idx in home_df.index and home_df.loc[row_idx, 'Starter']:
-                            return ['background-color: #e8f4f8'] * len(home_display.columns)
+                            return [f'background-color: {tc.section_bg}'] * len(home_display.columns)
                         return [''] * len(home_display.columns)
                     
                     styled_home = home_display.style.apply(highlight_starters, axis=1)

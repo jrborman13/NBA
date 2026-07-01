@@ -14,6 +14,7 @@ import time
 import nba_api.stats.endpoints
 import prediction_features as pf
 import team_onoff as toff
+import team_hexagon_viz as thv
 
 import altair as alt
 import pandas as pd
@@ -2249,8 +2250,17 @@ if selected_matchup:
     
     st.markdown("---")
     
-    # Tab selector (Core Stats, Shooting, Rosters, Injury Report)
-    tab1, tab2, tab3, tab4 = st.tabs(["Core Stats", "Shooting", "Rosters", "Injury Report"])
+    # Tab selector (Core Stats, Shooting, Rosters, Injury Report, Hexagon)
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        ["Core Stats", "Shooting", "Rosters", "Injury Report", "⬡ Hexagon"])
+
+    with tab5:
+        # Team hexagon overlay for the two selected matchup teams (offense solid / defense dashed,
+        # outward = good). Shared renderer (player_app/team_hexagon_viz.py) — identical to the
+        # standalone Team Hexagon page. Reuses the matchup's away/home ids; fails clean (st.info).
+        st.caption(f"⬡ **{away_team_name}** (blue) vs **{home_team_name}** (red) — "
+                   f"offense solid, defense dashed, outward = good.")
+        thv.render_team_hexagon(functions.current_season, [away_team_id, home_team_id])
 
     stat_font_size = 20
     rank_font_size = 16

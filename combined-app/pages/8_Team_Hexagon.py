@@ -29,31 +29,18 @@ except ImportError:
     st.stop()
 
 from supabase_config import get_supabase_client, get_supabase_service_client
+import team_hexagon_viz as thv  # shared fetch + scoring + overlay render (single source of truth)
 
 st.set_page_config(layout="wide")
 st.title("⬡ Team Hexagon")
 
-SEASON_TYPE = "Regular Season"
-WOLVES_ID = 1610612750  # home team — sorts first, marked 🐺
-
-AXES = ["rim", "perimeter", "transition", "second_chance", "bonus", "rebounding"]
-AXIS_LABELS = ["Rim", "Perimeter", "Transition", "Second Chance", "Bonus", "Rebounding"]
-
-# axis -> [(sub_metric, display label)] — sub_metric names match v_team_axis_pctile & team_axis_weights
-AXIS_SUBMETRICS = {
-    "rim":           [("pct", "Rim FG% (allowed)"), ("freq", "Rim rate")],
-    "perimeter":     [("pct", "3P% (allowed)"), ("freq", "3PA rate")],
-    "transition":    [("ppp", "Transition PPP"), ("rate", "Transition rate")],
-    "second_chance": [("ppp", "2nd-chance PPP"), ("rate", "2nd-chance rate")],
-    "bonus":         [("rate", "Bonus rate"), ("rtg", "Bonus rating")],
-    "rebounding":    [("reb_pct", "OREB% / DREB%")],
-}
+# Shared constants + scoring/render from team_hexagon_viz (this page adds the selectors + weights UI)
+SEASON_TYPE, WOLVES_ID = thv.SEASON_TYPE, thv.WOLVES_ID
+AXES, AXIS_LABELS, AXIS_SUBMETRICS = thv.AXES, thv.AXIS_LABELS, thv.AXIS_SUBMETRICS
 
 
 # ---------------------------------------------------------------- data access
-@st.cache_resource
-def _client():
-    return get_supabase_client()
+_client = thv.client  # shared cached client
 
 
 @st.cache_resource
@@ -79,107 +66,16 @@ def get_seasons():
     return sorted(seasons, reverse=True)
 
 
-@st.cache_data(ttl=1800)
-def get_pctiles(season):
-    """long: one row per team × side × axis × sub_metric, with pctile (0-100)."""
-    out, start = [], 0
-    while True:
-        r = (_client().table("v_team_axis_pctile").select("*")
-             .eq("season", season).eq("season_type", SEASON_TYPE).range(start, start + 999).execute())
-        if not r.data:
-            break
-        out.extend(r.data)
-        if len(r.data) < 1000:
-            break
-        start += 1000
-    return pd.DataFrame(out)
-
-
-@st.cache_data(ttl=1800)
-def get_raw(season):
-    """wide: one row per team with o_*/d_* raw sub-metrics (for hover)."""
-    r = (_client().table("v_team_axis_metrics").select("*")
-         .eq("season", season).eq("season_type", SEASON_TYPE).execute())
-    df = pd.DataFrame(r.data)
-    return df.set_index("team_id") if not df.empty else df
-
-
-@st.cache_data(ttl=3600)
-def get_default_weights():
-    r = _client().table("team_axis_weights").select("axis, sub_metric, weight").execute()
-    return {(row["axis"], row["sub_metric"]): float(row["weight"]) for row in (r.data or [])}
-
-
-# ---------------------------------------------------------------- scoring
-def compute_scores(pdf, team_id, side, weights):
-    """axis score = weighted mean of its sub-metric percentiles for one team+side."""
-    sub = pdf[(pdf["team_id"] == team_id) & (pdf["side"] == side)]
-    look = {(row["axis"], row["sub_metric"]): row["pctile"] for _, row in sub.iterrows()}
-    out = {}
-    for axis, subs in AXIS_SUBMETRICS.items():
-        num = den = 0.0
-        for sm, _ in subs:
-            p = look.get((axis, sm))
-            w = weights.get((axis, sm), 0.0)
-            if w and p is not None and not pd.isna(p):
-                num += w * float(p)
-                den += w
-        out[axis] = int(round(num / den)) if den > 0 else 0
-    return out
-
-
-def _f(v, fmt, scale=1.0):
-    if v is None or (isinstance(v, float) and pd.isna(v)):
-        return "—"
-    try:
-        return fmt.format(float(v) * scale)
-    except Exception:
-        return str(v)
-
-
-def raw_hover(raw_row, side):
-    """per-axis raw-value strings for the given side (o_* or d_* columns)."""
-    if raw_row is None:
-        return ["" for _ in AXES]
-    g = raw_row.get
-    if side == "off":
-        return [
-            f"Rim rate {_f(g('o_rim_freq'), '{:.1f}%')} · Rim FG% {_f(g('o_rim_pct'), '{:.1f}%')}",
-            f"3PA rate {_f(g('o_3_freq'), '{:.1f}%')} · 3P% {_f(g('o_3pct'), '{:.1f}%')}",
-            f"Transition PPP {_f(g('o_trans_ppp'), '{:.2f}')} · rate {_f(g('o_trans_rate'), '{:.1%}')}",
-            f"2nd-chance PPP {_f(g('o_2nd_ppp'), '{:.2f}')} · rate {_f(g('o_2nd_rate'), '{:.1%}')}",
-            f"Bonus rate {_f(g('o_bonus_rate'), '{:.1%}')} · bonus ORtg {_f(g('o_bonus_ortg'), '{:.1f}')}",
-            f"OREB% {_f(g('o_oreb_pct'), '{:.1%}')}",
-        ]
-    return [
-        f"Opp rim rate {_f(g('d_rim_freq'), '{:.1f}%')} · opp rim FG% {_f(g('d_rim_pct'), '{:.1f}%')}",
-        f"Opp 3PA rate {_f(g('d_3_freq'), '{:.1f}%')} · opp 3P% {_f(g('d_3pct'), '{:.1f}%')}",
-        f"Transition PPP allowed {_f(g('d_trans_ppp'), '{:.2f}')} · rate {_f(g('d_trans_rate'), '{:.1%}')}",
-        f"2nd-chance PPP allowed {_f(g('d_2nd_ppp'), '{:.2f}')} · rate {_f(g('d_2nd_rate'), '{:.1%}')}",
-        f"Bonus rate allowed {_f(g('d_bonus_rate'), '{:.1%}')} · bonus DRtg {_f(g('d_bonus_drtg'), '{:.1f}')}",
-        f"DREB% {_f(g('d_dreb_pct'), '{:.1%}')}",
-    ]
-
-
-def _hex_to_rgba(hex_color, alpha):
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return f"rgba({r},{g},{b},{alpha})"
-
-
-def add_trace(fig, scores, raw_row, label, color, side):
-    vals = [scores[a] for a in AXES]
-    is_off = side == "off"
-    fig.add_trace(go.Scatterpolar(
-        r=vals + [vals[0]],
-        theta=AXIS_LABELS + [AXIS_LABELS[0]],
-        customdata=raw_hover(raw_row, side) + [raw_hover(raw_row, side)[0]],
-        name=label,
-        fill="toself" if is_off else "none",
-        fillcolor=_hex_to_rgba(color, 0.12) if is_off else None,
-        line=dict(color=color, width=2, dash="solid" if is_off else "dash"),
-        hovertemplate="<b>%{theta}</b>: %{r}<br>%{customdata}<extra>" + label + "</extra>",
-    ))
+# Fetch + scoring + render come from team_hexagon_viz (shared; keeps this page and the Teams-page
+# matchup hexagon tab identical). Aliased so the UI code below is unchanged.
+get_pctiles = thv.fetch_pctiles          # (season)
+get_raw = thv.fetch_raw                  # (season)
+get_default_weights = thv.fetch_default_weights
+compute_scores = thv.compute_scores
+_f = thv._f
+raw_hover = thv.raw_hover
+_hex_to_rgba = thv._hex_to_rgba
+add_trace = thv.add_trace
 
 
 # ---------------------------------------------------------------- controls

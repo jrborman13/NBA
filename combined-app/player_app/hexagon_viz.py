@@ -157,12 +157,13 @@ def render_hexagon_tab(season, player_id, player_name=None, pool="all", key_pref
     raw = raw_df.loc[pid].to_dict() if (not raw_df.empty and pid in raw_df.index) else None
 
     fig = go.Figure()
-    add_trace(fig, scores, raw, name, "#1f77b4")
+    add_trace(fig, scores, raw, name, "#FF4B4B")  # theme primaryColor
     fig.update_layout(
         polar=dict(radialaxis=dict(visible=True, range=[0, 100], tickvals=[20, 40, 60, 80, 100])),
-        showlegend=False, height=520, margin=dict(l=60, r=60, t=30, b=30),
+        showlegend=False, height=520, margin=dict(l=70, r=70, t=50, b=50),
     )
 
+    st.markdown(f"### 🕸️ {name} — Player Hexagon · {season}")
     left, right = st.columns([3, 2])
     with left:
         st.plotly_chart(fig, use_container_width=True)

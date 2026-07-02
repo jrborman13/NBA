@@ -53,6 +53,15 @@ Finishing and shooting now have DISTINCT rim-vs-jumper outcomes built from shot_
 split by zone (staging tables hex_shot_own_stage / hex_oreb_stage; see REBUILD_SQL). The old shared
 team-on-court scoring_value outcome is retired.
 
+KNOWN LIMITATION (rebounding)
+-----------------------------
+reb_two_way's offensive half (team OREB rate on/off) is a near-duplicate of the rebounding
+sub-metric sc_rate_on_minus_off (team second-chance rate on/off) — a second chance IS an offensive
+rebound's consequence. So the referee cannot honestly judge that one sub-metric's weight; it is
+listed in AXIS_LEAKAGE_EXCLUDE and stripped from every weighting before grading. Rebounding's
+offensive dimension is therefore only partially referee-validated. A future clean fix would derive
+an offensive-rebounding outcome that is independent of second-chance rate.
+
 Run directly:  ``python analysis/hexagon_weight_backtest.py``
 """
 from __future__ import annotations
@@ -98,6 +107,14 @@ AXIS_OUTCOME = {
     "finishing": ("fin_rim_value", True),      # player OWN rim scoring value -> temporal
     "shooting": ("shoot_jump_value", True),    # player OWN jumper scoring value -> temporal
 }
+
+# Sub-metrics that must NOT be used to grade an axis because they are near-duplicates of that axis's
+# frozen outcome (grading them would leak). rebounding: sc_rate_on_minus_off (team second-chance rate
+# on/off) is essentially the same quantity as reb_two_way's offensive-OREB half — a second chance IS
+# the direct consequence of an offensive rebound. It stays a legit PRODUCTION sub-metric in
+# hexagon_weights, but the referee cannot validate its weight, so it is stripped from every weighting
+# before grading (current_weights, equal_weight, best_single, and any candidate the loop passes).
+AXIS_LEAKAGE_EXCLUDE = {"rebounding": frozenset({"sc_rate_on_minus_off"})}
 
 # The frozen outcomes are pre-aggregated per (player_id, season) into the hex_weight_outcomes
 # snapshot TABLE (plus two staging tables). Reason: the live on/off + shot_event views are too slow
@@ -246,7 +263,9 @@ def _f(x):
 # Load grades (percentiles) and the six frozen outcomes
 # ---------------------------------------------------------------------------
 def load_axis_submetrics(client):
-    """axis -> ordered list of its sub-metrics, live from hexagon_weights (fallback if empty)."""
+    """axis -> ordered list of its sub-metrics, live from hexagon_weights (fallback if empty).
+    The leakage guard is applied at grade time in grade_weights/best_single via AXIS_LEAKAGE_EXCLUDE,
+    so the universe here stays complete."""
     rows = _page(client, "hexagon_weights", "axis,sub_metric,weight")
     if not rows:
         return {k: list(v) for k, v in AXIS_SUBMETRICS_FALLBACK.items()}
@@ -376,6 +395,10 @@ def grade_weights(axis, weights, data=None, seasons=DEFAULT_TEST, label=None):
     outcome_key, temporal = AXIS_OUTCOME[axis]
     outcome = data["outcomes"][outcome_key]
     grades = data["grades"]
+    # Strip any leakage-excluded sub-metrics from the weighting before grading (no-leakage rule).
+    excl = AXIS_LEAKAGE_EXCLUDE.get(axis, frozenset())
+    if excl:
+        weights = {k: v for k, v in weights.items() if k not in excl}
 
     xs, ys, ctrl = [], [], []
     for (pid, season), row in grades.items():
@@ -405,7 +428,10 @@ def _equal_weights(submetrics):
 def best_single(axis, data, seasons=DEFAULT_TEST):
     """Ceiling-ish baseline: the single sub-metric that alone correlates best with the outcome."""
     best = None
+    excl = AXIS_LEAKAGE_EXCLUDE.get(axis, frozenset())
     for sm in data["axis_submetrics"].get(axis, AXIS_SUBMETRICS_FALLBACK[axis]):
+        if sm in excl:
+            continue
         r = grade_weights(axis, {sm: 1.0}, data=data, seasons=seasons, label=f"single:{sm}")
         if best is None or (np.isfinite(r["spearman"]) and r["spearman"] > best["spearman"]):
             best = r
@@ -431,7 +457,9 @@ def axis_report(axis, data=None, train=DEFAULT_TRAIN, test=DEFAULT_TEST, verbose
     if verbose:
         _, temporal = AXIS_OUTCOME[axis]
         tag = " [TEMPORAL N->N+1]" if temporal else ""
-        note = "  (shooting is noisy year-to-year — modest ceiling)" if axis == "shooting" else ""
+        note = ("  (shooting is noisy year-to-year — modest ceiling)" if axis == "shooting"
+                else "  (sc_rate_on_minus_off excluded — leaks into reb_two_way)" if axis == "rebounding"
+                else "")
         print(f"\n--- {axis.upper()}  outcome={rows['current_weights']['outcome']}{tag}{note}")
         print(f"    sub-metrics: {', '.join(subs)}")
         print(f"    {'baseline':<26}{'spearman':>10}{'partial':>10}{'partial_p':>11}{'n':>7}")

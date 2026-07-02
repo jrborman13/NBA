@@ -23,14 +23,16 @@ CREATE TABLE IF NOT EXISTS public.hexagon_weights (
   PRIMARY KEY (axis, sub_metric)
 );
 INSERT INTO public.hexagon_weights (axis, sub_metric, weight) VALUES
-  ('finishing','rim_rate',1), ('finishing','rim_fg_pct_over_league',2), ('finishing','team_rim_freq_lift',1),
+  -- finishing re-tuned 2026-07-01 via the weight backtest: team_rim_freq_lift dropped to 0 (noisy on/off).
+  ('finishing','rim_rate',1), ('finishing','rim_fg_pct_over_league',2), ('finishing','team_rim_freq_lift',0),
   -- Shooting split made REAL 2026-06-30 (Part C): real catch-&-shoot / pull-up eFG are primary;
   -- the noisy shotmaking_over_exp is floored (jump_fga>=150) and reduced 2->1; spotup_ppp is
   -- floored (>=50 spot-up poss, inside v_player_shooting); the redundant unfloored atb3_pct was
   -- DROPPED (cs_efg covers catch-&-shoot 3 quality with a volume floor). Mirrors the Defending recipe.
   ('shooting','cs_efg',2), ('shooting','pu_efg',1.5),
   ('shooting','shotmaking_over_exp',1), ('shooting','spotup_ppp',1),
-  ('playmaking','ast_pct',2), ('playmaking','ast_pts_created',1.5), ('playmaking','drive_ast',1),
+  -- playmaking re-tuned 2026-07-01 via the weight backtest: lead on ast_pts_created; ast_pct + drive_ast dropped to 0.
+  ('playmaking','ast_pct',0), ('playmaking','ast_pts_created',1), ('playmaking','drive_ast',0),
   -- Defending axis made REAL 2026-06-30 (Part C): direct tracking metrics replace the BLK/STL/on-off
   -- proxy. blk/stl kept at reduced weight; drtg_swing dropped. (def_* sub-metrics added to
   -- player_axis_metrics + v_player_axis_pctile + v_player_hexagon below.)

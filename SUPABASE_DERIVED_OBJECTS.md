@@ -111,9 +111,9 @@ v_player_defending, v_player_rebounding, v_player_gravity`. DDL: `sql/hexagon_an
 
 | Axis | Core sub-metrics (weight) |
 |---|---|
-| Finishing | rim FG% over league (2×), rim rate, team rim-freq on/off |
+| Finishing | rim FG% over league (2×), rim rate (1×) — **team rim-freq on/off dropped 2026-07-01 (backtest)** |
 | Shooting | catch-&-shoot eFG (2×), pull-up eFG (1.5×), shotmaking-over-expected (1×, floored), spot-up PPP (1×, floored) — **split REAL as of 2026-06-30 (Part C)**; ATB3% dropped |
-| Playmaking | AST% (2×), assist points created (1.5×), drive assists |
+| Playmaking | assist points created (1×) — **AST% + drive assists dropped 2026-07-01 (backtest); ast_pts_created is the impact signal** |
 | Defending | rim-stop = normal−actual rim FG% allowed (2×), −PCT_PLUSMINUS overall FG suppression (1.5×), deflections/36 (1.5×), contested-2PT/36 (1×), BLK/100 (1×), STL/100 (1×) — **REAL as of 2026-06-30 (Part C)** |
 | Rebounding | OREB% (1.5×), DREB% (1.5×), second-chance rate on/off, contested-reb/36 (1×), reb-chance conversion (1×) — **contested% added 2026-06-30 (Part C)** |
 | Gravity | shot-diet gravity = expected-eFG on/off (2×), ORtg lift, rim-freq lift |
@@ -158,6 +158,26 @@ re-backfill); the Streamlit page also edits weights live in-session. Output: one
 - `pool='position'` — ranked vs same position group.
 - `pos_group` (G/F/C) is a **role proxy** derived from rebounding/assist profile (the NBA `position`
   column is sparse/missing: `dreb_pct≥0.18→C, ast_pct≥0.15→G, else F`).
+
+**Weight backtest referee (`analysis/hexagon_weight_backtest.py`).** The weights are no longer only
+face-valid — a train/test referee grades any `{sub_metric: weight}` for an axis against a FROZEN,
+independent, on-court **impact** outcome (no leakage; grade in season N, gravity/finishing/shooting
+judged temporally vs N+1). Outcomes are pre-aggregated into snapshot tables (built by the module's
+`REBUILD_SQL`, 2021-22+): **`hex_weight_outcomes`** (per player-season: `def_drtg_swing`,
+`reb_two_way`, `play_setup_lift`, `grav_shotqual_lift`, `fin_rim_value`, `shoot_jump_value`) fed by
+**`hex_shot_own_stage`** (player OWN shots split rim vs jumper from `shot_event.shooter_id`) and
+**`hex_oreb_stage`** (offensive-rebound on-court counts from `possession_lineup`). Tune on TRAIN
+(2021-22..2023-24), judge once on TEST (2024-25..2025-26); ship only if the TEST partial Spearman
+beats both current and equal weights AND the leaderboard stays face-valid.
+> **Re-tune 2026-07-01 (shipped 2 of 6 axes):** **finishing** dropped `team_rim_freq_lift` (TEST
+> partial 0.446→0.500; rim-running bigs on top) and **playmaking** now leads on `ast_pts_created`,
+> dropping `ast_pct`+`drive_ast` (0.151→0.196; elite creators — Jokić/CP3 rise). **Kept unchanged
+> (nothing cleared the bar face-validly):** *defending* (best alt +0.008 but drops Wembanyama —
+> loses rim protection), *gravity* (only pure `shot_diet_gravity_efg`, which is the temporal near-dup
+> of its own outcome, and yields a role-player leaderboard), *shooting* (low year-to-year ceiling;
+> gain over equal is noise), *rebounding* (the best "improvement" is `sc_rate_on_minus_off`, a
+> **near-duplicate of the outcome's offensive OREB half = leakage**; excluding it, no weighting beats
+> the baselines — the referee's rebounding grade is compromised, current weights kept + flagged).
 
 Output columns: `pool, season, season_type, player_id, pos_group, off_poss_on, finishing, shooting,
 playmaking, defending, rebounding, gravity`.

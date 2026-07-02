@@ -78,16 +78,19 @@ with left:
     df.columns = ["Team", "Fit (blend)", "Need-fill", "Style-match"]
     st.dataframe(
         df, hide_index=True, width="stretch", height=460,
-        column_config={col: st.column_config.NumberColumn(format="%.2f")
+        column_config={col: st.column_config.NumberColumn(format="%.2f", help=tf.SCORE_DEFS[col])
                        for col in ["Fit (blend)", "Need-fill", "Style-match"]},
     )
+    st.caption("**Fit (blend):** " + tf.SCORE_DEFS["Fit (blend)"] + "  \n"
+               "**Need-fill:** " + tf.SCORE_DEFS["Need-fill"] + "  \n"
+               "**Style-match:** " + tf.SCORE_DEFS["Style-match"])
 
 with right:
     top = ranked[0]
     st.subheader(f"Why {sf.player_name.get(pid, pid)} → {top['team']}")
-    st.caption("Top dimensions the player supplies that the team ranks low in (player pctile vs team pctile):")
+    st.caption(tf.WHY_CAPTION)
     for label, p_pct, t_pct in sf.explain(pid, top["team_id"]):
-        st.markdown(f"- **{label}** — you **{p_pct}th** pctile · team **{t_pct}th** pctile")
+        st.markdown(f"- **{label}** — you do it a lot (**{p_pct}th** pctile) · team rarely (**{t_pct}th**)")
 
 st.divider()
 st.subheader("Style embedding — players + teams in one 2D space")

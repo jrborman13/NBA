@@ -22,6 +22,18 @@ HONEST_NOTE = ("Validated to beat the naive baselines (good-player×good-team an
                "on a 412-move backtest; **directional, not yet statistically decisive** (p≈0.12). "
                "Use as a stylistic prior, not a verdict.")
 
+# Plain-English definitions of the three scores (shared so both surfaces read identically).
+SCORE_DEFS = {
+    "Fit (blend)": "Overall match — mostly “fills the team's gaps” with a little “plays like them,” "
+                   "scored relative to this player's other 29 team options.",
+    "Need-fill": "Your strengths line up with what this team lacks — you're strong where they're weak.",
+    "Style-match": "You already play the way this team plays (similarity; weighted low on purpose).",
+}
+# One-liner for the "why it fits" bullets — clarifies the bullets are style/frequency, not skill.
+WHY_CAPTION = ("How often you do each thing vs how often the team does (both are **league frequency "
+               "percentiles** for that style, not skill grades). You do these a lot; the team doesn't — "
+               "so you'd add that to their style.")
+
 DIMS = [
     "off_Cut", "off_Handoff", "off_Isolation", "off_Misc", "off_OffRebound", "off_OffScreen",
     "off_Postup", "off_PRBallHandler", "off_PRRollman", "off_Spotup", "off_Transition",
@@ -30,20 +42,27 @@ DIMS = [
     "z_ra", "z_paint", "z_mid", "z_corner3", "z_atb3",
     "off_trans_rate", "off_sc_rate", "off_bonus_rate", "def_trans_rate", "def_sc_rate",
 ]
+# Base nouns (no offense/defense marker — explain() appends the side). Used only by explain().
 DIM_LABELS = {
-    "off_Cut": "cutting", "off_Handoff": "handoffs", "off_Isolation": "isolation",
-    "off_Misc": "misc offense", "off_OffRebound": "putbacks", "off_OffScreen": "off-screen",
-    "off_Postup": "post-ups", "off_PRBallHandler": "PnR ball-handler", "off_PRRollman": "PnR roll",
-    "off_Spotup": "spot-up", "off_Transition": "transition O",
-    "def_Handoff": "D: handoffs", "def_Isolation": "D: isolation", "def_OffScreen": "D: off-screen",
-    "def_Postup": "D: post-ups", "def_PRBallHandler": "D: PnR ball-handler",
-    "def_PRRollman": "D: PnR roll", "def_Spotup": "D: spot-up",
-    "z_ra": "shots at rim", "z_paint": "paint shots", "z_mid": "mid-range",
-    "z_corner3": "corner 3s", "z_atb3": "above-break 3s",
-    "off_trans_rate": "plays in transition", "off_sc_rate": "second-chance O",
-    "off_bonus_rate": "bonus/FT pressure", "def_trans_rate": "transition D", "def_sc_rate": "second-chance D",
+    "off_Cut": "cuts", "off_Handoff": "handoffs", "off_Isolation": "isolation",
+    "off_Misc": "misc offense", "off_OffRebound": "putbacks", "off_OffScreen": "off-screen actions",
+    "off_Postup": "post-ups", "off_PRBallHandler": "pick-&-roll ball-handling", "off_PRRollman": "rolling to the rim",
+    "off_Spotup": "spot-ups", "off_Transition": "transition",
+    "def_Handoff": "handoffs", "def_Isolation": "isolation", "def_OffScreen": "off-screen actions",
+    "def_Postup": "post-ups", "def_PRBallHandler": "pick-&-roll ball-handling",
+    "def_PRRollman": "the roll man", "def_Spotup": "spot-ups",
+    "z_ra": "shots at the rim", "z_paint": "paint shots", "z_mid": "mid-range shots",
+    "z_corner3": "corner 3s", "z_atb3": "above-the-break 3s",
+    "off_trans_rate": "playing in transition", "off_sc_rate": "second-chance offense",
+    "off_bonus_rate": "drawing fouls / bonus", "def_trans_rate": "transition", "def_sc_rate": "second-chance",
 }
 MIN_MPG = 15.0
+
+# explain() gates (a dim is a "reason" only if the player GENUINELY does it a lot AND the team lacks it):
+INVOLVEMENT_FLOOR = 0.07  # min raw style-share — a dim must be >=7% of the player's possessions/shots in
+                          # that phase to count (drops near-zero/noise dims, e.g. a guard's post-up defense
+                          # that ranks high vs the league only because everyone else does ~0).
+HIGH_PCTILE = 60          # and the player must be clearly above the league (does it a lot, not just at all).
 
 
 class SeasonFit:
@@ -143,13 +162,34 @@ class SeasonFit:
             r["blend"] = float(w * znf[i] + (1 - w) * zsm[i])
         return sorted(rows, key=lambda r: r["blend"], reverse=True)
 
-    def explain(self, player_id, team_id, top=4):
-        """Top dims the player supplies that the team lacks: (label, player_pctile, team_pctile)."""
+    def explain(self, player_id, team_id, top=8):
+        """Reasons this player stylistically fits the team, as (label, player_pctile, team_pctile).
+
+        A dim qualifies as a reason only when the player GENUINELY does it a lot — raw style-share
+        >= INVOLVEMENT_FLOOR AND league pctile >= HIGH_PCTILE — AND the team does little of it.
+        Ranked by the GEOMETRIC MEAN of player-strength and team-deficit, so one extreme team
+        deficit can't float a dim the player barely participates in (the old raw-product bug, e.g.
+        NAW's post-up defense). Percentiles are frequency/style ranks vs the league, not skill grades.
+        """
         if player_id not in self.p_pct or team_id not in self.t_pct:
             return []
-        pp, tp = self.p_pct[player_id], self.t_pct[team_id]
-        scored = sorted(((pp[d] * (100 - tp[d]), d) for d in DIMS), reverse=True)
-        return [(DIM_LABELS.get(d, d), round(pp[d]), round(tp[d])) for _, d in scored[:top]]
+        pp, tp, raw = self.p_pct[player_id], self.t_pct[team_id], self.players[player_id]
+        missing = [d for d in DIMS if d not in pp or d not in tp]
+        if missing:  # fail loud — percentile pools should cover every fingerprint dim
+            raise RuntimeError(f"team_fit.explain: fingerprint dims missing from percentiles {missing[:5]}")
+        cands = []
+        for i, d in enumerate(DIMS):
+            involvement, p, t = raw[i], pp[d], tp[d]
+            deficit = 100 - t
+            if involvement < INVOLVEMENT_FLOOR or p < HIGH_PCTILE or deficit <= 0:
+                continue  # not a genuine, high-usage part of the player's game the team lacks
+            cands.append(((p * deficit) ** 0.5, d, round(p), round(t)))  # geometric mean = balanced
+        cands.sort(reverse=True)
+        out = []
+        for _, d, p, t in cands[:top]:
+            side = "defense" if d.startswith("def_") else "offense"
+            out.append((f"{DIM_LABELS.get(d, d)} · {side}", p, t))
+        return out
 
     def embedding(self):
         """2D PCA coords for players (P) + teams (T). Returns dict {(etype,id): (x,y)}."""

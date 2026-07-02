@@ -620,15 +620,17 @@ with tab5:
                 _fit_df.columns = ["Team", "Fit (blend)", "Need-fill", "Style-match"]
                 st.dataframe(
                     _fit_df, hide_index=True, width='stretch', height=460,
-                    column_config={c: st.column_config.NumberColumn(format="%.2f")
+                    column_config={c: st.column_config.NumberColumn(format="%.2f", help=tf.SCORE_DEFS[c])
                                    for c in ["Fit (blend)", "Need-fill", "Style-match"]},
                 )
+                st.caption("**Fit (blend):** " + tf.SCORE_DEFS["Fit (blend)"] + "  \n"
+                           "**Need-fill:** " + tf.SCORE_DEFS["Need-fill"] + "  \n"
+                           "**Style-match:** " + tf.SCORE_DEFS["Style-match"])
             with _why_col:
                 st.subheader(f"Why → {_top['team']}")
-                st.caption("Top dimensions the player supplies that the team ranks low in "
-                           "(player pctile vs team pctile):")
+                st.caption(tf.WHY_CAPTION)
                 for _label, _pp, _tp in _sf.explain(_pid, _top["team_id"]):
-                    st.markdown(f"- **{_label}** — you **{_pp}th** pctile · team **{_tp}th** pctile")
+                    st.markdown(f"- **{_label}** — you do it a lot (**{_pp}th** pctile) · team rarely (**{_tp}th**)")
 
             # Embedding kept collapsed for game-time speed (PCA is cheap but the plot is optional).
             with st.expander("🗺️ Style embedding — players + teams in one 2D space", expanded=False):

@@ -116,7 +116,40 @@ v_player_defending, v_player_rebounding, v_player_gravity`. DDL: `sql/hexagon_an
 | Playmaking | assist points created (1×) — **AST% + drive assists dropped 2026-07-01 (backtest); ast_pts_created is the impact signal** |
 | Defending | rim-stop = normal−actual rim FG% allowed (2×), −PCT_PLUSMINUS overall FG suppression (1.5×), deflections/36 (1.5×), contested-2PT/36 (1×), BLK/100 (1×), STL/100 (1×) — **REAL as of 2026-06-30 (Part C)** |
 | Rebounding | OREB% (1.5×), DREB% (1.5×), second-chance rate on/off, contested-reb/36 (1×), reb-chance conversion (1×) — **contested% added 2026-06-30 (Part C)** |
-| Gravity | shot-diet gravity = expected-eFG on/off (2×), ORtg lift, rim-freq lift |
+| Gravity | **2025-26+: NBA tracking gravity (2×), ORtg lift (1×)** — pre-2025-26 keeps shot-diet gravity = expected-eFG on/off (2×), ORtg lift, rim-freq lift. **REAL as of 2026-08-09** |
+
+**Gravity axis is now REAL** (2026-08-09), and it is the first axis with **season-scoped weights**.
+
+*Why:* against NBA's own tracking measure (`stats.nba.com/stats/gravityleaders`, defensive attention
+from per-frame defender positioning), the old axis correlated **+0.009** — no relationship at all.
+The league's #1/#2 gravity players graded 44 and 27, because `shot_diet_gravity_efg` (2×) and
+`rim_freq_lift` (1×) are shot-*location* proxies that read perimeter gravity as absence.
+
+*Chain:* `fetch_gravity_tracking.py` → **`player_gravity_tracking`** → `refresh_player_axis_metrics`
+populates `tracking_gravity` + 4 splits (`grav_onball_perim`, `grav_offball_perim`, `grav_onball_int`,
+`grav_offball_int`, all weight 0 = breakdown) → **`v_player_gravity_pctile`** → `v_player_axis_pctile`
+(now a thin wrapper over `v_player_axis_pctile_core` + the gravity percentiles, so all sub-metric
+percentiles stay under one name) → `v_player_hexagon`.
+
+*Season scoping:* `hexagon_weights.season_from` (sentinel `'0000-00'` = from the beginning), PK
+`(axis, sub_metric, season_from)`; `v_player_hexagon` picks the most specific applicable row via
+`JOIN LATERAL … ORDER BY season_from DESC LIMIT 1`. Required because the assembly renormalizes over
+non-NULL weights — dropping the proxies outright would have applied to all 13 seasons. **Coverage is
+2025-26 forward only; the endpoint has no history.** Verified bit-identical: **0 of 8,892 pre-2025-26
+rows changed**.
+
+*Untracked players:* 145 of 379 qualified players are absent from the tracking feed (Giannis, Embiid).
+`shot_diet_gravity_efg_fb` / `rim_freq_lift_fb` are non-NULL **only** when `tracking_gravity` IS NULL,
+so those players score on the exact pre-2025-26 formula while covered players score on tracking —
+never a blend of the two. Without this they renormalized onto `off_rating_lift` alone and hit 97–99.
+
+⚠️ Gravity is **not comparable across the 2024-25 → 2025-26 boundary**; the backtest judges gravity
+temporally N→N+1, so that pair is apples-to-oranges.
+
+⚠️ The gravity percentile columns use `rank()/count(col)` rather than the `percent_rank()` pattern used
+by their siblings, which leaves NULLs in the denominator and caps sparse metrics below 100 (`cs_efg`
+maxes at 90.2, `floater_fg` at 92.3 — pre-existing, not fixed here). With `tracking_gravity` NULL for
+145 of 379, the old pattern would have graded the top of the axis at ~62.
 
 **Defending axis is now REAL** (Part C, 2026-06-30): the Part A tracking dashboards provide
 `pt_defend_player` (rim D_FG% allowed vs normal, overall PCT_PLUSMINUS) + `hustle_player`
@@ -154,6 +187,11 @@ recipe (real tracking metric primary; noisy proxy floored/reduced; before→afte
 of percentiles per axis. **Re-tune grades by `UPDATE hexagon_weights`** (instant, all seasons, no
 re-backfill); the Streamlit page also edits weights live in-session. Output: one row per **`pool`**
 × player × season.
+> ⚠️ **App-side parity:** whenever a sub-metric is added / dropped / re-weighted here, also update
+> `AXIS_SUBMETRICS` **and** `RAW_FMT` in `combined-app/player_app/hexagon_viz.py` — that list drives
+> both the Players-page 🕸️ Player Hexagon tab's `compute_scores` (must match `v_player_hexagon`, else
+> it silently drifts) and the "Raw sub-metrics" display. See CLAUDE.md → *Hexagon Sub-metric Display
+> Parity Rule*.
 - `pool='all'` — ranked vs all minutes-qualified players (≥ 1000 on-court off. possessions).
 - `pool='position'` — ranked vs same position group.
 - `pos_group` (G/F/C) is a **role proxy** derived from rebounding/assist profile (the NBA `position`
@@ -178,6 +216,43 @@ beats both current and equal weights AND the leaderboard stays face-valid.
 > gain over equal is noise), *rebounding* (the best "improvement" is `sc_rate_on_minus_off`, a
 > **near-duplicate of the outcome's offensive OREB half = leakage**; excluding it, no weighting beats
 > the baselines — the referee's rebounding grade is compromised, current weights kept + flagged).
+
+**Candidate sub-metric expansion + re-tune 2026-07-02.** Added 13 columns to `player_axis_metrics`
+(+ `v_player_axis_pctile` + `v_player_hexagon` lateral): shot-diet volume/rate `rim_att_pg`,
+`rim_mk_pg`, `floater_fg`, `atb3_att_pg`, `c3_pct`, `c3_att_pg` (from `shot_event`); `cut_ppp`,
+`roll_ppp` (Synergy offensive PPP); `ast_pg`, `blk_pg`, `stl_pg` (box PerGame); `team_efg_lift`
+(team eFG on−off, `v_player_shot_onoff_context`); and `opp_shot_quality_forced` (opponent expected-eFG
+on vs off, from `player_oncourt_shot_def` + a team-faced `shot_event` scan). All referee-tested
+(standalone + in-blend, tune TRAIN / judge TEST). **Shipped 2:**
+> - **shooting** `+atb3_att_pg:2` (drop `spotup_ppp`, `shotmaking_over_exp`→2): TEST partial
+>   **0.354→0.387**, and it **fixed the long-standing "non-shooting centers on top" face-validity bug**
+>   (Jarrett Allen/Zubac → LaVine/Curry/Durant/SGA/Dame). atb3-3 volume identifies real shooters.
+> - **defending** `+drtg_swing:1` — a **DELIBERATE** on/off impact include (Jack's call), weight 1;
+>   Wemby/JJJ stay #1/#2. `drtg_swing` IS the referee's def outcome ⇒ added to `AXIS_LEAKAGE_EXCLUDE`
+>   (referee-excluded, live only). `shot_diet_gravity_efg` (gravity) also excluded for the same reason.
+>
+> **Classified but NOT weighted:** finishing volume (`rim_att_pg`/`rim_mk_pg` dilute −0.05, `floater_fg`
+> +0.009 = noise), `ast_pg` (+0.001, ast_pts_created already best), `team_efg_lift` (gravity TRAIN −0.006),
+> `cut_ppp`/`roll_ppp`/`blk_pg`/`stl_pg` (weak) — kept as columns for the star map, weight 0.
+> **`opp_shot_quality_forced` = leakage** (near-dup of `def_drtg_swing`; its +0.026 was context, and it
+> dropped JJJ / floated Donovan Mitchell) → `AXIS_LEAKAGE_EXCLUDE`, weight 0, not shipped.
+> **Deferred:** gravity-derived `corner3_pct_lift`/`team_fta_rate_lift` (heavy stint×event builds,
+> gravity outcome already leakage-prone) and assist-dependent `created_2s`/`created_3s`/
+> `high_value_assists` (assist resolution covers only 2024-25 → unvalidatable on TRAIN; the multi-season
+> resolve is the disk-crash risk). `refresh_player_axis_metrics` wires the shipped `atb3_att_pg` + the
+> star-map columns nightly (not the heavy unshipped `opp_shot_quality_forced`).
+
+**Undervalued view `v_player_axis_value_gap`** (2021-22+, read live). Per (player, season, axis):
+`grade` (validated hexagon skill), `role_pctile` (percentile of `off_poss_on`), `impact_pctile` (raw
+axis impact outcome from `hex_weight_outcomes`), `impact_adj_pctile` (team-rating-residualized), and
+**`value_gap = grade − role_pctile`** — high = a **sleeper** (validated skill the rotation under-uses),
+NOT team-context-confounded. The v1 `impact − grade` construct was dropped as the ranking signal:
+the on/off impact outcomes are team/lineup quantities, and residualizing on team OFF/DEF rating
+**empirically removes ~nothing** (the confound is lineup-level, not team-level — RAW and adjusted
+defending leaders were identical, both surfacing context beneficiaries like Micic/Shamet). The two
+`impact*_pctile` columns are retained for transparency only. Top 2024-25 sleepers face-valid
+(Gueye/Nnaji defending; Ingram/Embiid playmaking — skilled, low-minute). Exposed as the "💎 Undervalued"
+section on `combined-app/pages/7_Hexagon.py`.
 
 Output columns: `pool, season, season_type, player_id, pos_group, off_poss_on, finishing, shooting,
 playmaking, defending, rebounding, gravity`.

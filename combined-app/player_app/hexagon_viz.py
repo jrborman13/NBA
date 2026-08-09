@@ -24,14 +24,45 @@ AXIS_LABELS = ["Finishing", "Shooting", "Playmaking", "Defending", "Rebounding",
 SEASON_TYPE = "Regular Season"
 MIN_SAMPLE = 1500  # on-court offensive possessions below which scores get a noise caveat
 
-# axis -> [(sub_metric column, display label)] — columns match v_player_axis_pctile & hexagon_weights
+# axis -> [(sub_metric column, display label)] — columns match v_player_axis_pctile & hexagon_weights.
+# ⚠️ KEEP IN SYNC WITH hexagon_weights: this list IS the set of sub-metrics the app blends
+# (compute_scores) and shows (raw_hover). Whenever the hexagon stats change (a sub-metric added /
+# dropped / re-weighted via the weight backtest), add or remove it here AND in RAW_FMT below, or the
+# Players-page hexagon tab will silently drift from the DB's v_player_hexagon. Zero-weight sub-metrics
+# are kept here on purpose so they stay editable in the weights editor (they contribute 0 to the score).
 AXIS_SUBMETRICS = {
-    "finishing":  [("rim_rate", "Rim rate"), ("rim_fg_pct_over_league", "Rim FG% over league"), ("team_rim_freq_lift", "Team rim-freq on/off")],
-    "shooting":   [("cs_efg", "Catch-&-shoot eFG"), ("pu_efg", "Pull-up eFG"), ("shotmaking_over_exp", "Jump make over expected"), ("spotup_ppp", "Spot-up PPP")],
-    "playmaking": [("ast_pct", "AST%"), ("ast_pts_created", "Assist pts created"), ("drive_ast", "Drive assists")],
-    "defending":  [("def_rim_stop", "Rim-stop (norm−actual)"), ("def_pm_stop", "FG suppression (−PM)"), ("deflections_per36", "Deflections / 36"), ("contested2_per36", "Contested 2PT / 36"), ("blk_per100", "BLK / 100"), ("stl_per100", "STL / 100")],
+    "finishing":  [("rim_rate", "Rim rate"), ("rim_fg_pct_over_league", "Rim FG% over league"), ("team_rim_freq_lift", "Team rim-freq on/off (w0)")],
+    "shooting":   [("cs_efg", "Catch-&-shoot eFG"), ("pu_efg", "Pull-up eFG"), ("shotmaking_over_exp", "Jump make over expected"), ("atb3_att_pg", "Above-break-3 att/g"), ("spotup_ppp", "Spot-up PPP (w0)")],
+    "playmaking": [("ast_pts_created", "Assist pts created"), ("ast_pct", "AST% (w0)"), ("drive_ast", "Drive assists (w0)")],
+    "defending":  [("def_rim_stop", "Rim-stop (norm−actual)"), ("def_pm_stop", "FG suppression (−PM)"), ("deflections_per36", "Deflections / 36"), ("contested2_per36", "Contested 2PT / 36"), ("blk_per100", "BLK / 100"), ("stl_per100", "STL / 100"), ("drtg_swing", "DRtg on/off swing")],
     "rebounding": [("oreb_pct", "OREB%"), ("dreb_pct", "DREB%"), ("sc_rate_on_minus_off", "2nd-chance on/off"), ("contested_reb_per36", "Contested reb / 36"), ("reb_chance_pct", "Reb-chance conversion")],
-    "gravity":    [("shot_diet_gravity_efg", "Shot-diet gravity"), ("off_rating_lift", "ORtg on/off lift"), ("rim_freq_lift", "Rim-freq on/off lift")],
+    # Gravity switched to NBA tracking data from 2025-26. The _fb entries carry the
+    # pre-2025-26 location proxies for players the tracking feed does not cover
+    # (145 of 379 in 2025-26); they are NULL for covered players, so a player scores
+    # on one formula or the other, never a mix. Splits are (w0) breakdown only.
+    "gravity":    [("tracking_gravity", "NBA tracking gravity"), ("off_rating_lift", "ORtg on/off lift"),
+                   ("shot_diet_gravity_efg", "Shot-diet gravity"), ("rim_freq_lift", "Rim-freq on/off lift"),
+                   ("shot_diet_gravity_efg_fb", "Shot-diet gravity (untracked fallback)"),
+                   ("rim_freq_lift_fb", "Rim-freq on/off lift (untracked fallback)"),
+                   ("grav_onball_perim", "On-ball perimeter gravity (w0)"),
+                   ("grav_offball_perim", "Off-ball perimeter gravity (w0)"),
+                   ("grav_onball_int", "On-ball interior gravity (w0)"),
+                   ("grav_offball_int", "Off-ball interior gravity (w0)")],
+}
+
+# Per-sub-metric display format (value scale, format string) for the "Raw sub-metrics" expander.
+# ⚠️ Add an entry here for every new sub-metric added to AXIS_SUBMETRICS (falls back to 2-dp otherwise).
+RAW_FMT = {
+    "rim_rate": "{:.0%}", "rim_fg_pct_over_league": "{:+.1%}", "team_rim_freq_lift": "{:+.1%}",
+    "cs_efg": "{:.1%}", "pu_efg": "{:.1%}", "shotmaking_over_exp": "{:+.1%}", "atb3_att_pg": "{:.1f}", "spotup_ppp": "{:.2f}",
+    "ast_pts_created": "{:.1f}", "ast_pct": "{:.0%}", "drive_ast": "{:.1f}",
+    "def_rim_stop": "{:+.1%}", "def_pm_stop": "{:+.1f}", "deflections_per36": "{:.1f}", "contested2_per36": "{:.1f}",
+    "blk_per100": "{:.1f}", "stl_per100": "{:.1f}", "drtg_swing": "{:+.1f}",
+    "oreb_pct": "{:.0%}", "dreb_pct": "{:.0%}", "sc_rate_on_minus_off": "{:+.1%}", "contested_reb_per36": "{:.1f}", "reb_chance_pct": "{:.0%}",
+    "shot_diet_gravity_efg": "{:+.3f}", "off_rating_lift": "{:+.1f}", "rim_freq_lift": "{:+.1%}",
+    "tracking_gravity": "{:+.2f}", "shot_diet_gravity_efg_fb": "{:+.3f}", "rim_freq_lift_fb": "{:+.1%}",
+    "grav_onball_perim": "{:+.2f}", "grav_offball_perim": "{:+.2f}",
+    "grav_onball_int": "{:+.2f}", "grav_offball_int": "{:+.2f}",
 }
 
 
@@ -64,12 +95,55 @@ def fetch_raw(season):
 
 
 @st.cache_data(ttl=3600)
-def fetch_default_weights():
+def fetch_default_weights(season: str = None):
+    """Effective weights for `season`.
+
+    hexagon_weights is season-scoped: a row applies from its `season_from`
+    onward, and the most specific applicable row wins — the same resolution
+    v_player_hexagon does in SQL. Gravity switched to NBA tracking data from
+    2025-26, so a flat (axis, sub_metric) dict would pick a row at random and
+    silently drift from the DB.
+
+    season=None means "latest", i.e. every row applies.
+    """
     c = client()
     if c is None:
         return {}
-    r = c.table("hexagon_weights").select("axis, sub_metric, weight").execute()
-    return {(row["axis"], row["sub_metric"]): float(row["weight"]) for row in (r.data or [])}
+    r = c.table("hexagon_weights").select("axis, sub_metric, weight, season_from").execute()
+    best = {}
+    for row in (r.data or []):
+        sf = row.get("season_from") or "0000-00"
+        if season is not None and sf > season:
+            continue                      # not yet in effect for this season
+        key = (row["axis"], row["sub_metric"])
+        prev = best.get(key)
+        if prev is None or sf > prev[0]:
+            best[key] = (sf, float(row["weight"]))
+    return {k: v[1] for k, v in best.items()}
+
+
+@st.cache_data(ttl=3600)
+def fetch_weight_scopes(season: str = None):
+    """(axis, sub_metric) -> the season_from of the row currently in effect.
+
+    The weights editor writes back to the scope it is showing: editing while a
+    2025-26 season is selected updates the 2025-26 gravity rows, editing an older
+    season updates the '0000-00' defaults. Without this the editor would silently
+    rewrite history while appearing to change the current season.
+    """
+    c = client()
+    if c is None:
+        return {}
+    r = c.table("hexagon_weights").select("axis, sub_metric, season_from").execute()
+    best = {}
+    for row in (r.data or []):
+        sf = row.get("season_from") or "0000-00"
+        if season is not None and sf > season:
+            continue
+        key = (row["axis"], row["sub_metric"])
+        if key not in best or sf > best[key]:
+            best[key] = sf
+    return best
 
 
 # ---------------------------------------------------------------- scoring
@@ -98,17 +172,17 @@ def _f(v, fmt, scale=1.0):
 
 
 def raw_hover(raw_row):
+    """One "· "-joined line per axis listing every sub-metric in AXIS_SUBMETRICS with its raw value.
+    Data-driven from AXIS_SUBMETRICS + RAW_FMT so it always shows the complete, current set — add a
+    sub-metric to those two dicts and it appears here automatically (no hand-editing this function)."""
     if raw_row is None:
         return ["" for _ in AXES]
     g = raw_row.get
-    return [
-        f"Rim rate {_f(g('rim_rate'), '{:.0%}')} · Rim FG% vs lg {_f(g('rim_fg_pct_over_league'), '{:+.1%}')} · team rim-freq on/off {_f(g('team_rim_freq_lift'), '{:+.1%}')}",
-        f"C&S eFG {_f(g('cs_efg'), '{:.1%}')} · Pull-up eFG {_f(g('pu_efg'), '{:.1%}')} · Jump make vs exp {_f(g('shotmaking_over_exp'), '{:+.1%}')} · Spot-up PPP {_f(g('spotup_ppp'), '{:.2f}')}",
-        f"AST% {_f(g('ast_pct'), '{:.0%}')} · Ast pts created {_f(g('ast_pts_created'), '{:.1f}')} · Drive ast {_f(g('drive_ast'), '{:.1f}')}",
-        f"Rim-stop {_f(g('def_rim_stop'), '{:+.1%}')} · FG suppression {_f(g('def_pm_stop'), '{:+.1f}')} · Defl/36 {_f(g('deflections_per36'), '{:.1f}')} · Cont2/36 {_f(g('contested2_per36'), '{:.1f}')}",
-        f"OREB% {_f(g('oreb_pct'), '{:.0%}')} · DREB% {_f(g('dreb_pct'), '{:.0%}')} · 2nd-chance on/off {_f(g('sc_rate_on_minus_off'), '{:+.1%}')} · Cont reb/36 {_f(g('contested_reb_per36'), '{:.1f}')}",
-        f"Shot-diet gravity {_f(g('shot_diet_gravity_efg'), '{:+.3f}')} · ORtg lift {_f(g('off_rating_lift'), '{:+.1f}')} · rim-freq lift {_f(g('rim_freq_lift'), '{:+.1%}')}",
-    ]
+    out = []
+    for axis in AXES:
+        parts = [f"{label} {_f(g(sub), RAW_FMT.get(sub, '{:.2f}'))}" for sub, label in AXIS_SUBMETRICS[axis]]
+        out.append(" · ".join(parts))
+    return out
 
 
 def add_trace(fig, scores, raw_row, name, color):
@@ -151,7 +225,7 @@ def render_hexagon_tab(season, player_id, player_name=None, pool="all", key_pref
     prow = px_df.loc[pid]
     if isinstance(prow, pd.DataFrame):   # dup-index guard
         prow = prow.iloc[0]
-    weights = fetch_default_weights()
+    weights = fetch_default_weights(season)
     scores = compute_scores(prow.to_dict(), weights)
     raw_df = fetch_raw(season)
     raw = raw_df.loc[pid].to_dict() if (not raw_df.empty and pid in raw_df.index) else None

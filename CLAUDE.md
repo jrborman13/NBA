@@ -32,6 +32,22 @@ in `combined-app/player_app/`). When adding a new prediction factor:
 
 ---
 
+## Hexagon Sub-metric Display Parity Rule
+
+**Every time the hexagon stats change** (a sub-metric added, dropped, or re-weighted — e.g. via the
+weight backtest `analysis/hexagon_weight_backtest.py`, shipped through `hexagon_weights` +
+`v_player_axis_pctile` + `v_player_hexagon`), you MUST also update the app-side sub-metric lists in
+**`combined-app/player_app/hexagon_viz.py`**:
+1. `AXIS_SUBMETRICS` — the per-axis `(sub_metric, label)` list. This IS what `compute_scores` blends
+   for the Players-page **🕸️ Player Hexagon** tab and the `7_Hexagon.py` radar. If a shipped
+   sub-metric is missing here, the app's scores **silently drift** from the DB's `v_player_hexagon`.
+2. `RAW_FMT` — the display format for the new sub-metric (so it renders in the "Raw sub-metrics"
+   expander; `raw_hover` is data-driven off these two dicts).
+Keep zero-weight sub-metrics in `AXIS_SUBMETRICS` (they stay editable in the weight editor and
+contribute 0 to the score). Verify parity: app `compute_scores` must equal DB `v_player_hexagon`.
+
+---
+
 ## Project Purpose
 
 Streamlit multi-page app for NBA player prop analysis, fantasy lineup optimization, historical
@@ -444,6 +460,112 @@ python scripts/optimize_lineups_by_wave.py \
 ---
 
 ## Daily Change Log
+
+### 2026-08-09 — Nightly refresh un-broken; minute normalization extracted; batch predictions can now reach Supabase
+
+**Cron was dead for six weeks.** pg_cron job 31 `refresh_show_rollups()` had failed **44 consecutive
+nights** (last success 2026-06-26) on `canceling statement due to statement timeout`, thrown by
+`refresh_possessions`' INSERT. It dies on the *first* step, so possessions, the three
+`player_oncourt_*` tables, `player_axis_metrics` (the hexagon) and all four matviews never refreshed.
+`refresh_player_axis_metrics` / `refresh_team_axis_metrics` / `refresh_style_fingerprint` all disable
+the timeout; `refresh_possessions` and `refresh_show_rollups` never did. Added
+`set_config('statement_timeout','0',true)` to both and ran it manually to clear the backlog —
+possession 3.27M, matviews repopulated, `player_oncourt_poss` 10,750. **The ten `fetch_nba_*` jobs
+succeeded throughout**, so raw data looked current while everything derived from it was frozen; check
+job 31, not the fetch jobs, when data looks stale.
+
+**`player_predictions` was never a pipeline.** Its only writer was
+`prediction_store.upload_game_predictions()`, called from the Streamlit UI — a user-triggered cache.
+It held exactly six dates (2026-03-23 → 03-30), i.e. when the page was last opened.
+`generate_predictions_batch.py` ended at `to_csv()` with no DB write. This is the table the website
+reads, so the predictions page had no live feed behind it.
+
+**Minute normalization extracted (Prediction Parity Rule).** `normalize_team_minutes` —
+**1,185 lines**, lines 254–1438 of `3_Predictions.py` — moved verbatim to
+`combined-app/player_app/minutes_normalization.py`; the page now imports it. Verified byte-identical
+against `git show HEAD`. It was self-contained (zero `st.*`, pandas its only dependency). It had to
+move because minutes are the biggest single driver of FPTS and lived only inside a Streamlit page, so
+batch predictions were never normalized — a standing parity violation, not a new one.
+
+**Batch script can now write to Supabase.** `generate_predictions_batch.py` gained `--upload`
+(→ `prediction_store`), plus `player_id` and `is_away` on each statline, and `MIN` seeded from
+season-average MPG with a 25.0 fallback — **exactly what the page does**
+(`player_minutes_map.get(int(player_id), 25.0)` at `3_Predictions.py:1743`), then normalized to 240.
+Note the model never predicted minutes; the page uses season averages too, so this is real parity, not
+an approximation. Two blockers had made a naive `--upload` a silent no-op: no `player_id` in the
+statline, and `MIN` hardcoded 0.0 while the uploader skips `MIN <= 0.01`. Upload failure now prints
+loudly rather than passing silently. Verified the shared module normalizes both teams to exactly
+240.00 with the 48-minute cap held. **Not yet run end-to-end** — the season ended 2026-06-19, and
+`--upload` on a March date would overwrite the UI-generated rows currently in the table.
+
+⚠️ **FPTS is Underdog scoring, not DraftKings.** `3_Predictions.py:1782` states the formula as
+`PTS*1 + REB*1.2 + AST*1.5 + STL*3 + BLK*3 - TOV*1`, which reproduces the stored `fpts` column to a
+mean absolute error of 0.011 across all 827 rows (DK is off by 0.640). Underdog and FanDuel NBA
+scoring are numerically identical, so either label is arithmetically correct — but the model's intent
+is Underdog. `sports-web` currently labels it FanDuel.
+
+### 2026-08-09 — Gravity axis rebuilt on NBA tracking data; hexagon_weights is now season-scoped
+
+The gravity axis was measuring nothing. Against NBA's own `stats.nba.com/stats/gravityleaders`
+(tracking-derived defensive attention, 234 players), the shipped axis correlated **+0.009** — the
+league's #1 and #2 gravity players (Durant, Edwards) graded 44 and 27. Cause: `shot_diet_gravity_efg`
+(weight 2) and `rim_freq_lift` (weight 1) are shot-*location* proxies that read perimeter gravity as
+absence; Edwards sat in the 6th and 11th percentile on them while `off_rating_lift` (85) was outvoted
+3-to-1. This is the axis the 2026-07-01 backtest left alone because its referee was compromised
+(`shot_diet_gravity_efg` is a temporal near-dup of the gravity outcome, in `AXIS_LEAKAGE_EXCLUDE`) —
+the external tracking feed is precisely the independent signal that referee could not supply.
+
+**Ingest:** `historical-database/scripts/fetch_gravity_tracking.py` → **`player_gravity_tracking`**
+(234 rows). curl_cffi via `nba_session`; treats an empty body as *throttle*, not absence, and refuses
+to write an empty season (an earlier probe mistook the throttle for "no data" — the control request
+proved otherwise). **Coverage is 2025-26 forward only; the endpoint has no history.**
+`refresh_player_axis_metrics` gained `tracking_gravity` + four on/off-ball × perimeter/interior splits
+(injected *before* the `pos_group` UPDATE — appending would have hijacked `GET DIAGNOSTICS`).
+
+**Season-scoped weights (new mechanism):** `hexagon_weights` gained `season_from` (sentinel `'0000-00'`
+= from the beginning), PK now `(axis, sub_metric, season_from)`, and `v_player_hexagon` resolves the
+most specific applicable row via a `JOIN LATERAL ... ORDER BY season_from DESC LIMIT 1`. Needed because
+the assembly renormalizes over non-NULL weights: *adding* a NULL-in-history metric is free, but
+*dropping* the proxies would have applied to all 13 seasons and collapsed history to `off_rating_lift`
+alone. Reusable for any future feed that starts mid-history.
+
+**2025-26 formula:** `tracking_gravity` 2 + `off_rating_lift` 1. **145 of 379 qualified players are not
+in the tracking feed** (Giannis, Embiid, Porter), and without a fallback they renormalized onto
+`off_rating_lift` alone and scored 97–99 on one on/off proxy. Fixed with conditional
+`shot_diet_gravity_efg_fb` / `rim_freq_lift_fb` (non-NULL only when `tracking_gravity` IS NULL), so an
+uncovered player scores on the *exact* pre-2025-26 formula and a covered one on tracking — never a mix.
+
+**Verified:** pre-2025-26 is **bit-identical — 0 of 8,892 rows changed** vs a pre-migration snapshot;
+the other five axes in 2025-26 unchanged; untracked players unchanged; 229 of 234 tracked players moved.
+Face-valid: SGA 42→99, Edwards 27→95, Durant 44→90, Kawhi 26→98, Duncan Robinson 72→97; Gobert 15→**2**,
+Kalkbrenner 60→2, Draymond 58→7.
+
+**Parity (Rule):** `hexagon_viz.py` `AXIS_SUBMETRICS`/`RAW_FMT` updated; verified programmatically that
+the app's sub-metric set equals `hexagon_weights` on all six axes. `fetch_default_weights()` **had to
+become season-aware** — its `(axis, sub_metric)` dict now has two rows per key and would pick one at
+random. Added `fetch_weight_scopes(season)`; the `7_Hexagon.py` weight editor now writes back to the
+scope it is displaying and its `on_conflict` was `axis,sub_metric`, a constraint that no longer exists
+(saving would have failed outright). `sports-web` `lib/axes.ts` updated in the same pass.
+
+⚠️ **Gravity is not comparable across the 2024-25 → 2025-26 boundary** — different measurement. The
+backtest judges gravity temporally N→N+1, so that pair is now apples-to-oranges.
+
+⚠️ **Two pre-existing issues found, NOT fixed (out of scope, both need their own decision):**
+1. **`v_player_axis_pctile` compresses sparse metrics.** `CASE WHEN col IS NULL THEN NULL ELSE
+   percent_rank() OVER (ORDER BY col) END` leaves NULL rows in percent_rank's denominator, so a sparse
+   metric can never reach 100: `cs_efg` (342/379 non-NULL) tops out at **90.2**, `floater_fg` at **92.3**.
+   `cs_efg` carries weight 2 on shooting, so every qualifying player's shooting grade is compressed by
+   ~342/379. Also affects `pu_efg`, `c3_pct`, `cut_ppp`, `roll_ppp`, floored `shotmaking_over_exp`/
+   `spotup_ppp`. The new gravity columns deliberately use `rank()/count(col)` instead — reproducing the
+   old pattern would have graded Edwards ~62 rather than ~99 and defeated the change.
+2. **`sql/hexagon_assembly.sql` is stale.** Its `v_player_hexagon` hardcodes weights inline and its
+   `player_axis_metrics` DDL lists 18 columns; production reads weights from the table and has 44.
+   `sql/hexagon_weights.sql` is the accurate one. Rebuilding from `hexagon_assembly.sql` would silently
+   revert the July weight work.
+
+### 2026-07-02 — Hexagon candidate sub-metrics built + re-tuned; undervalued view context-fixed
+
+Extended the player hexagon with 13 new candidate sub-metrics (columns on `player_axis_metrics` → `v_player_axis_pctile` → `v_player_hexagon`), all referee-tested via `analysis/hexagon_weight_backtest.py` (tune TRAIN 2021-22..23-24, judge TEST 2024-25..25-26, face-validity gate). Built: shot-diet `rim_att_pg`/`rim_mk_pg`/`floater_fg`/`atb3_att_pg`/`c3_pct`/`c3_att_pg` (`shot_event`), `cut_ppp`/`roll_ppp` (Synergy), `ast_pg`/`blk_pg`/`stl_pg` (box), `team_efg_lift` (on/off eFG), and derived `opp_shot_quality_forced` (opponent expected-eFG on/off). Backfilled all seasons; `refresh_player_axis_metrics` wires the shipped + star-map columns nightly. **Shipped 2 axes** (one `UPDATE hexagon_weights`, dropped=0, reversible): **shooting** +`atb3_att_pg:2` → TEST 0.354→0.387 and **fixed the non-shooting-centers-on-top face-validity bug** (Jarrett Allen/Zubac → LaVine/Curry/Durant/SGA/Dame); **defending** +`drtg_swing:1` as a DELIBERATE on/off include (Jack's call; Wemby/JJJ stay #1/#2). Leakage guard extended: `drtg_swing`+`opp_shot_quality_forced` (defending), `shot_diet_gravity_efg` (gravity) added to `AXIS_LEAKAGE_EXCLUDE` (referee-excluded, kept live). **`opp_shot_quality_forced` classified as leakage** (near-dup of `def_drtg_swing`; +0.026 was context, dropped JJJ/floated D.Mitchell) → not weighted. **Deferred** (documented): gravity-derived `corner3_pct_lift`/`team_fta_rate_lift` (heavy stint builds) and assist-dependent `created_2s`/`created_3s`/`high_value_assists` (only 2024-25 resolved → unvalidatable on TRAIN; multi-season resolve is the disk-crash risk). **Undervalued view rebuilt** as `v_player_axis_value_gap`: `value_gap = grade − role_pctile` (validated skill vs role = sleeper, not context-confounded) after empirically finding that residualizing on/off impact on team rating removes ~nothing (lineup-level confound; RAW≈adjusted). Exposed as the "💎 Undervalued" section on `7_Hexagon.py`. `sql/hexagon_weights.sql` synced; detail in `SUPABASE_DERIVED_OBJECTS.md` §4.
 
 ### 2026-07-01 — Hexagon axis weights re-tuned against an impact backtest (finishing + playmaking shipped)
 

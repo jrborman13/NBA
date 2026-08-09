@@ -128,7 +128,8 @@ with psel[1]:
 
 # ---------------------------------------------------------------- axis weights (in-page)
 with st.expander("⚖️ Axis weights — edit to re-tune the grades (updates live)", expanded=False):
-    defaults = get_default_weights()
+    defaults = get_default_weights(season)
+    scopes = hv.fetch_weight_scopes(season)
     canon, rows = [], []
     for axis, subs in AXIS_SUBMETRICS.items():
         for sub, lbl in subs:
@@ -153,11 +154,20 @@ with st.expander("⚖️ Axis weights — edit to re-tune the grades (updates li
             st.session_state.pop("hexw", None)
             st.rerun()
     if save_clicked and svc is not None:
-        payload = [{"axis": a, "sub_metric": s, "weight": w} for (a, s), w in weights.items()]
+        # hexagon_weights is season-scoped; write back to the scope currently in
+        # effect for the selected season so an edit here cannot rewrite history.
+        payload = [{"axis": a, "sub_metric": s, "weight": w,
+                    "season_from": scopes.get((a, s), "0000-00")}
+                   for (a, s), w in weights.items()]
         try:
-            svc.table("hexagon_weights").upsert(payload, on_conflict="axis,sub_metric").execute()
+            svc.table("hexagon_weights").upsert(
+                payload, on_conflict="axis,sub_metric,season_from").execute()
             get_default_weights.clear()
-            st.success("Saved — these are now the defaults (v_player_hexagon updated for all seasons).")
+            hv.fetch_weight_scopes.clear()
+            edited_scopes = sorted({p["season_from"] for p in payload})
+            span = ("all seasons" if edited_scopes == ["0000-00"]
+                    else "scopes " + ", ".join(s if s != "0000-00" else "default" for s in edited_scopes))
+            st.success(f"Saved — v_player_hexagon updated for {span}.")
         except Exception as e:
             st.error(f"Save failed: {e}")
     if svc is None:
@@ -205,3 +215,62 @@ with right:
         with st.expander("Raw sub-metrics"):
             for label, txt in zip(AXIS_LABELS, raw_hover(raw1)):
                 st.markdown(f"**{label}** — {txt}")
+
+
+# ---------------------------------------------------------------- undervalued / sleepers
+st.divider()
+st.subheader("💎 Undervalued — high skill grade, low role")
+st.caption(
+    "A **sleeper** = a player whose validated skill **grade** (0–100, from the weight-backtested "
+    "hexagon) far exceeds their **role** (share of on-court possessions): `value_gap = grade − role "
+    "percentile`. Grade is an individual measure validated by `analysis/hexagon_weight_backtest.py`; "
+    "role is observed — so this is **not** team-context-confounded. `Impact %ile` (raw on/off or "
+    "own-shot impact) and `Impact %ile (ctx-adj)` (team-rating-residualized) are shown for "
+    "transparency only: for the four on/off axes those stay **lineup-confounded** (team-rating "
+    "residualization empirically removes ~nothing), which is why impact-minus-grade is **not** the "
+    "ranking signal. Window: 2021-22+."
+)
+
+_AXIS_LABEL = dict(zip(AXES, AXIS_LABELS))
+
+
+@st.cache_data(ttl=3600)
+def get_value_gap(season):
+    out, start = [], 0
+    while True:
+        r = _client().table("v_player_axis_value_gap").select("*").eq("season", season).range(start, start + 999).execute()
+        if not r.data:
+            break
+        out.extend(r.data)
+        if len(r.data) < 1000:
+            break
+        start += 1000
+    return pd.DataFrame(out)
+
+
+vg = get_value_gap(season)
+if vg.empty:
+    st.info(f"No value-gap data for {season} — needs the possession-engine impact window (2021-22+).")
+else:
+    vc = st.columns([2, 2, 2])
+    with vc[0]:
+        vaxis = st.selectbox("Axis", AXES, format_func=lambda a: _AXIS_LABEL[a], key="vg_axis")
+    with vc[1]:
+        min_grade = st.slider("Min skill grade", 50, 95, 70, 5, key="vg_grade")
+    with vc[2]:
+        min_poss = st.slider("Min on-court poss", 1000, 3000, 1000, 250, key="vg_poss")
+    d = vg[(vg["axis"] == vaxis) & (vg["grade"] >= min_grade) & (vg["off_poss_on"] >= min_poss)].copy()
+    if d.empty:
+        st.info("No players match these filters — lower the grade / possession minimums.")
+    else:
+        d["Player"] = [names.get(pid, str(pid)) for pid in d["player_id"]]
+        d = d.sort_values("value_gap", ascending=False).head(25)
+        show = d[["Player", "grade", "role_pctile", "value_gap",
+                  "impact_pctile", "impact_adj_pctile", "off_poss_on"]].rename(columns={
+            "grade": "Grade", "role_pctile": "Role %ile", "value_gap": "Value gap",
+            "impact_pctile": "Impact %ile", "impact_adj_pctile": "Impact %ile (ctx-adj)", "off_poss_on": "Poss"})
+        st.dataframe(
+            show, hide_index=True, use_container_width=True,
+            column_config={c: st.column_config.NumberColumn(format="%.0f")
+                           for c in ["Grade", "Role %ile", "Value gap", "Impact %ile", "Impact %ile (ctx-adj)", "Poss"]},
+        )

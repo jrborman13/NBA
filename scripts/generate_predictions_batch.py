@@ -25,6 +25,8 @@ import pytz
 # Import prediction functions
 import player_functions as pf
 import prediction_model as pm
+import minutes_normalization          # shared with 3_Predictions.py (Prediction Parity Rule)
+import prediction_store               # writes player_predictions, the table the website reads
 import injury_report as ir
 import tanking_utils as _tu
 import injury_adjustments as inj
@@ -167,7 +169,7 @@ def _fetch_bulk_game_logs(season: str = '2025-26') -> pd.DataFrame:
 
 def generate_predictions_for_date(game_date: date, output_dir: str = None, exclude_injured: bool = True,
                                   optimize_lineups: bool = False, draftables_path: str = None, max_salary: int = 50000,
-                                  tipoff_time_filter: str = None):
+                                  tipoff_time_filter: str = None, upload: bool = False):
     """
     Generate predictions for all games on a given date.
     
@@ -436,7 +438,14 @@ def generate_predictions_for_date(game_date: date, output_dir: str = None, exclu
                 statlines_list.append({
                     'Player': player_name,
                     'Team': team_abbr,
-                    'MIN': 0.0,  # Minutes not predicted in batch mode
+                    'player_id': str(player_id),
+                    'is_away': team_abbr == away_team_abbr,
+                    # Seeded from season-average MPG exactly as 3_Predictions.py does
+                    # (`player_minutes_map.get(int(player_id), 25.0)`); normalize_team_minutes
+                    # then scales each team to 240. This was hardcoded 0.0 — "minutes not
+                    # predicted in batch mode" — which left batch FPTS un-normalized and made
+                    # the rows unuploadable, since the uploader skips MIN <= 0.01.
+                    'MIN': float(player_avg_minutes.get(str(player_id), 25.0)),
                     'PTS': round(pts_value, 1),
                     'REB': round(reb_value, 1),
                     'AST': round(ast_value, 1),
@@ -613,6 +622,20 @@ def generate_predictions_for_date(game_date: date, output_dir: str = None, exclu
                             mult_pct = int(tank_ctx.get('spread_mult', 0) * 100)
                             print(f"  📉 Tanking adjustments applied ({label}, spread={tank_ctx.get('spread')}, mult={mult_pct}%): {scaled} players scaled")
 
+            # Normalize each team to 240 minutes using the SAME shared function the
+            # Predictions page calls (Prediction Parity Rule). Runs after the injury and
+            # tanking adjustments above, matching the page's ordering.
+            # NOTE: the page passes its tanking deltas in as `manual_adjustments`; this
+            # script has already applied tanking to the statlines directly, so passing them
+            # again here would double-count.
+            minutes_normalization.normalize_team_minutes(
+                statlines_list,
+                target_minutes=240.0,
+                out_player_ids=out_player_ids,
+                bulk_game_logs=bulk_game_logs,
+                game_date=game_date_str,
+            )
+
             # Create DataFrame
             predictions_df = pd.DataFrame(statlines_list)
             
@@ -624,7 +647,29 @@ def generate_predictions_for_date(game_date: date, output_dir: str = None, exclu
             print(f"\n✓ Saved predictions to: {output_path}")
             print(f"  Total players: {len(predictions_df)}")
             print(f"  Average FPTS: {predictions_df['FPTS'].mean():.2f}")
-            
+
+            # Headless write to Supabase. Until now the ONLY writer of player_predictions
+            # was the Streamlit UI, so the table only held dates somebody happened to open.
+            if upload:
+                cf_map = {
+                    sl['player_id']: {
+                        'ceiling':  sl.get('FPTS_Ceiling'),
+                        'floor':    sl.get('FPTS_Floor'),
+                        'median':   sl.get('FPTS_Median'),
+                        'std_dev':  sl.get('FPTS_StdDev'),
+                    }
+                    for sl in statlines_list if sl.get('player_id')
+                }
+                ok = prediction_store.upload_game_predictions(
+                    game_date_str, away_team_abbr, home_team_abbr, statlines_list, cf_map,
+                )
+                if ok:
+                    uploaded = sum(1 for sl in statlines_list if float(sl.get('MIN', 0)) > 0.01)
+                    print(f"  ☁ Uploaded {uploaded} players to Supabase (player_predictions)")
+                else:
+                    # Fail loud: a silent no-op here is exactly how this table went stale.
+                    print("  ✗ Supabase upload FAILED (check SUPABASE_URL / SUPABASE_SERVICE_KEY)")
+
             output_files.append(output_path)
             
         except Exception as e:
@@ -727,6 +772,14 @@ Examples:
         help='Output directory for CSV files (default: current directory)'
     )
     parser.add_argument(
+        '--upload',
+        action='store_true',
+        help='Also upsert predictions into Supabase player_predictions (the table the '
+             'website reads). Requires SUPABASE_URL + SUPABASE_SERVICE_KEY. Without this '
+             'flag the script only writes CSV, which is why the table previously only held '
+             'dates that were opened in the Streamlit UI.'
+    )
+    parser.add_argument(
         '--season',
         type=str,
         default='2025-26',
@@ -793,7 +846,8 @@ Examples:
             optimize_lineups=args.optimize,
             draftables_path=args.draftables,
             max_salary=args.max_salary,
-            tipoff_time_filter=args.tipoff_time
+            tipoff_time_filter=args.tipoff_time,
+            upload=args.upload,
         )
         
         if len(output_files) == 0:

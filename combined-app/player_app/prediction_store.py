@@ -24,6 +24,31 @@ def _get_client():
     return None
 
 
+def _get_write_client():
+    """Client for INSERT/UPDATE/DELETE on player_predictions.
+
+    supabase_config builds its client from SUPABASE_KEY, which is the publishable
+    (anon) key. Migration `enable_rls_public_readonly_anon` (2026-08-04) turned on
+    RLS with a SELECT-only anon policy so the website could read safely — which
+    also means anon writes now fail with 42501. Every write here has silently
+    returned False since that date; the season had already ended, so nobody saw it.
+
+    Writes therefore need the service-role key, matching what
+    historical-database/scripts/supabase_io.py already does. Falls back to the
+    read client so behaviour is unchanged where no service key is configured.
+    """
+    import os
+    url = os.environ.get('SUPABASE_URL')
+    service_key = os.environ.get('SUPABASE_SERVICE_KEY')
+    if url and service_key:
+        try:
+            from supabase import create_client
+            return create_client(url, service_key)
+        except Exception as e:
+            logger.warning(f"service-role client unavailable, falling back to read client: {e}")
+    return _get_client()
+
+
 TABLE = 'player_predictions'
 
 
@@ -31,7 +56,7 @@ TABLE = 'player_predictions'
 
 def delete_predictions_for_date(game_date: str) -> bool:
     """Delete all cached predictions for a given date from Supabase."""
-    client = _get_client()
+    client = _get_write_client()
     if not client:
         return False
     try:
@@ -76,7 +101,7 @@ def upload_game_predictions(
         statlines:         list of statline dicts (post-normalize_team_minutes)
         ceiling_floor_map: optional dict of player_id -> {ceiling, floor, median, std_dev}
     """
-    client = _get_client()
+    client = _get_write_client()
     if not client:
         return False
 

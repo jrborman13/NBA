@@ -140,12 +140,28 @@ def build_resolver(c, game_id, events):
     return resolve
 
 
-REG_SEC = 720   # regulation period length: 720 (NBA 12-min) or 600 (WNBA 10-min); set per --league
+# Regulation shape, set per --league AND per era in main(). Both halves matter: the WNBA
+# played two 20-minute halves from 1997 to 2005, so in that era periods 3+ are OVERTIME.
+# A single REG_SEC with a hardcoded `p <= 4` cutoff got both wrong (SITE-78).
+REG_SEC = 720      # regulation period length: 720 NBA, 600 WNBA >=2006, 1200 WNBA <=2005
+REG_PERIODS = 4    # regulation periods: 4, except 2 for the WNBA half era
 
 
 def period_len(p):
-    """Period length in seconds: REG_SEC in regulation, 300 (5 min) in OT (period > 4)."""
-    return REG_SEC if p <= 4 else 300
+    """Period length in seconds: REG_SEC in regulation, 300 (5 min) in OT."""
+    return REG_SEC if p <= REG_PERIODS else 300
+
+
+def period_shape(league, season):
+    """(regulation period length, regulation period count) for a league and season.
+
+    The WNBA played two 20-minute halves from 1997 to 2005 and four 10-minute quarters
+    from 2006 on, so the era boundary moves BOTH numbers. WNBA seasons are a single year
+    ("1999"); NBA seasons are "2025-26", which is why only the WNBA branch parses one.
+    """
+    if league == "wnba":
+        return (1200, 2) if int(season) <= 2005 else (600, 4)
+    return (720, 4)
 
 
 def clock_remaining(clk):
@@ -269,10 +285,10 @@ def main():
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--max-games", type=int, default=0)
     args = ap.parse_args()
-    if args.league == "wnba":           # WNBA: separate Postgres schema + 10-min quarters
+    global REG_SEC, REG_PERIODS
+    REG_SEC, REG_PERIODS = period_shape(args.league, args.season)
+    if args.league == "wnba":           # WNBA lives in its own Postgres schema
         s.SCHEMA = "wnba"
-        global REG_SEC
-        REG_SEC = 600
     c = s.client()
 
     games = sorted({r["scope"] for r in
